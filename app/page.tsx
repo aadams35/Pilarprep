@@ -170,6 +170,22 @@ const rolePrompts: Record<AudienceRole, string[]> = {
   ],
 };
 
+const lifecycleStages = [
+  "Context",
+  "Generate",
+  "Refine",
+  "Approve",
+  "Promote",
+  "Execute",
+];
+
+const evidenceSources = [
+  "Customer notes",
+  "SA feedback",
+  "AWS Well-Architected",
+  "Bedrock Knowledge Base",
+];
+
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -217,6 +233,9 @@ export default function Home() {
   const selectedPillarDetails = pillars.filter((pillar) =>
     selectedPillars.includes(pillar.id)
   );
+  const primaryConcern = selectedPillarDetails[0]?.id ?? "Discovery";
+  const readinessScore = promoted ? 96 : approved ? 84 : briefVersion > 1 ? 71 : 58;
+  const lifecycleProgress = promoted ? 100 : approved ? 72 : briefVersion > 1 ? 48 : 22;
 
   const industryFocus = useMemo(() => {
     if (industry === "Financial Services") {
@@ -402,48 +421,116 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7f2] text-[#17201c]">
-      <section className="border-b border-[#d8ded2] bg-[#fbfcf8]">
-        <div className="mx-auto grid max-w-7xl gap-5 px-5 py-5 xl:grid-cols-[1fr_auto] xl:items-center">
-          <div className="flex items-center gap-4">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-[#263a33] bg-[#17201c] text-sm font-black text-white">
-              PP
+    <main className="app-shell min-h-screen text-[#17201c]">
+      <section className="hero-shell">
+        <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6 xl:grid-cols-[1fr_380px] xl:items-stretch">
+          <div className="hero-copy">
+            <div className="flex items-center gap-4">
+              <div className="brand-mark">PP</div>
+              <div>
+                <p className="eyebrow">AWS Hackathon Product Console</p>
+                <h1 className="mt-1 text-3xl font-black text-white sm:text-5xl">
+                  PillarPrep
+                </h1>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#527064]">
-                AWS Hackathon Product Console
-              </p>
-              <h1 className="text-2xl font-black tracking-tight text-[#17201c] sm:text-3xl">
-                PillarPrep
-              </h1>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-[#536158]">
-                Generate the pre-meeting brief, refine it with SA feedback, then
-                promote the final brief into a living project model for the
-                people who have to deliver the work.
-              </p>
+            <p className="mt-5 max-w-3xl text-base leading-7 text-white/74">
+              An SA briefing cockpit that turns customer context into a refined
+              pre-meeting plan, then promotes the final brief into a living
+              project brain for the team that has to execute.
+            </p>
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              {[
+                ["Current customer", company || "Customer"],
+                ["Primary concern", primaryConcern],
+                ["Win theme", activeScenario.winTheme],
+              ].map(([label, value]) => (
+                <div key={label} className="hero-stat">
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 rounded-lg border border-[#d8ded2] bg-white p-2 text-center shadow-sm">
-            <div className="px-3 py-2">
-              <p className="text-[11px] font-bold uppercase text-[#6f7c73]">
-                Brief
-              </p>
-              <p className="text-sm font-black">v{briefVersion}</p>
+
+          <div className="hero-panel">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="eyebrow text-[#9fd7c0]">Demo readiness</p>
+                <strong className="mt-2 block text-5xl font-black text-white">
+                  {readinessScore}
+                  <span className="text-2xl text-white/50">%</span>
+                </strong>
+              </div>
+              <span className="hero-pill">
+                {promoted ? "Project live" : approved ? "Brief approved" : "In refinement"}
+              </span>
             </div>
-            <div className="border-x border-[#e2e7de] px-3 py-2">
-              <p className="text-[11px] font-bold uppercase text-[#6f7c73]">
-                Stage
-              </p>
-              <p className="text-sm font-black">
-                {promoted ? "Project" : approved ? "Approved" : "Refine"}
-              </p>
+            <div className="mt-6">
+              <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-[0.14em] text-white/58">
+                <span>Lifecycle progress</span>
+                <span>{lifecycleProgress}%</span>
+              </div>
+              <div className="hero-progress">
+                <span style={{ width: `${lifecycleProgress}%` }} />
+              </div>
             </div>
-            <div className="px-3 py-2">
-              <p className="text-[11px] font-bold uppercase text-[#6f7c73]">
-                Model
-              </p>
-              <p className="text-sm font-black">Bedrock</p>
+            <div className="mt-5 grid grid-cols-3 gap-2 text-center">
+              <div className="mini-stat">
+                <span>Brief</span>
+                <strong>v{briefVersion}</strong>
+              </div>
+              <div className="mini-stat">
+                <span>Pillars</span>
+                <strong>{selectedPillars.length}</strong>
+              </div>
+              <div className="mini-stat">
+                <span>Mode</span>
+                <strong>Bedrock</strong>
+              </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 pt-5">
+        <div className="lifecycle-rail">
+          {lifecycleStages.map((stage, index) => {
+            const stageActive =
+              index === 0 ||
+              (briefVersion > 1 && index <= 2) ||
+              (approved && index <= 3) ||
+              (promoted && index <= 5);
+
+            return (
+              <div
+                key={stage}
+                className={cx("lifecycle-step", stageActive && "lifecycle-step-active")}
+              >
+                <span>{index + 1}</span>
+                <strong>{stage}</strong>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 pt-5">
+        <div className="spotlight-grid">
+          <div className="spotlight-card">
+            <span>Customer signal</span>
+            <strong>{activeScenario.challenge}</strong>
+            <p>{industryFocus}</p>
+          </div>
+          <div className="spotlight-card spotlight-card-strong">
+            <span>AWS value path</span>
+            <strong>{primaryConcern}</strong>
+            <p>Briefs are mapped to Well-Architected priorities and promoted into delivery context.</p>
+          </div>
+          <div className="spotlight-card">
+            <span>Next best action</span>
+            <strong>{promoted ? "Run the project brain" : approved ? "Capture meeting outcomes" : "Refine the pre-brief"}</strong>
+            <p>{promoted ? "Generate plans, status summaries, and onboarding answers." : "Turn the customer conversation into reusable team memory."}</p>
           </div>
         </div>
       </section>
@@ -708,6 +795,11 @@ export default function Home() {
                         <p key={item} className="brief-line">
                           {item}
                         </p>
+                      ))}
+                    </div>
+                    <div className="evidence-tray">
+                      {evidenceSources.map((source) => (
+                        <span key={source}>{source}</span>
                       ))}
                     </div>
                   </div>
