@@ -248,6 +248,150 @@ body {
     #ffffff;
 }
 
+.demo-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 0.9rem;
+}
+
+.demo-panel {
+  border: 1px solid #d8ded2;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 1rem;
+  box-shadow: 0 18px 50px rgba(23, 32, 28, 0.075);
+}
+
+.demo-panel-dark {
+  border-color: rgba(23, 32, 28, 0.9);
+  background:
+    linear-gradient(90deg, rgba(159, 215, 192, 0.08), transparent 38%),
+    #17201c;
+}
+
+.section-head p {
+  color: #607067;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.section-head h2 {
+  margin-top: 0.35rem;
+  color: #17201c;
+  font-size: 1.15rem;
+  font-weight: 1000;
+  line-height: 1.25;
+}
+
+.section-head-dark p {
+  color: #9fd7c0;
+}
+
+.section-head-dark h2 {
+  color: #ffffff;
+}
+
+.demo-beats {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.demo-beat {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr;
+  gap: 0.75rem;
+  align-items: start;
+  border: 1px solid #e0e7dc;
+  border-radius: 8px;
+  background: #fbfcf8;
+  padding: 0.82rem;
+}
+
+.demo-beat time {
+  display: grid;
+  min-height: 2rem;
+  place-items: center;
+  border-radius: 6px;
+  background: #17201c;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.demo-beat strong {
+  display: block;
+  color: #17201c;
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+.demo-beat p {
+  margin-top: 0.22rem;
+  color: #536158;
+  font-size: 0.8rem;
+  line-height: 1.48;
+}
+
+.aws-spine {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.aws-spine-node {
+  display: grid;
+  min-height: 6.7rem;
+  align-content: space-between;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.72rem;
+}
+
+.aws-spine-node span {
+  display: grid;
+  height: 1.55rem;
+  width: 1.55rem;
+  place-items: center;
+  border-radius: 6px;
+  background: #9fd7c0;
+  color: #17201c;
+  font-size: 0.7rem;
+  font-weight: 950;
+}
+
+.aws-spine-node strong {
+  color: #ffffff;
+  font-size: 0.78rem;
+  line-height: 1.22;
+}
+
+.aws-spine-caption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.9rem;
+}
+
+.aws-spine-caption span {
+  display: inline-flex;
+  min-height: 1.8rem;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.68);
+  padding: 0 0.62rem;
+  font-size: 0.67rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 button,
 input,
 select,
@@ -699,6 +843,58 @@ button {
   color: #ffffff;
 }
 
+.packet-band {
+  border: 1px solid #d8ded2;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(31, 122, 99, 0.06), transparent 46%),
+    rgba(255, 255, 255, 0.92);
+  padding: 1rem;
+  box-shadow: 0 18px 48px rgba(23, 32, 28, 0.07);
+}
+
+.packet-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.packet-tile {
+  min-height: 10rem;
+  border: 1px solid #d8ded2;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0.9rem;
+}
+
+.packet-tile span {
+  display: grid;
+  height: 1.7rem;
+  width: 1.7rem;
+  place-items: center;
+  border-radius: 6px;
+  background: #e8f5ee;
+  color: #176d58;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.packet-tile strong {
+  display: block;
+  margin-top: 1.1rem;
+  color: #17201c;
+  font-size: 0.92rem;
+  line-height: 1.3;
+}
+
+.packet-tile p {
+  margin-top: 0.45rem;
+  color: #536158;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
 .architecture-map {
   display: grid;
   gap: 0.55rem;
@@ -941,7 +1137,10 @@ button {
 
 @media (max-width: 640px) {
   .lifecycle-rail,
-  .spotlight-grid {
+  .spotlight-grid,
+  .demo-grid,
+  .packet-grid,
+  .aws-spine {
     grid-template-columns: 1fr;
   }
 
@@ -952,5 +1151,16 @@ button {
   .brief-surface,
   .project-answer {
     min-height: auto;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1100px) {
+  .demo-grid,
+  .packet-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .aws-spine {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

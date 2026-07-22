@@ -186,6 +186,57 @@ const evidenceSources = [
   "Bedrock Knowledge Base",
 ];
 
+const demoBeats = [
+  {
+    time: "0:00",
+    title: "Select the customer",
+    detail: "Choose a scenario and show how sparse context becomes structured prep.",
+  },
+  {
+    time: "0:25",
+    title: "Refine the brief",
+    detail: "Apply SA feedback to tune the brief for audience, pillar, and risk.",
+  },
+  {
+    time: "0:50",
+    title: "Promote to project",
+    detail: "Capture meeting outcomes and turn the brief into shared delivery memory.",
+  },
+  {
+    time: "1:15",
+    title: "Ask Project Brain",
+    detail: "Switch roles and generate the plan, exec summary, or onboarding answer.",
+  },
+];
+
+const architectureFlow = [
+  "Context",
+  "Bedrock",
+  "Refine",
+  "S3",
+  "Knowledge Base",
+  "Project Brain",
+];
+
+const packetOutputs = [
+  {
+    title: "Technical brief",
+    detail: "Architecture assumptions, risk areas, service references, and deep-dive questions.",
+  },
+  {
+    title: "Executive brief",
+    detail: "Business context, outcome framing, success criteria, and low-jargon questions.",
+  },
+  {
+    title: "SA game plan",
+    detail: "Meeting objective, talk track, likely objections, and closeout checklist.",
+  },
+  {
+    title: "Project handoff",
+    detail: "Notes, decisions, owners, risks, timeline, and role-aware follow-on answers.",
+  },
+];
+
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -531,6 +582,49 @@ export default function Home() {
             <span>Next best action</span>
             <strong>{promoted ? "Run the project brain" : approved ? "Capture meeting outcomes" : "Refine the pre-brief"}</strong>
             <p>{promoted ? "Generate plans, status summaries, and onboarding answers." : "Turn the customer conversation into reusable team memory."}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 pt-5">
+        <div className="demo-grid">
+          <div className="demo-panel">
+            <div className="section-head">
+              <p>Hackathon demo lane</p>
+              <h2>90-second story</h2>
+            </div>
+            <div className="demo-beats">
+              {demoBeats.map((beat) => (
+                <div key={beat.time} className="demo-beat">
+                  <time>{beat.time}</time>
+                  <div>
+                    <strong>{beat.title}</strong>
+                    <p>{beat.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="demo-panel demo-panel-dark">
+            <div className="section-head section-head-dark">
+              <p>AWS system spine</p>
+              <h2>From brief to delivery brain</h2>
+            </div>
+            <div className="aws-spine">
+              {architectureFlow.map((node, index) => (
+                <div key={node} className="aws-spine-node">
+                  <span>{index + 1}</span>
+                  <strong>{node}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="aws-spine-caption">
+              <span>Guardrails</span>
+              <span>CloudWatch</span>
+              <span>DynamoDB</span>
+              <span>API Gateway</span>
+            </div>
           </div>
         </div>
       </section>
@@ -949,6 +1043,22 @@ export default function Home() {
                   ))}
                 </div>
               </section>
+            </div>
+          </section>
+
+          <section className="packet-band">
+            <div className="section-head">
+              <p>Generated packet</p>
+              <h2>What the team walks away with</h2>
+            </div>
+            <div className="packet-grid">
+              {packetOutputs.map((packet, index) => (
+                <div key={packet.title} className="packet-tile">
+                  <span>{index + 1}</span>
+                  <strong>{packet.title}</strong>
+                  <p>{packet.detail}</p>
+                </div>
+              ))}
             </div>
           </section>
 
