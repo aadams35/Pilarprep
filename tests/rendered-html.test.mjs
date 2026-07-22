@@ -31,6 +31,10 @@ test("server-renders the PillarPrep console", async () => {
   const html = await response.text();
   assert.match(html, /PillarPrep/);
   assert.match(html, /PillarPrep demo console/);
+  assert.match(html, /1\. Setup/);
+  assert.match(html, /2\. Brief/);
+  assert.match(html, /3\. Project Brain/);
+  assert.match(html, /Set up the customer/);
   assert.match(html, /Pre-brief refinement/);
   assert.match(html, /Follow-on project model/);
   assert.match(html, /Project Brain/);

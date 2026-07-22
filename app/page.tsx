@@ -288,14 +288,6 @@ const heroProofPoints = [
   "AWS-ready deployment path",
 ];
 
-const runtimeSignals = [
-  "Bedrock",
-  "Lambda",
-  "S3",
-  "DynamoDB",
-  "CloudWatch",
-];
-
 const implementationBacklog = [
   "CDK or SAM stack",
   "Bedrock prompt contract",
@@ -548,10 +540,10 @@ export default function Home() {
               <span className="status-dot" />
               PillarPrep demo console
             </div>
-            <div className="top-command-services" aria-label="AWS runtime services">
-              {runtimeSignals.map((signal) => (
-                <span key={signal}>{signal}</span>
-              ))}
+            <div className="top-command-actions">
+              <a href="#setup">1. Setup</a>
+              <a href="#brief">2. Brief</a>
+              <a href="#project-brain">3. Project Brain</a>
             </div>
           </div>
         </div>
@@ -775,8 +767,16 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-5 py-5 xl:grid-cols-[380px_1fr]">
-        <aside className="space-y-5">
+      <section className="linear-workflow mx-auto max-w-7xl px-5 py-5">
+        <div className="workflow-heading" id="setup">
+          <span>Step 1</span>
+          <div>
+            <p>Set up the customer</p>
+            <h2>Pick a scenario or enter real meeting context</h2>
+          </div>
+        </div>
+
+        <div className="setup-grid">
           <section className="rounded-lg border border-[#d8ded2] bg-white shadow-sm">
             <div className="border-b border-[#e2e7de] p-5">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#527064]">
@@ -897,17 +897,30 @@ export default function Home() {
                 />
               </label>
 
-              <button
-                className="primary-button w-full"
-                type="button"
-                onClick={refineBrief}
-              >
-                <span className="button-icon">+</span>
-                Generate / refine brief
-              </button>
+              <div className="action-row">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={refineBrief}
+                >
+                  <span className="button-icon">+</span>
+                  Generate / refine brief
+                </button>
+                <a className="secondary-link" href="#brief">
+                  Review generated brief
+                </a>
+              </div>
             </div>
           </section>
-        </aside>
+        </div>
+
+        <div className="workflow-heading" id="brief">
+          <span>Step 2</span>
+          <div>
+            <p>Refine the pre-brief</p>
+            <h2>Review the output, apply feedback, then approve it</h2>
+          </div>
+        </div>
 
         <div className="space-y-5">
           <section className="rounded-lg border border-[#d8ded2] bg-white shadow-sm">
@@ -1209,6 +1222,14 @@ export default function Home() {
               ))}
             </div>
           </section>
+
+          <div className="workflow-heading workflow-heading-dark" id="project-brain">
+            <span>Step 3</span>
+            <div>
+              <p>Promote after the meeting</p>
+              <h2>Turn the final brief into the follow-on project model</h2>
+            </div>
+          </div>
 
           <section className="rounded-lg border border-[#d8ded2] bg-[#17201c] text-white shadow-sm">
             <div className="grid gap-0 2xl:grid-cols-[380px_1fr]">
