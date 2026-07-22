@@ -534,7 +534,7 @@ export default function Home() {
   return (
     <main className="app-shell min-h-screen text-[#17201c]">
       <section className="hero-shell">
-        <div className="mx-auto max-w-7xl px-5 pt-4">
+        <div className="mx-auto max-w-[1500px] px-5 pt-4">
           <div className="top-command">
             <div className="top-command-title">
               <span className="status-dot" />
@@ -547,7 +547,7 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6 xl:grid-cols-[1fr_380px] xl:items-stretch">
+        <div className="mx-auto grid max-w-[1500px] gap-5 px-5 py-6 xl:grid-cols-[1fr_400px] xl:items-stretch">
           <div className="hero-copy">
             <div className="flex items-center gap-4">
               <div className="brand-mark">PP</div>
@@ -648,7 +648,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pt-5">
+      <section className="mx-auto max-w-[1500px] px-5 pt-5">
         <div className="lifecycle-rail">
           {lifecycleStages.map((stage, index) => {
             const stageActive =
@@ -670,7 +670,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pt-5">
+      <section className="mx-auto max-w-[1500px] px-5 pt-5">
         <div className="spotlight-grid">
           <div className="spotlight-card">
             <span>Customer signal</span>
@@ -690,7 +690,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pt-5">
+      <section className="mx-auto max-w-[1500px] px-5 pt-5">
         <div className="demo-grid">
           <div className="demo-panel">
             <div className="section-head">
@@ -733,7 +733,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pt-5">
+      <section className="mx-auto max-w-[1500px] px-5 pt-5">
         <div className="aws-runway">
           <div className="section-head">
             <p>AWS run path</p>
@@ -767,7 +767,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="linear-workflow mx-auto max-w-7xl px-5 py-5">
+      <section className="linear-workflow mx-auto max-w-[1500px] px-5 py-5">
         <div className="workflow-heading" id="setup">
           <span>Step 1</span>
           <div>
@@ -923,67 +923,64 @@ export default function Home() {
         </div>
 
         <div className="space-y-5">
-          <section className="rounded-lg border border-[#d8ded2] bg-white shadow-sm">
-            <div className="grid gap-0 lg:grid-cols-[1fr_280px_1fr]">
-              <div className="loop-panel">
-                <div className="loop-badge">Loop 1</div>
-                <h2 className="text-xl font-black">Pre-brief refinement</h2>
-                <p className="mt-2 text-sm leading-6 text-[#536158]">
-                  The SA reviews the generated brief, gives targeted feedback,
-                  and improves it before the customer conversation.
-                </p>
-                <div className="mt-5 grid gap-2">
-                  {["Generate", "Review", "Refine", "Approve"].map(
-                    (step, index) => (
-                      <div key={step} className="flow-step">
-                        <span>{index + 1}</span>
-                        <strong>{step}</strong>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-
-              <div className="flex min-h-64 flex-col items-center justify-center border-y border-[#e2e7de] bg-[#f7f9f3] p-5 lg:border-x lg:border-y-0">
-                <div className="diagram-core">
-                  <div className="diagram-ring">
-                    <span>Brief</span>
-                    <strong>{approved ? "Approved" : "Draft"}</strong>
-                  </div>
-                  <div className="diagram-line" />
-                  <button
-                    className={cx(
-                      "promote-button",
-                      promoted && "promote-button-done"
-                    )}
-                    type="button"
-                    onClick={promoteProject}
-                  >
-                    Promote to Project
-                  </button>
-                </div>
-                <p className="mt-4 max-w-48 text-center text-xs font-semibold uppercase tracking-[0.14em] text-[#718078]">
-                  Final brief becomes project context
+          <section className="phase-stack">
+            <div className="phase-card">
+              <div className="phase-copy">
+                <div className="loop-badge">Phase 1</div>
+                <h2>Pre-brief refinement</h2>
+                <p>
+                  Generate the first brief, review it with SA feedback, improve
+                  the questions, and approve the customer-ready version.
                 </p>
               </div>
+              <div className="phase-steps">
+                {["Generate", "Review", "Refine", "Approve"].map(
+                  (step, index) => (
+                    <div key={step} className="flow-step">
+                      <span>{index + 1}</span>
+                      <strong>{step}</strong>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
 
-              <div className="loop-panel">
-                <div className="loop-badge loop-badge-project">Loop 2</div>
-                <h2 className="text-xl font-black">Follow-on project model</h2>
-                <p className="mt-2 text-sm leading-6 text-[#536158]">
-                  After the meeting, notes and decisions turn the approved
-                  brief into a living assistant for delivery and leadership.
+            <div className="phase-bridge">
+              <div>
+                <span>Approved brief</span>
+                <strong>{approved ? "Ready for handoff" : "Waiting for approval"}</strong>
+              </div>
+              <button
+                className={cx(
+                  "promote-button",
+                  promoted && "promote-button-done"
+                )}
+                type="button"
+                onClick={promoteProject}
+              >
+                Promote to Project
+              </button>
+              <p>Final brief becomes project context</p>
+            </div>
+
+            <div className="phase-card phase-card-project">
+              <div className="phase-copy">
+                <div className="loop-badge loop-badge-project">Phase 2</div>
+                <h2>Follow-on project model</h2>
+                <p>
+                  Capture meeting outcomes, promote the brief into shared
+                  memory, and use Project Brain for delivery follow-through.
                 </p>
-                <div className="mt-5 grid gap-2">
-                  {["Capture notes", "Promote", "Ask", "Update"].map(
-                    (step, index) => (
-                      <div key={step} className="flow-step project-step">
-                        <span>{index + 1}</span>
-                        <strong>{step}</strong>
-                      </div>
-                    )
-                  )}
-                </div>
+              </div>
+              <div className="phase-steps">
+                {["Capture notes", "Promote", "Ask", "Update"].map(
+                  (step, index) => (
+                    <div key={step} className="flow-step project-step">
+                      <span>{index + 1}</span>
+                      <strong>{step}</strong>
+                    </div>
+                  )
+                )}
               </div>
             </div>
           </section>

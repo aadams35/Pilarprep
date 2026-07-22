@@ -35,6 +35,9 @@ test("server-renders the PillarPrep console", async () => {
   assert.match(html, /2\. Brief/);
   assert.match(html, /3\. Project Brain/);
   assert.match(html, /Set up the customer/);
+  assert.match(html, /Phase 1/);
+  assert.match(html, /Phase 2/);
+  assert.match(html, /Approved brief/);
   assert.match(html, /Pre-brief refinement/);
   assert.match(html, /Follow-on project model/);
   assert.match(html, /Project Brain/);
