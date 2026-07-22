@@ -21,6 +21,7 @@ https://pillarprep-console.adamsaustin35.chatgpt.site
 - Prompt contract: `docs/prompt-contract.md`
 - Architecture notes: `docs/aws-architecture.md`
 - Demo script: `docs/demo-script.md`
+- Project Brain tools: `docs/project-brain-tools.md`
 - Brief quality eval: `npm run eval:briefs`
 
 ## Why Bedrock First

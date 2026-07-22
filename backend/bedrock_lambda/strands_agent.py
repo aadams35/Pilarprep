@@ -3,6 +3,13 @@ import os
 from strands import Agent
 from strands.models import BedrockModel
 
+from project_tools import (
+    build_follow_up_email,
+    build_project_record,
+    build_risk_register,
+    build_two_week_plan,
+)
+
 
 def build_project_brain_agent():
     model = BedrockModel(
@@ -14,6 +21,12 @@ def build_project_brain_agent():
 
     return Agent(
         model=model,
+        tools=[
+            build_project_record,
+            build_two_week_plan,
+            build_risk_register,
+            build_follow_up_email,
+        ],
         system_prompt=(
             "You are Project Brain for PillarPrep. Use the approved brief, "
             "meeting notes, risks, decisions, and owners to answer role-aware "
