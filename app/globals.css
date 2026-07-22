@@ -255,11 +255,11 @@ body {
 }
 
 .demo-panel {
-  border: 1px solid #d8ded2;
+  border: 1px solid #cbd6c7;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.92);
   padding: 1rem;
-  box-shadow: 0 18px 50px rgba(23, 32, 28, 0.075);
+  box-shadow: 0 16px 38px rgba(23, 32, 28, 0.085);
 }
 
 .demo-panel-dark {
@@ -387,6 +387,87 @@ body {
   color: rgba(255, 255, 255, 0.68);
   padding: 0 0.62rem;
   font-size: 0.67rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.aws-runway {
+  border: 1px solid #bfcabe;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(35, 103, 162, 0.08), transparent 42%),
+    #ffffff;
+  padding: 1rem;
+  box-shadow: 0 18px 48px rgba(23, 32, 28, 0.08);
+}
+
+.runway-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.runway-card {
+  min-height: 11.5rem;
+  border: 1px solid #d8ded2;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 250, 246, 0.96)),
+    #ffffff;
+  padding: 0.9rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.runway-card span {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  border-radius: 999px;
+  background: #e8f1fb;
+  color: #163f64;
+  padding: 0 0.58rem;
+  font-size: 0.65rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.runway-card strong {
+  display: block;
+  margin-top: 0.95rem;
+  color: #17201c;
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+.runway-card p {
+  margin-top: 0.48rem;
+  color: #536158;
+  font-size: 0.8rem;
+  line-height: 1.52;
+}
+
+.production-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.9rem;
+  border-top: 1px solid #e1e8dc;
+  padding-top: 0.9rem;
+}
+
+.production-strip span {
+  display: inline-flex;
+  min-height: 1.9rem;
+  align-items: center;
+  border: 1px solid #d4ded0;
+  border-radius: 999px;
+  background: #fbfcf8;
+  color: #435149;
+  padding: 0 0.7rem;
+  font-size: 0.68rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1140,7 +1221,8 @@ button {
   .spotlight-grid,
   .demo-grid,
   .packet-grid,
-  .aws-spine {
+  .aws-spine,
+  .runway-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1156,7 +1238,8 @@ button {
 
 @media (min-width: 641px) and (max-width: 1100px) {
   .demo-grid,
-  .packet-grid {
+  .packet-grid,
+  .runway-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

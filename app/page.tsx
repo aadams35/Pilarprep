@@ -237,6 +237,43 @@ const packetOutputs = [
   },
 ];
 
+const awsRunway = [
+  {
+    layer: "Frontend",
+    service: "S3 + CloudFront",
+    detail: "Static React app with fast global delivery and a simple hackathon deployment path.",
+  },
+  {
+    layer: "API",
+    service: "API Gateway + Lambda",
+    detail: "Thin request layer for brief generation, feedback capture, and project promotion.",
+  },
+  {
+    layer: "AI generation",
+    service: "Amazon Bedrock",
+    detail: "Role-aware brief generation, refinement loop, objection handling, and follow-on answers.",
+  },
+  {
+    layer: "Project memory",
+    service: "S3 + Knowledge Bases",
+    detail: "Final briefs, meeting notes, and project artifacts become searchable project context.",
+  },
+  {
+    layer: "State + telemetry",
+    service: "DynamoDB + CloudWatch",
+    detail: "Track project status, feedback, owners, timestamps, usage, and operational health.",
+  },
+];
+
+const productionChecks = [
+  "IAM least privilege",
+  "Bedrock Guardrails",
+  "CloudWatch logs",
+  "Structured JSON outputs",
+  "S3 artifact retention",
+  "DynamoDB project state",
+];
+
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -536,8 +573,8 @@ export default function Home() {
                 <strong>{selectedPillars.length}</strong>
               </div>
               <div className="mini-stat">
-                <span>Mode</span>
-                <strong>Bedrock</strong>
+                <span>Runtime</span>
+                <strong>AWS</strong>
               </div>
             </div>
           </div>
@@ -625,6 +662,29 @@ export default function Home() {
               <span>DynamoDB</span>
               <span>API Gateway</span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 pt-5">
+        <div className="aws-runway">
+          <div className="section-head">
+            <p>AWS run path</p>
+            <h2>Designed to deploy as a native AWS workload</h2>
+          </div>
+          <div className="runway-grid">
+            {awsRunway.map((item) => (
+              <div key={item.layer} className="runway-card">
+                <span>{item.layer}</span>
+                <strong>{item.service}</strong>
+                <p>{item.detail}</p>
+              </div>
+            ))}
+          </div>
+          <div className="production-strip">
+            {productionChecks.map((check) => (
+              <span key={check}>{check}</span>
+            ))}
           </div>
         </div>
       </section>
@@ -1002,13 +1062,15 @@ export default function Home() {
                 <div className="p-5">
                   <div className="architecture-map">
                     {[
-                      "React",
+                      "S3 + CloudFront",
                       "API Gateway",
                       "Lambda",
                       "Bedrock",
                       "Knowledge Base",
-                      "S3 + DynamoDB",
+                      "DynamoDB",
+                      "S3 artifacts",
                       "Guardrails",
+                      "CloudWatch",
                     ].map((service, index) => (
                       <div key={service} className="architecture-node">
                         <span>{index + 1}</span>

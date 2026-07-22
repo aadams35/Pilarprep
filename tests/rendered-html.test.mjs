@@ -34,6 +34,8 @@ test("server-renders the PillarPrep console", async () => {
   assert.match(html, /Follow-on project model/);
   assert.match(html, /Project Brain/);
   assert.match(html, /AWS-native architecture/);
+  assert.match(html, /AWS run path/);
+  assert.match(html, /S3 \+ CloudFront/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/i);
 });
 
@@ -46,7 +48,7 @@ test("removes the starter preview shell", async () => {
 
   assert.match(page, /Project Brain/);
   assert.match(page, /Promote to Project/);
-  assert.match(layout, /PillarPrep \| AWS SA Briefing Console/);
+  assert.match(layout, /PillarPrep \| AWS SA Briefing Copilot/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
