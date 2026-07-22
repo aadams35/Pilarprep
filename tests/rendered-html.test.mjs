@@ -3,13 +3,18 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
+  return fetchWorker("/");
+}
+
+async function fetchWorker(path, init) {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
-    new Request("http://localhost/", {
+    new Request(`http://localhost${path}`, {
       headers: { accept: "text/html" },
+      ...init,
     }),
     {
       ASSETS: {
@@ -63,4 +68,29 @@ test("removes the starter preview shell", async () => {
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
+});
+
+test("generates a demo brief through the API contract", async () => {
+  const response = await fetchWorker("/api/brief", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      company: "Apex Mutual",
+      industry: "Financial Services",
+      meetingType: "Executive Briefing",
+      companySize: "Enterprise",
+      pillars: ["Security", "Reliability"],
+      context: "Modernizing a customer portal with audit and migration risk.",
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.provider, "demo");
+  assert.match(payload.technical.join("\n"), /Apex Mutual/);
+  assert.match(payload.executive.join("\n"), /auditability/);
+  assert.match(payload.projectAnswer, /Project Brain|promote/i);
 });

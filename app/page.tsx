@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { BriefResponse } from "@/lib/pillarprep/types";
 
 type BriefTab = "technical" | "executive" | "gameplan" | "objections";
 type AudienceRole = "Sales" | "Executive" | "PM" | "Engineer" | "New member";
@@ -340,6 +341,9 @@ export default function Home() {
   const [activePrompt, setActivePrompt] = useState(
     "Create the first two-week plan."
   );
+  const [generatedBrief, setGeneratedBrief] = useState<BriefResponse | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState("");
 
   const selectedPillarDetails = pillars.filter((pillar) =>
     selectedPillars.includes(pillar.id)
@@ -408,7 +412,7 @@ export default function Home() {
     [approved, feedback, promoted, selectedPillars.length]
   );
 
-  const briefContent = useMemo(
+  const fallbackBriefContent = useMemo(
     () => ({
       technical: [
         `${company || "The customer"} likely needs a secure landing zone, governed identity model, observable application path, and migration pattern that reduces production risk.`,
@@ -440,6 +444,15 @@ export default function Home() {
     ]
   );
 
+  const briefContent = generatedBrief
+    ? {
+        technical: generatedBrief.technical,
+        executive: generatedBrief.executive,
+        gameplan: generatedBrief.gameplan,
+        objections: generatedBrief.objections,
+      }
+    : fallbackBriefContent;
+
   const projectAnswer = useMemo(() => {
     const customerName = company || "the customer";
 
@@ -461,6 +474,8 @@ export default function Home() {
 
     return `This project started as an SA pre-brief for ${customerName}. The final brief, meeting notes, assumptions, risks, and decisions become the source of truth for anyone joining later.`;
   }, [company, industryFocus, role, selectedPillars]);
+
+  const displayedProjectAnswer = generatedBrief?.projectAnswer ?? projectAnswer;
 
   const handoffItems = [
     {
@@ -515,10 +530,56 @@ export default function Home() {
     );
   }
 
+  async function requestBrief(mode: "prebrief" | "project" = "prebrief") {
+    setIsGenerating(true);
+    setGenerationError("");
+
+    try {
+      const response = await fetch("/api/brief", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          mode,
+          company,
+          industry,
+          meetingType,
+          companySize,
+          pillars: selectedPillars,
+          context,
+          meetingNotes,
+          feedback,
+          role,
+          prompt: activePrompt,
+        }),
+      });
+
+      const payload = (await response.json()) as BriefResponse | { error?: string };
+
+      if (!response.ok) {
+        throw new Error(
+          "error" in payload
+            ? payload.error ?? "Brief generation failed"
+            : "Brief generation failed"
+        );
+      }
+
+      setGeneratedBrief(payload as BriefResponse);
+      setBriefVersion((version) => version + 1);
+      setApproved(false);
+      setPromoted(mode === "project");
+    } catch (error) {
+      setGenerationError(
+        error instanceof Error ? error.message : "Brief generation failed"
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
   function refineBrief() {
-    setBriefVersion((version) => version + 1);
-    setApproved(false);
-    setPromoted(false);
+    void requestBrief("prebrief");
   }
 
   function approveBrief() {
@@ -529,6 +590,7 @@ export default function Home() {
   function promoteProject() {
     setApproved(true);
     setPromoted(true);
+    void requestBrief("project");
   }
 
   return (
@@ -901,15 +963,27 @@ export default function Home() {
                 <button
                   className="primary-button"
                   type="button"
+                  disabled={isGenerating}
                   onClick={refineBrief}
                 >
                   <span className="button-icon">+</span>
-                  Generate / refine brief
+                  {isGenerating ? "Generating brief..." : "Generate / refine brief"}
                 </button>
                 <a className="secondary-link" href="#brief">
                   Review generated brief
                 </a>
               </div>
+              <div className="provider-note">
+                <span>{generatedBrief?.provider ?? "demo"} provider</span>
+                <strong>
+                  {generatedBrief
+                    ? `Last generated ${new Date(generatedBrief.generatedAt).toLocaleTimeString()}`
+                    : "Ready for Bedrock"}
+                </strong>
+              </div>
+              {generationError ? (
+                <p className="error-note">{generationError}</p>
+              ) : null}
             </div>
           </section>
         </div>
@@ -1048,7 +1122,7 @@ export default function Home() {
                       ))}
                     </div>
                     <div className="evidence-tray">
-                      {evidenceSources.map((source) => (
+                      {(generatedBrief?.citations ?? evidenceSources).map((source) => (
                         <span key={source}>{source}</span>
                       ))}
                     </div>
@@ -1060,9 +1134,10 @@ export default function Home() {
                       <button
                         className="small-action"
                         type="button"
+                        disabled={isGenerating}
                         onClick={refineBrief}
                       >
-                        Apply feedback
+                        {isGenerating ? "Applying..." : "Apply feedback"}
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1310,7 +1385,7 @@ export default function Home() {
                         </span>
                       </div>
                       <p className="mt-5 text-base leading-7 text-white/82">
-                        {projectAnswer}
+                        {displayedProjectAnswer}
                       </p>
                     </div>
 
@@ -1355,10 +1430,13 @@ export default function Home() {
                         promoted && "project-promote-wide-done"
                       )}
                       type="button"
+                      disabled={isGenerating}
                       onClick={promoteProject}
                     >
                       {promoted
-                        ? "Project model updated"
+                        ? isGenerating
+                          ? "Updating project model..."
+                          : "Project model updated"
                         : "Promote notes into Project Brain"}
                     </button>
                   </div>

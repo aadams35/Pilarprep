@@ -1,98 +1,114 @@
-# vinext-starter
+# PillarPrep
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+PillarPrep is an AWS-focused SA briefing generator for hackathon demos.
 
-## Prerequisites
+The app has two loops:
 
-- Node.js `>=22.13.0`
+1. Pre-brief refinement: generate, review, refine, and approve a customer-ready SA brief.
+2. Follow-on project model: promote the final brief and meeting notes into Project Brain for sales, executives, PMs, engineers, and new project members.
 
-## Quick Start
+Live demo:
+
+https://pillarprep-console.adamsaustin35.chatgpt.site
+
+## Current Shape
+
+- Frontend: React, Next-compatible Vinext app
+- Hosted demo: OpenAI Sites
+- Local API contract: `POST /api/brief`
+- Demo provider: deterministic local generator in `lib/pillarprep/generator.ts`
+- AWS implementation target: `backend/bedrock_lambda/`
+
+## Why Bedrock First
+
+Amazon Bedrock is the core v1 choice because PillarPrep needs managed generation, role-aware refinement, guardrails, and a Knowledge Bases path for Project Brain. It avoids custom model hosting while keeping the architecture AWS-native.
+
+Recommended production path:
+
+```text
+React app
+  -> API Gateway
+  -> Lambda
+  -> Amazon Bedrock
+  -> S3 approved brief artifacts
+  -> DynamoDB project state
+  -> Bedrock Knowledge Bases
+  -> Project Brain answers
+```
+
+## Where Strands Fits
+
+Strands is the optional agent layer for Phase 2. Use it when Project Brain needs tool use, multi-step project workflows, role-aware implementation planning, or retrieval-backed follow-up actions.
+
+Recommended split:
+
+- Bedrock: brief generation, refinement, structured outputs, guardrails
+- Strands: follow-on agent orchestration for Project Brain
+- SageMaker: out of scope for v1 unless the team decides to train, fine-tune, or host custom models
+
+## API Contract
+
+`POST /api/brief`
+
+```json
+{
+  "mode": "prebrief",
+  "company": "Apex Mutual",
+  "industry": "Financial Services",
+  "meetingType": "Executive Briefing",
+  "companySize": "Enterprise",
+  "pillars": ["Security", "Reliability"],
+  "context": "Modernizing a customer portal with audit and migration risk.",
+  "meetingNotes": "",
+  "feedback": ["Reduce AWS jargon"],
+  "role": "PM",
+  "prompt": "Create the first two-week plan."
+}
+```
+
+Response:
+
+```json
+{
+  "provider": "demo",
+  "generatedAt": "2026-07-22T00:00:00.000Z",
+  "technical": [],
+  "executive": [],
+  "gameplan": [],
+  "objections": [],
+  "projectAnswer": "",
+  "citations": []
+}
+```
+
+## AWS Backend
+
+The Lambda reference lives in `backend/bedrock_lambda/app.py`.
+
+Minimum IAM permissions for the Lambda execution role:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": ["bedrock:InvokeModel"],
+  "Resource": "*"
+}
+```
+
+For production, scope `Resource` to the selected model ARN and add permissions for S3, DynamoDB, CloudWatch Logs, and Knowledge Bases as those features are implemented.
+
+Optional Strands reference:
+
+```text
+backend/bedrock_lambda/strands_agent.py
+```
+
+## Local Development
 
 ```bash
 npm install
 npm run dev
-npm run build
+npm test
 ```
 
-This starter does not use `wrangler.jsonc`.
-
-## Included Shape
-
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+The local app works without AWS credentials because `/api/brief` currently uses the demo provider. Swap the API implementation to the Bedrock Lambda once the AWS sandbox is ready.
