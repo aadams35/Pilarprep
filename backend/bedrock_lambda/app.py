@@ -68,6 +68,45 @@ def _invoke_bedrock(prompt):
     return result["output"]["message"]["content"][0]["text"]
 
 
+def _as_string_list(value):
+    if isinstance(value, list):
+        return [str(item) for item in value if item]
+
+    if value:
+        return [str(value)]
+
+    return []
+
+
+def _parse_model_response(model_text):
+    cleaned = model_text.strip()
+
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+
+    if start >= 0 and end > start:
+        cleaned = cleaned[start : end + 1]
+
+    parsed = json.loads(cleaned)
+
+    return {
+        "technical": _as_string_list(parsed.get("technical")),
+        "executive": _as_string_list(parsed.get("executive")),
+        "gameplan": _as_string_list(parsed.get("gameplan")),
+        "objections": _as_string_list(parsed.get("objections")),
+        "projectAnswer": str(parsed.get("projectAnswer", "")),
+        "citations": _as_string_list(parsed.get("citations")),
+    }
+
+
 def _project_id(payload):
     company = payload.get("company") or "customer"
     slug = "".join(char.lower() if char.isalnum() else "-" for char in company)
@@ -134,7 +173,7 @@ def handler(event, _context):
     model_text = _invoke_bedrock(prompt)
 
     try:
-        generated = json.loads(model_text)
+        generated = _parse_model_response(model_text)
     except json.JSONDecodeError:
         generated = {
             "technical": [model_text],
