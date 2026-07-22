@@ -1,0 +1,35 @@
+[
+  {
+    "id": "apex",
+    "company": "Apex Mutual",
+    "industry": "Financial Services",
+    "meetingType": "Executive Briefing",
+    "companySize": "Enterprise",
+    "pillars": ["Security", "Reliability", "Cost Optimization"],
+    "context": "Customer is modernizing a customer portal, worried about compliance, and wants a clearer migration path without disrupting peak business periods.",
+    "meetingNotes": "CIO wants an executive-ready modernization path. Security asked for identity boundaries, audit evidence, and a migration pilot before committing to a broader program.",
+    "feedback": ["Reduce AWS jargon", "Focus on security"]
+  },
+  {
+    "id": "northstar",
+    "company": "Northstar Health",
+    "industry": "Healthcare",
+    "meetingType": "Technical Deep Dive",
+    "companySize": "Enterprise",
+    "pillars": ["Security", "Reliability", "Operational Excellence"],
+    "context": "Hospital network is consolidating patient scheduling systems and needs stronger disaster recovery, lower support burden, and clear compliance controls.",
+    "meetingNotes": "Architecture team needs RTO/RPO options, data classification, and phased cutover patterns. Compliance team wants explicit evidence paths and fewer manual review steps.",
+    "feedback": ["Add stronger technical depth", "Improve discovery questions"]
+  },
+  {
+    "id": "peakcart",
+    "company": "PeakCart Retail",
+    "industry": "Retail",
+    "meetingType": "Discovery Call",
+    "companySize": "Mid-market",
+    "pillars": ["Performance Efficiency", "Cost Optimization", "Reliability"],
+    "context": "Digital commerce team is preparing for peak season. They need better elasticity, fewer checkout incidents, and a clearer cost story for executive sponsors.",
+    "meetingNotes": "VP of Digital cares about conversion and launch speed. Engineering wants load-test targets, rollback patterns, and cost controls before seasonal traffic ramps.",
+    "feedback": ["Add cost angle", "Customer is already on AWS"]
+  }
+]

@@ -19,6 +19,9 @@ https://pillarprep-console.adamsaustin35.chatgpt.site
 - Demo provider: deterministic local generator in `lib/pillarprep/generator.ts`
 - AWS implementation target: `backend/bedrock_lambda/`
 - Prompt contract: `docs/prompt-contract.md`
+- Architecture notes: `docs/aws-architecture.md`
+- Demo script: `docs/demo-script.md`
+- Brief quality eval: `npm run eval:briefs`
 
 ## Why Bedrock First
 
@@ -141,6 +144,7 @@ backend/bedrock_lambda/strands_agent.py
 npm install
 npm run dev
 npm test
+npm run eval:briefs
 ```
 
 The local app works without AWS credentials because `/api/brief` currently uses the demo provider. Swap the API implementation to the Bedrock Lambda once the AWS sandbox is ready.
