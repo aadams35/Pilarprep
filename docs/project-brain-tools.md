@@ -13,6 +13,7 @@ backend/bedrock_lambda/project_tools.py
 - `build_project_record`: creates a structured project summary from request and generated brief output.
 - `build_two_week_plan`: produces the first implementation sprint.
 - `build_risk_register`: captures major delivery risks and mitigations.
+- `build_stakeholder_map`: turns approved decision-maker context into stakeholder signals and validation questions.
 - `build_follow_up_email`: drafts a concise customer follow-up.
 
 ## Strands Usage

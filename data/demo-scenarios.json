@@ -7,6 +7,20 @@
     "companySize": "Enterprise",
     "pillars": ["Security", "Reliability", "Cost Optimization"],
     "context": "Customer is modernizing a customer portal, worried about compliance, and wants a clearer migration path without disrupting peak business periods.",
+    "decisionMakers": [
+      {
+        "name": "Lena Ortiz",
+        "title": "CIO",
+        "source": "Customer-approved profile notes",
+        "context": "Prior notes emphasize board visibility, customer trust, modernization governance, and avoiding a risky big-bang migration."
+      },
+      {
+        "name": "Marcus Reed",
+        "title": "CISO",
+        "source": "Customer-approved profile notes",
+        "context": "Security leadership has focused on audit evidence, identity boundaries, data residency, and incident readiness."
+      }
+    ],
     "meetingNotes": "CIO wants an executive-ready modernization path. Security asked for identity boundaries, audit evidence, and a migration pilot before committing to a broader program.",
     "feedback": ["Reduce AWS jargon", "Focus on security"]
   },
@@ -18,6 +32,20 @@
     "companySize": "Enterprise",
     "pillars": ["Security", "Reliability", "Operational Excellence"],
     "context": "Hospital network is consolidating patient scheduling systems and needs stronger disaster recovery, lower support burden, and clear compliance controls.",
+    "decisionMakers": [
+      {
+        "name": "Priya Shah",
+        "title": "VP Patient Access",
+        "source": "Customer-approved profile notes",
+        "context": "Public themes center on patient access, scheduling reliability, care team efficiency, and minimizing disruption during system changes."
+      },
+      {
+        "name": "Daniel Brooks",
+        "title": "Director of Enterprise Architecture",
+        "source": "Customer-approved profile notes",
+        "context": "Architecture notes emphasize interoperability, resilient integration patterns, and reducing manual operational support."
+      }
+    ],
     "meetingNotes": "Architecture team needs RTO/RPO options, data classification, and phased cutover patterns. Compliance team wants explicit evidence paths and fewer manual review steps.",
     "feedback": ["Add stronger technical depth", "Improve discovery questions"]
   },
@@ -29,6 +57,20 @@
     "companySize": "Mid-market",
     "pillars": ["Performance Efficiency", "Cost Optimization", "Reliability"],
     "context": "Digital commerce team is preparing for peak season. They need better elasticity, fewer checkout incidents, and a clearer cost story for executive sponsors.",
+    "decisionMakers": [
+      {
+        "name": "Emma Chen",
+        "title": "VP Digital",
+        "source": "Customer-approved profile notes",
+        "context": "Recent themes focus on conversion, faster campaign launches, loyalty growth, and protecting customer experience during peak traffic."
+      },
+      {
+        "name": "Luis Ramirez",
+        "title": "Platform Engineering Lead",
+        "source": "Customer-approved profile notes",
+        "context": "Engineering priorities include rollback confidence, load-test evidence, observability, and predictable cloud spend."
+      }
+    ],
     "meetingNotes": "VP of Digital cares about conversion and launch speed. Engineering wants load-test targets, rollback patterns, and cost controls before seasonal traffic ramps.",
     "feedback": ["Add cost angle", "Customer is already on AWS"]
   }

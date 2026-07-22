@@ -40,6 +40,8 @@ test("server-renders the PillarPrep console", async () => {
   assert.match(html, /2\. Brief/);
   assert.match(html, /3\. Project Brain/);
   assert.match(html, /Set up the customer/);
+  assert.match(html, /Decision maker context/);
+  assert.match(html, /Stakeholder lens/);
   assert.match(html, /Phase 1/);
   assert.match(html, /Phase 2/);
   assert.match(html, /Approved brief/);
@@ -84,6 +86,14 @@ test("generates a demo brief through the API contract", async () => {
       companySize: "Enterprise",
       pillars: ["Security", "Reliability"],
       context: "Modernizing a customer portal with audit and migration risk.",
+      decisionMakers: [
+        {
+          name: "Lena Ortiz",
+          title: "CIO",
+          source: "Customer-approved profile notes",
+          context: "Modernization governance and board visibility.",
+        },
+      ],
     }),
   });
 
@@ -92,6 +102,7 @@ test("generates a demo brief through the API contract", async () => {
   assert.equal(payload.provider, "demo");
   assert.match(payload.technical.join("\n"), /Apex Mutual/);
   assert.match(payload.executive.join("\n"), /auditability/);
+  assert.match(payload.stakeholders.join("\n"), /Lena Ortiz/);
   assert.match(payload.projectAnswer, /Project Brain|promote/i);
 });
 

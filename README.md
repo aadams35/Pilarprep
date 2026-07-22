@@ -5,7 +5,7 @@ PillarPrep is an AWS-focused SA briefing generator for hackathon demos.
 The app has two loops:
 
 1. Pre-brief refinement: generate, review, refine, and approve a customer-ready SA brief.
-2. Follow-on project model: promote the final brief and meeting notes into Project Brain for sales, executives, PMs, engineers, and new project members.
+2. Follow-on project model: promote the final brief, decision-maker context, and meeting notes into Project Brain for sales, executives, PMs, engineers, and new project members.
 
 Live demo:
 
@@ -17,6 +17,7 @@ https://pillarprep-console.adamsaustin35.chatgpt.site
 - Hosted demo: OpenAI Sites
 - Local API contract: `POST /api/brief`
 - Demo provider: deterministic local generator in `lib/pillarprep/generator.ts`
+- Decision-maker context: manual/customer-approved profile notes, not automated LinkedIn scraping
 - AWS implementation target: `backend/bedrock_lambda/`
 - Prompt contract: `docs/prompt-contract.md`
 - Architecture notes: `docs/aws-architecture.md`
@@ -64,6 +65,14 @@ Recommended split:
   "companySize": "Enterprise",
   "pillars": ["Security", "Reliability"],
   "context": "Modernizing a customer portal with audit and migration risk.",
+  "decisionMakers": [
+    {
+      "name": "Lena Ortiz",
+      "title": "CIO",
+      "source": "Customer-approved profile notes",
+      "context": "Prior notes emphasize board visibility, customer trust, modernization governance, and avoiding a risky big-bang migration."
+    }
+  ],
   "meetingNotes": "",
   "feedback": ["Reduce AWS jargon"],
   "role": "PM",
@@ -79,6 +88,7 @@ Response:
   "generatedAt": "2026-07-22T00:00:00.000Z",
   "technical": [],
   "executive": [],
+  "stakeholders": [],
   "gameplan": [],
   "objections": [],
   "projectAnswer": "",

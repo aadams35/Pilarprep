@@ -13,6 +13,14 @@ PillarPrep uses one structured request and one structured response across demo m
   "companySize": "Enterprise",
   "pillars": ["Security", "Reliability"],
   "context": "Modernizing a customer portal with audit and migration risk.",
+  "decisionMakers": [
+    {
+      "name": "Lena Ortiz",
+      "title": "CIO",
+      "source": "Customer-approved profile notes",
+      "context": "Prior notes emphasize board visibility, customer trust, modernization governance, and avoiding a risky big-bang migration."
+    }
+  ],
   "meetingNotes": "",
   "feedback": ["Reduce AWS jargon"],
   "role": "PM",
@@ -33,10 +41,15 @@ PillarPrep uses one structured request and one structured response across demo m
   },
   "technical": ["..."],
   "executive": ["..."],
+  "stakeholders": ["..."],
   "gameplan": ["..."],
   "objections": ["..."],
   "projectAnswer": "...",
-  "citations": ["Customer context", "AWS Well-Architected pillars"]
+  "citations": [
+    "Customer context",
+    "Decision-maker context (user-provided)",
+    "AWS Well-Architected pillars"
+  ]
 }
 ```
 
@@ -47,6 +60,8 @@ PillarPrep uses one structured request and one structured response across demo m
 - Keep executive content low-jargon.
 - Tie technical recommendations to AWS Well-Architected pillars.
 - Include AWS services only when they help the conversation.
+- Use decision-maker context only when it is customer-approved or manually provided.
+- Never claim that PillarPrep scraped, browsed, or verified LinkedIn.
 - Return strict JSON only.
 
 ## Strands Phase 2 Behavior
@@ -54,6 +69,7 @@ PillarPrep uses one structured request and one structured response across demo m
 Use Strands after the approved brief and meeting notes exist. The agent should answer role-aware questions using:
 
 - final brief
+- decision-maker context
 - meeting notes
 - open risks
 - owners

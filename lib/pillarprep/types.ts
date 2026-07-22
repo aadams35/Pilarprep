@@ -1,5 +1,12 @@
 export type BriefMode = "prebrief" | "project";
 
+export type DecisionMakerContext = {
+  name: string;
+  title: string;
+  source?: string;
+  context: string;
+};
+
 export type BriefRequest = {
   mode?: BriefMode;
   company: string;
@@ -8,6 +15,7 @@ export type BriefRequest = {
   companySize: string;
   pillars: string[];
   context: string;
+  decisionMakers?: DecisionMakerContext[];
   meetingNotes?: string;
   feedback?: string[];
   role?: string;
@@ -25,6 +33,7 @@ export type BriefResponse = {
   };
   technical: string[];
   executive: string[];
+  stakeholders: string[];
   gameplan: string[];
   objections: string[];
   projectAnswer: string;

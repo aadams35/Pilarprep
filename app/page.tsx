@@ -1,9 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { BriefResponse } from "@/lib/pillarprep/types";
+import type {
+  BriefResponse,
+  DecisionMakerContext,
+} from "@/lib/pillarprep/types";
 
-type BriefTab = "technical" | "executive" | "gameplan" | "objections";
+type BriefTab =
+  | "technical"
+  | "executive"
+  | "stakeholders"
+  | "gameplan"
+  | "objections";
 type AudienceRole = "Sales" | "Executive" | "PM" | "Engineer" | "New member";
 type RiskLevel = "Low" | "Medium" | "High";
 
@@ -16,6 +24,7 @@ type Scenario = {
   companySize: string;
   pillars: string[];
   context: string;
+  decisionMakers: DecisionMakerContext[];
   meetingNotes: string;
   challenge: string;
   winTheme: string;
@@ -50,6 +59,22 @@ const scenarios: Scenario[] = [
     pillars: ["Security", "Reliability", "Cost Optimization"],
     context:
       "Customer is modernizing a customer portal, worried about compliance, and wants a clearer migration path without disrupting peak business periods.",
+    decisionMakers: [
+      {
+        name: "Lena Ortiz",
+        title: "CIO",
+        source: "Customer-approved profile notes",
+        context:
+          "Prior notes emphasize board visibility, customer trust, modernization governance, and avoiding a risky big-bang migration.",
+      },
+      {
+        name: "Marcus Reed",
+        title: "CISO",
+        source: "Customer-approved profile notes",
+        context:
+          "Security leadership has focused on audit evidence, identity boundaries, data residency, and incident readiness.",
+      },
+    ],
     meetingNotes:
       "CIO wants an executive-ready modernization path. Security asked for identity boundaries, audit evidence, and a migration pilot before committing to a broader program.",
     challenge: "Risk-sensitive modernization",
@@ -65,6 +90,22 @@ const scenarios: Scenario[] = [
     pillars: ["Security", "Reliability", "Operational Excellence"],
     context:
       "Hospital network is consolidating patient scheduling systems and needs stronger disaster recovery, lower support burden, and clear compliance controls.",
+    decisionMakers: [
+      {
+        name: "Priya Shah",
+        title: "VP Patient Access",
+        source: "Customer-approved profile notes",
+        context:
+          "Public themes center on patient access, scheduling reliability, care team efficiency, and minimizing disruption during system changes.",
+      },
+      {
+        name: "Daniel Brooks",
+        title: "Director of Enterprise Architecture",
+        source: "Customer-approved profile notes",
+        context:
+          "Architecture notes emphasize interoperability, resilient integration patterns, and reducing manual operational support.",
+      },
+    ],
     meetingNotes:
       "Architecture team needs RTO/RPO options, data classification, and phased cutover patterns. Compliance team wants explicit evidence paths and fewer manual review steps.",
     challenge: "Patient-facing availability",
@@ -80,6 +121,22 @@ const scenarios: Scenario[] = [
     pillars: ["Performance Efficiency", "Cost Optimization", "Reliability"],
     context:
       "Digital commerce team is preparing for peak season. They need better elasticity, fewer checkout incidents, and a clearer cost story for executive sponsors.",
+    decisionMakers: [
+      {
+        name: "Emma Chen",
+        title: "VP Digital",
+        source: "Customer-approved profile notes",
+        context:
+          "Recent themes focus on conversion, faster campaign launches, loyalty growth, and protecting customer experience during peak traffic.",
+      },
+      {
+        name: "Luis Ramirez",
+        title: "Platform Engineering Lead",
+        source: "Customer-approved profile notes",
+        context:
+          "Engineering priorities include rollback confidence, load-test evidence, observability, and predictable cloud spend.",
+      },
+    ],
     meetingNotes:
       "VP of Digital cares about conversion and launch speed. Engineering wants load-test targets, rollback patterns, and cost controls before seasonal traffic ramps.",
     challenge: "Elastic customer experience",
@@ -229,6 +286,10 @@ const packetOutputs = [
     detail: "Business context, outcome framing, success criteria, and low-jargon questions.",
   },
   {
+    title: "Decision-maker lens",
+    detail: "Approved stakeholder context, likely priorities, tailored questions, and influence notes.",
+  },
+  {
     title: "SA game plan",
     detail: "Meeting objective, talk track, likely objections, and closeout checklist.",
   },
@@ -326,6 +387,9 @@ export default function Home() {
     activeScenario.pillars
   );
   const [context, setContext] = useState(activeScenario.context);
+  const [decisionMakers, setDecisionMakers] = useState<DecisionMakerContext[]>(
+    () => activeScenario.decisionMakers.map((person) => ({ ...person }))
+  );
   const [meetingNotes, setMeetingNotes] = useState(
     activeScenario.meetingNotes
   );
@@ -347,6 +411,22 @@ export default function Home() {
 
   const selectedPillarDetails = pillars.filter((pillar) =>
     selectedPillars.includes(pillar.id)
+  );
+  const usableDecisionMakers = useMemo(
+    () =>
+      decisionMakers
+        .map((person) => ({
+          name: person.name.trim(),
+          title: person.title.trim(),
+          source: person.source?.trim() ?? "",
+          context: person.context.trim(),
+        }))
+        .filter((person) => person.name || person.title || person.context),
+    [decisionMakers]
+  );
+  const decisionMakerSignalLength = usableDecisionMakers.reduce(
+    (total, person) => total + person.context.length,
+    0
   );
   const primaryConcern = selectedPillarDetails[0]?.id ?? "Discovery";
   const readinessScore = promoted ? 96 : approved ? 84 : briefVersion > 1 ? 71 : 58;
@@ -395,6 +475,18 @@ export default function Home() {
           : "Needs low-jargon refinement",
       },
       {
+        label: "Stakeholder signal",
+        value: Math.min(
+          96,
+          42 +
+            usableDecisionMakers.length * 18 +
+            Math.min(18, Math.floor(decisionMakerSignalLength / 45))
+        ),
+        detail: usableDecisionMakers.length
+          ? `${usableDecisionMakers.length} decision-maker profiles captured`
+          : "Add approved decision-maker notes",
+      },
+      {
         label: "Handoff readiness",
         value: approved ? (promoted ? 96 : 84) : 62,
         detail: promoted
@@ -409,7 +501,14 @@ export default function Home() {
         detail: "Designed for Bedrock Knowledge Bases and citations",
       },
     ],
-    [approved, feedback, promoted, selectedPillars.length]
+    [
+      approved,
+      decisionMakerSignalLength,
+      feedback,
+      promoted,
+      selectedPillars.length,
+      usableDecisionMakers.length,
+    ]
   );
 
   const fallbackBriefContent = useMemo(
@@ -424,6 +523,16 @@ export default function Home() {
         "Position AWS as a way to improve decision quality, reduce operational drag, and make progress measurable without forcing a risky all-at-once transformation.",
         `Business framing: ${activeScenario.winTheme}`,
       ],
+      stakeholders: usableDecisionMakers.length
+        ? usableDecisionMakers.map(
+            (person) =>
+              `${person.name || "Decision maker"}${person.title ? `, ${person.title}` : ""}: connect the opening to ${primaryConcern.toLowerCase()} and ask which outcome, risk, or blocker matters most from their seat. ${person.context ? `Signal: ${person.context}` : ""}`
+          )
+        : [
+            "Add approved stakeholder notes to tailor the opening, questions, and objection handling.",
+            `For ${company || "the customer"}, identify the economic buyer, technical owner, security approver, and project driver before the follow-up.`,
+            "Use pasted customer-approved context only; treat all profile-based insight as a hypothesis to validate.",
+          ],
       gameplan: [
         "Open by confirming the business event driving urgency, then map technical unknowns to business impact.",
         `Spend the first half on ${selectedPillars.join(", ").toLowerCase()} and use the final ten minutes to agree on success measures and next steps.`,
@@ -440,7 +549,9 @@ export default function Home() {
       company,
       companySize,
       industryFocus,
+      primaryConcern,
       selectedPillars,
+      usableDecisionMakers,
     ]
   );
 
@@ -448,6 +559,9 @@ export default function Home() {
     ? {
         technical: generatedBrief.technical,
         executive: generatedBrief.executive,
+        stakeholders: generatedBrief.stakeholders?.length
+          ? generatedBrief.stakeholders
+          : fallbackBriefContent.stakeholders,
         gameplan: generatedBrief.gameplan,
         objections: generatedBrief.objections,
       }
@@ -455,25 +569,29 @@ export default function Home() {
 
   const projectAnswer = useMemo(() => {
     const customerName = company || "the customer";
+    const stakeholderLead = usableDecisionMakers[0];
+    const stakeholderContext = stakeholderLead
+      ? ` Include ${stakeholderLead.name || "the primary stakeholder"}${stakeholderLead.title ? ` (${stakeholderLead.title})` : ""} in the alignment path and validate the decision-maker notes before using them as facts.`
+      : " Capture stakeholder owners before the project handoff so follow-on answers stay audience-aware.";
 
     if (role === "PM") {
-      return `Start with a two-week discovery sprint for ${customerName}: confirm stakeholders, validate the ${selectedPillars[0]?.toLowerCase() || "top"} risk, capture current-state architecture, and publish a decision log. Track owners for security, data, app dependencies, and executive success criteria.`;
+      return `Start with a two-week discovery sprint for ${customerName}: confirm stakeholders, validate the ${selectedPillars[0]?.toLowerCase() || "top"} risk, capture current-state architecture, and publish a decision log. Track owners for security, data, app dependencies, and executive success criteria.${stakeholderContext}`;
     }
 
     if (role === "Engineer") {
-      return `Begin with the narrow technical spine: ingestion path, identity model, API boundary, data store, and observability. Use the final pre-brief assumptions as hypotheses, then validate them before committing to architecture.`;
+      return `Begin with the narrow technical spine: ingestion path, identity model, API boundary, data store, and observability. Use the final pre-brief assumptions as hypotheses, then validate them before committing to architecture.${stakeholderContext}`;
     }
 
     if (role === "Executive") {
-      return `${customerName} needs a controlled modernization path. The business case is reduced delivery risk, better visibility into cost and reliability, and faster movement on high-value customer-facing work.`;
+      return `${customerName} needs a controlled modernization path. The business case is reduced delivery risk, better visibility into cost and reliability, and faster movement on high-value customer-facing work.${stakeholderContext}`;
     }
 
     if (role === "Sales") {
-      return `Lead the follow-up with the outcome they cared about most: ${industryFocus}. Keep it short, confirm what we heard, and propose a focused working session that turns the brief into an implementation plan.`;
+      return `Lead the follow-up with the outcome they cared about most: ${industryFocus}. Keep it short, confirm what we heard, and propose a focused working session that turns the brief into an implementation plan.${stakeholderContext}`;
     }
 
-    return `This project started as an SA pre-brief for ${customerName}. The final brief, meeting notes, assumptions, risks, and decisions become the source of truth for anyone joining later.`;
-  }, [company, industryFocus, role, selectedPillars]);
+    return `This project started as an SA pre-brief for ${customerName}. The final brief, decision-maker context, meeting notes, assumptions, risks, and decisions become the source of truth for anyone joining later.`;
+  }, [company, industryFocus, role, selectedPillars, usableDecisionMakers]);
 
   const displayedProjectAnswer = generatedBrief?.projectAnswer ?? projectAnswer;
 
@@ -482,6 +600,13 @@ export default function Home() {
       title: "Final brief",
       status: approved ? "Ready" : "Draft",
       detail: `v${briefVersion} with ${feedback.length} refinements`,
+    },
+    {
+      title: "Stakeholder lens",
+      status: usableDecisionMakers.length ? "Captured" : "Needs context",
+      detail: usableDecisionMakers.length
+        ? `${usableDecisionMakers.length} decision-maker signals`
+        : "Approved profile notes and priorities",
     },
     {
       title: "Meeting outcomes",
@@ -508,10 +633,14 @@ export default function Home() {
     setCompanySize(nextScenario.companySize);
     setSelectedPillars(nextScenario.pillars);
     setContext(nextScenario.context);
+    setDecisionMakers(nextScenario.decisionMakers.map((person) => ({ ...person })));
     setMeetingNotes(nextScenario.meetingNotes);
     setBriefVersion(1);
     setApproved(false);
     setPromoted(false);
+    setActiveTab("technical");
+    setGeneratedBrief(null);
+    setGenerationError("");
   }
 
   function togglePillar(pillar: string) {
@@ -527,6 +656,38 @@ export default function Home() {
       current.includes(option)
         ? current.filter((item) => item !== option)
         : [...current, option]
+    );
+  }
+
+  function updateDecisionMaker(
+    index: number,
+    field: keyof DecisionMakerContext,
+    value: string
+  ) {
+    setDecisionMakers((current) =>
+      current.map((person, personIndex) =>
+        personIndex === index ? { ...person, [field]: value } : person
+      )
+    );
+  }
+
+  function addDecisionMaker() {
+    setDecisionMakers((current) => [
+      ...current,
+      {
+        name: "",
+        title: "",
+        source: "Customer-approved profile notes",
+        context: "",
+      },
+    ]);
+  }
+
+  function removeDecisionMaker(index: number) {
+    setDecisionMakers((current) =>
+      current.length <= 1
+        ? current
+        : current.filter((_, personIndex) => personIndex !== index)
     );
   }
 
@@ -550,6 +711,7 @@ export default function Home() {
           context,
           meetingNotes,
           feedback,
+          decisionMakers: usableDecisionMakers,
           role,
           prompt: activePrompt,
         }),
@@ -959,6 +1121,85 @@ export default function Home() {
                 />
               </label>
 
+              <div className="decision-context-panel">
+                <div className="decision-context-head">
+                  <div>
+                    <span className="field-label">Decision maker context</span>
+                    <h3>Stakeholder lens</h3>
+                  </div>
+                  <button
+                    className="small-action"
+                    type="button"
+                    onClick={addDecisionMaker}
+                  >
+                    Add person
+                  </button>
+                </div>
+                <p className="decision-context-note">
+                  Customer-approved notes only. No automated LinkedIn scraping.
+                </p>
+                <div className="decision-maker-list">
+                  {decisionMakers.map((person, index) => (
+                    <div key={index} className="decision-maker-card">
+                      <div className="decision-maker-card-head">
+                        <strong>Decision maker {index + 1}</strong>
+                        {decisionMakers.length > 1 ? (
+                          <button
+                            className="text-action"
+                            type="button"
+                            onClick={() => removeDecisionMaker(index)}
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="decision-maker-grid">
+                        <label className="block">
+                          <span className="field-label">Name</span>
+                          <input
+                            className="field"
+                            value={person.name}
+                            onChange={(event) =>
+                              updateDecisionMaker(index, "name", event.target.value)
+                            }
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="field-label">Title</span>
+                          <input
+                            className="field"
+                            value={person.title}
+                            onChange={(event) =>
+                              updateDecisionMaker(index, "title", event.target.value)
+                            }
+                          />
+                        </label>
+                      </div>
+                      <label className="block">
+                        <span className="field-label">Source label</span>
+                        <input
+                          className="field"
+                          value={person.source ?? ""}
+                          onChange={(event) =>
+                            updateDecisionMaker(index, "source", event.target.value)
+                          }
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="field-label">Approved profile / post themes</span>
+                        <textarea
+                          className="field min-h-24 resize-none"
+                          value={person.context}
+                          onChange={(event) =>
+                            updateDecisionMaker(index, "context", event.target.value)
+                          }
+                        />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="action-row">
                 <button
                   className="primary-button"
@@ -1078,6 +1319,7 @@ export default function Home() {
                     [
                       "technical",
                       "executive",
+                      "stakeholders",
                       "gameplan",
                       "objections",
                     ] as BriefTab[]
@@ -1091,7 +1333,11 @@ export default function Home() {
                       onClick={() => setActiveTab(tab)}
                       type="button"
                     >
-                      {tab === "gameplan" ? "SA game plan" : tab}
+                      {tab === "gameplan"
+                        ? "SA game plan"
+                        : tab === "stakeholders"
+                          ? "Stakeholder lens"
+                          : tab}
                     </button>
                   ))}
                 </div>
@@ -1106,9 +1352,11 @@ export default function Home() {
                           ? "Technical brief"
                           : activeTab === "executive"
                             ? "Executive brief"
-                            : activeTab === "gameplan"
-                              ? "SA game plan"
-                              : "Objection simulator"}
+                            : activeTab === "stakeholders"
+                              ? "Stakeholder lens"
+                              : activeTab === "gameplan"
+                                ? "SA game plan"
+                                : "Objection simulator"}
                       </p>
                       <span className="status-pill">
                         {approved ? "Approved" : "Draft"}
@@ -1159,6 +1407,27 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-4">
+                  <div className="summary-panel stakeholder-summary">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#527064]">
+                      Decision makers
+                    </p>
+                    <div className="mt-4 space-y-2">
+                      {usableDecisionMakers.length ? (
+                        usableDecisionMakers.slice(0, 3).map((person) => (
+                          <div key={`${person.name}-${person.title}`} className="stakeholder-mini">
+                            <strong>{person.name || "Decision maker"}</strong>
+                            <span>{person.title || "Role to confirm"}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="stakeholder-mini stakeholder-mini-empty">
+                          <strong>Context needed</strong>
+                          <span>Approved notes unlock tailored questions</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="summary-panel">
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#527064]">
                       Pillar heatmap
@@ -1393,7 +1662,7 @@ export default function Home() {
                       {[
                         "Implementation plan",
                         "Risk list",
-                        "Exec summary",
+                        "Stakeholder map",
                         "Onboarding answers",
                       ].map((artifact) => (
                         <div key={artifact} className="artifact-tile">

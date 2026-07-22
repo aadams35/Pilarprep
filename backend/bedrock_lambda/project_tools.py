@@ -20,6 +20,7 @@ def build_project_record(payload, generated):
         "createdAt": now,
         "updatedAt": now,
         "summary": _first(generated.get("executive", []), ""),
+        "stakeholders": build_stakeholder_map(payload, generated),
         "openQuestions": generated.get("gameplan", []),
         "risks": build_risk_register(payload, generated),
     }
@@ -76,16 +77,59 @@ def build_risk_register(payload, generated):
     ]
 
 
+def build_stakeholder_map(payload, generated):
+    decision_makers = payload.get("decisionMakers", [])
+    generated_lens = generated.get("stakeholders", [])
+
+    if not isinstance(decision_makers, list):
+        decision_makers = []
+
+    if not isinstance(generated_lens, list):
+        generated_lens = []
+
+    if not decision_makers:
+        return [
+            {
+                "name": "Stakeholder to confirm",
+                "title": "Economic buyer / technical owner / security approver",
+                "signal": _first(
+                    generated_lens,
+                    "Capture approved decision-maker notes during or after the meeting.",
+                ),
+                "nextQuestion": "Who owns approval, technical validation, security review, and budget?",
+            }
+        ]
+
+    return [
+        {
+            "name": person.get("name", "Decision maker")
+            if isinstance(person, dict)
+            else "Decision maker",
+            "title": person.get("title", "") if isinstance(person, dict) else "",
+            "source": person.get("source", "User-provided context")
+            if isinstance(person, dict)
+            else "User-provided context",
+            "signal": person.get("context", _first(generated_lens, ""))
+            if isinstance(person, dict)
+            else str(person),
+            "nextQuestion": "What outcome, risk, or blocker matters most from your seat?",
+        }
+        for person in decision_makers
+    ]
+
+
 def build_follow_up_email(payload, generated):
     company = payload.get("company", "your team")
     executive_summary = _first(generated.get("executive", []), "")
+    stakeholder_lens = _first(generated.get("stakeholders", []), "")
     next_step = _first(generated.get("gameplan", []), "confirm next steps")
 
     return {
         "subject": f"Follow-up from PillarPrep briefing for {company}",
         "body": (
             f"Thanks for the conversation. The main theme we captured was: {executive_summary}\n\n"
+            f"Stakeholder context we will validate: {stakeholder_lens}\n\n"
             f"Recommended next step: {next_step}\n\n"
-            "We will use the approved brief, meeting notes, risks, and owner list as the shared project context."
+            "We will use the approved brief, decision-maker notes, meeting notes, risks, and owner list as the shared project context."
         ),
     }

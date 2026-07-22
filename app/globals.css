@@ -998,6 +998,88 @@ textarea:focus-visible {
   box-shadow: 0 0 0 4px rgba(31, 122, 99, 0.12);
 }
 
+.decision-context-panel {
+  border: 1px solid #cbd6c7;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(35, 103, 162, 0.08), transparent 44%),
+    #fbfcf8;
+  padding: 1rem;
+}
+
+.decision-context-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.decision-context-head h3 {
+  color: #17201c;
+  font-size: 1rem;
+  font-weight: 1000;
+  line-height: 1.25;
+}
+
+.decision-context-note {
+  margin-top: 0.55rem;
+  border: 1px solid #d8ded2;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #526057;
+  padding: 0.62rem 0.72rem;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.decision-maker-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.decision-maker-card {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid #d8ded2;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0.85rem;
+  box-shadow: 0 10px 24px rgba(23, 32, 28, 0.045);
+}
+
+.decision-maker-card-head,
+.stakeholder-mini {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.decision-maker-card-head strong {
+  color: #17201c;
+  font-size: 0.86rem;
+  font-weight: 950;
+}
+
+.decision-maker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.text-action {
+  border: 0;
+  background: transparent;
+  color: #2367a2;
+  padding: 0;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .scenario-button {
   display: grid;
   min-height: 4.25rem;
@@ -1481,6 +1563,43 @@ textarea:focus-visible {
   box-shadow: 0 12px 30px rgba(23, 32, 28, 0.055);
 }
 
+.stakeholder-summary {
+  background:
+    linear-gradient(135deg, rgba(35, 103, 162, 0.08), transparent 42%),
+    #ffffff;
+}
+
+.stakeholder-mini {
+  min-height: 2.9rem;
+  border: 1px solid #d8ded2;
+  border-radius: 8px;
+  background: #fbfcf8;
+  padding: 0.58rem 0.68rem;
+}
+
+.stakeholder-mini strong {
+  color: #17201c;
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.stakeholder-mini span {
+  color: #607067;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.25;
+  text-align: right;
+}
+
+.stakeholder-mini-empty {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.stakeholder-mini-empty span {
+  text-align: left;
+}
+
 .quality-bar {
   height: 0.5rem;
   overflow: hidden;
@@ -1521,7 +1640,7 @@ textarea:focus-visible {
 
 .packet-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.75rem;
   margin-top: 1rem;
 }
@@ -1827,6 +1946,7 @@ textarea:focus-visible {
   .spotlight-grid,
   .demo-grid,
   .setup-grid,
+  .decision-maker-grid,
   .action-row,
   .phase-card,
   .phase-steps,
@@ -1852,6 +1972,16 @@ textarea:focus-visible {
 
   .phase-bridge p {
     justify-self: start;
+    text-align: left;
+  }
+
+  .decision-context-head,
+  .stakeholder-mini {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .stakeholder-mini span {
     text-align: left;
   }
 

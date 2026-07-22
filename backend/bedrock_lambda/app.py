@@ -23,12 +23,17 @@ def _response(status_code, body):
 
 
 def _build_prompt(payload):
+    decision_makers = json.dumps(
+        payload.get("decisionMakers", []),
+        ensure_ascii=True,
+    )
+
     return f"""
 You are PillarPrep, an AWS Solutions Architect briefing assistant.
 
 Return strict JSON with these keys:
-technical, executive, gameplan, objections, projectAnswer, citations.
-Each of technical/executive/gameplan/objections/citations must be an array of strings.
+technical, executive, stakeholders, gameplan, objections, projectAnswer, citations.
+Each of technical/executive/stakeholders/gameplan/objections/citations must be an array of strings.
 
 Company: {payload.get("company")}
 Industry: {payload.get("industry")}
@@ -36,6 +41,7 @@ Meeting type: {payload.get("meetingType")}
 Company size: {payload.get("companySize")}
 AWS pillar priorities: {", ".join(payload.get("pillars", []))}
 Known context: {payload.get("context")}
+Decision-maker context: {decision_makers}
 Meeting notes: {payload.get("meetingNotes", "")}
 Feedback: {", ".join(payload.get("feedback", []))}
 Follow-on role: {payload.get("role", "")}
@@ -47,6 +53,8 @@ Rules:
 - Tie recommendations to AWS Well-Architected pillars.
 - Include practical AWS services only when useful.
 - Treat unknowns as assumptions to validate.
+- Treat decision-maker context as user-provided or customer-approved notes.
+- Do not claim to scrape, browse, or verify LinkedIn or any external profile.
 """
 
 
@@ -100,6 +108,7 @@ def _parse_model_response(model_text):
     return {
         "technical": _as_string_list(parsed.get("technical")),
         "executive": _as_string_list(parsed.get("executive")),
+        "stakeholders": _as_string_list(parsed.get("stakeholders")),
         "gameplan": _as_string_list(parsed.get("gameplan")),
         "objections": _as_string_list(parsed.get("objections")),
         "projectAnswer": str(parsed.get("projectAnswer", "")),
@@ -169,6 +178,9 @@ def handler(event, _context):
     if missing:
         return _response(400, {"error": f"Missing required fields: {', '.join(missing)}"})
 
+    if "decisionMakers" in payload and not isinstance(payload["decisionMakers"], list):
+        return _response(400, {"error": "decisionMakers must be an array"})
+
     prompt = _build_prompt(payload)
     model_text = _invoke_bedrock(prompt)
 
@@ -178,6 +190,7 @@ def handler(event, _context):
         generated = {
             "technical": [model_text],
             "executive": [],
+            "stakeholders": [],
             "gameplan": [],
             "objections": [],
             "projectAnswer": "",

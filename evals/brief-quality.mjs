@@ -28,6 +28,7 @@ function scoreBrief(scenario, brief) {
   const allText = [
     technicalText,
     executiveText,
+    brief.stakeholders.join("\n"),
     brief.gameplan.join("\n"),
     brief.objections.join("\n"),
     brief.projectAnswer,
@@ -36,10 +37,14 @@ function scoreBrief(scenario, brief) {
   if (brief.provider) score += 10;
   if (brief.technical.length >= 3) score += 15;
   if (brief.executive.length >= 3) score += 15;
+  if (brief.stakeholders.length >= 2) score += 10;
   if (brief.gameplan.length >= 3) score += 15;
   if (brief.objections.length >= 3) score += 10;
   if (brief.citations.length >= 3) score += 10;
   if (allText.includes(scenario.company)) score += 10;
+  if (scenario.decisionMakers?.some((person) => allText.includes(person.name))) {
+    score += 10;
+  }
   if (/Bedrock|Knowledge Bases|Well-Architected/.test(technicalText)) score += 10;
 
   if (/API Gateway|Lambda|DynamoDB|CloudWatch/.test(executiveText)) {
