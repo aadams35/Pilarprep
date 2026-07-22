@@ -94,3 +94,20 @@ test("generates a demo brief through the API contract", async () => {
   assert.match(payload.executive.join("\n"), /auditability/);
   assert.match(payload.projectAnswer, /Project Brain|promote/i);
 });
+
+test("rejects incomplete brief API requests", async () => {
+  const response = await fetchWorker("/api/brief", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      company: "",
+    }),
+  });
+
+  assert.equal(response.status, 400);
+  const payload = await response.json();
+  assert.match(payload.error, /company is required/);
+});

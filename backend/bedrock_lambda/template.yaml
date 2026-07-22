@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: PillarPrep Bedrock briefing backend
+
+Parameters:
+  BedrockModelId:
+    Type: String
+    Default: anthropic.claude-3-5-sonnet-20241022-v2:0
+  AllowedOrigin:
+    Type: String
+    Default: "*"
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 512
+    Tracing: Active
+    Environment:
+      Variables:
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        ALLOWED_ORIGIN: !Ref AllowedOrigin
+        ARTIFACT_BUCKET: !Ref BriefArtifactsBucket
+        PROJECT_TABLE: !Ref ProjectStateTable
+
+Resources:
+  BriefApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowHeaders:
+          - content-type
+          - x-api-key
+        AllowMethods:
+          - POST
+          - OPTIONS
+
+  BriefFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: app.handler
+      Events:
+        GenerateBrief:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref BriefApi
+            Path: /brief
+            Method: POST
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+              - bedrock:InvokeModelWithResponseStream
+            Resource: "*"
+        - Statement:
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+            Resource: !Sub "${BriefArtifactsBucket.Arn}/*"
+        - Statement:
+            Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:Query
+              - dynamodb:UpdateItem
+            Resource: !GetAtt ProjectStateTable.Arn
+
+  BriefArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+
+  ProjectStateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: projectId
+          AttributeType: S
+        - AttributeName: sortKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: projectId
+          KeyType: HASH
+        - AttributeName: sortKey
+          KeyType: RANGE
+
+Outputs:
+  BriefApiUrl:
+    Description: API Gateway endpoint for PillarPrep brief generation
+    Value: !Sub "https://${BriefApi}.execute-api.${AWS::Region}.amazonaws.com/brief"
+  ArtifactBucketName:
+    Description: S3 bucket for approved briefs and project artifacts
+    Value: !Ref BriefArtifactsBucket
+  ProjectStateTableName:
+    Description: DynamoDB table for project state
+    Value: !Ref ProjectStateTable

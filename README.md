@@ -18,6 +18,7 @@ https://pillarprep-console.adamsaustin35.chatgpt.site
 - Local API contract: `POST /api/brief`
 - Demo provider: deterministic local generator in `lib/pillarprep/generator.ts`
 - AWS implementation target: `backend/bedrock_lambda/`
+- Prompt contract: `docs/prompt-contract.md`
 
 ## Why Bedrock First
 
@@ -84,6 +85,30 @@ Response:
 ## AWS Backend
 
 The Lambda reference lives in `backend/bedrock_lambda/app.py`.
+
+The SAM template lives in `backend/bedrock_lambda/template.yaml`.
+
+Deploy from that folder when the AWS sandbox is ready:
+
+```bash
+cd backend/bedrock_lambda
+sam build
+sam deploy --guided
+```
+
+After deployment, set the frontend environment variable to the SAM output URL:
+
+```bash
+PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
+```
+
+If API Gateway is protected with an API key, also set:
+
+```bash
+PILLARPREP_BACKEND_API_KEY=...
+```
+
+When `PILLARPREP_BACKEND_URL` is absent, the app uses the local demo generator.
 
 Minimum IAM permissions for the Lambda execution role:
 
