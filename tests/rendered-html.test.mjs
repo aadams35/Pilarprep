@@ -30,12 +30,16 @@ test("server-renders the PillarPrep console", async () => {
 
   const html = await response.text();
   assert.match(html, /PillarPrep/);
+  assert.match(html, /PillarPrep demo console/);
   assert.match(html, /Pre-brief refinement/);
   assert.match(html, /Follow-on project model/);
   assert.match(html, /Project Brain/);
+  assert.match(html, /AWS-ready deployment path/);
   assert.match(html, /AWS-native architecture/);
   assert.match(html, /AWS run path/);
   assert.match(html, /S3 \+ CloudFront/);
+  assert.match(html, /Live signal profile/);
+  assert.match(html, /Implementation queue/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/i);
 });
 

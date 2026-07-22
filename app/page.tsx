@@ -274,6 +274,37 @@ const productionChecks = [
   "DynamoDB project state",
 ];
 
+const signalMetrics = [
+  { label: "Context fit", value: 92 },
+  { label: "Pillar match", value: 88 },
+  { label: "Handoff depth", value: 81 },
+  { label: "AWS readiness", value: 94 },
+];
+
+const heroProofPoints = [
+  "Bedrock generation loop",
+  "Well-Architected pillar scoring",
+  "Project Brain handoff",
+  "AWS-ready deployment path",
+];
+
+const runtimeSignals = [
+  "Bedrock",
+  "Lambda",
+  "S3",
+  "DynamoDB",
+  "CloudWatch",
+];
+
+const implementationBacklog = [
+  "CDK or SAM stack",
+  "Bedrock prompt contract",
+  "Knowledge Base bucket",
+  "DynamoDB project schema",
+  "Guardrail policy",
+  "CloudWatch dashboard",
+];
+
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -511,6 +542,19 @@ export default function Home() {
   return (
     <main className="app-shell min-h-screen text-[#17201c]">
       <section className="hero-shell">
+        <div className="mx-auto max-w-7xl px-5 pt-4">
+          <div className="top-command">
+            <div className="top-command-title">
+              <span className="status-dot" />
+              PillarPrep demo console
+            </div>
+            <div className="top-command-services" aria-label="AWS runtime services">
+              {runtimeSignals.map((signal) => (
+                <span key={signal}>{signal}</span>
+              ))}
+            </div>
+          </div>
+        </div>
         <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6 xl:grid-cols-[1fr_380px] xl:items-stretch">
           <div className="hero-copy">
             <div className="flex items-center gap-4">
@@ -527,6 +571,14 @@ export default function Home() {
               pre-meeting plan, then promotes the final brief into a living
               project brain for the team that has to execute.
             </p>
+            <div className="product-strip" aria-label="Hackathon value signals">
+              {heroProofPoints.map((point, index) => (
+                <span key={point}>
+                  <i>{String(index + 1).padStart(2, "0")}</i>
+                  {point}
+                </span>
+              ))}
+            </div>
             <div className="mt-6 grid gap-3 md:grid-cols-3">
               {[
                 ["Current customer", company || "Customer"],
@@ -542,6 +594,10 @@ export default function Home() {
           </div>
 
           <div className="hero-panel">
+            <div className="panel-status">
+              <span>Live AWS workload concept</span>
+              <strong>Hackathon ready</strong>
+            </div>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="eyebrow text-[#9fd7c0]">Demo readiness</p>
@@ -575,6 +631,25 @@ export default function Home() {
               <div className="mini-stat">
                 <span>Runtime</span>
                 <strong>AWS</strong>
+              </div>
+            </div>
+            <div className="telemetry-screen">
+              <div className="telemetry-header">
+                <span>Live signal profile</span>
+                <strong>{company || "Customer"}</strong>
+              </div>
+              <div className="telemetry-bars">
+                {signalMetrics.map((metric) => (
+                  <div key={metric.label} className="telemetry-row">
+                    <div>
+                      <span>{metric.label}</span>
+                      <strong>{metric.value}%</strong>
+                    </div>
+                    <div className="telemetry-bar">
+                      <span style={{ width: `${metric.value}%` }} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -685,6 +760,17 @@ export default function Home() {
             {productionChecks.map((check) => (
               <span key={check}>{check}</span>
             ))}
+          </div>
+          <div className="implementation-queue">
+            <div>
+              <p>Implementation queue</p>
+              <strong>Next build sprint</strong>
+            </div>
+            <div className="implementation-items">
+              {implementationBacklog.map((item) => (
+                <span key={item}>{item}</span>
+              ))}
+            </div>
           </div>
         </div>
       </section>
