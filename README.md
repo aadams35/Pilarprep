@@ -110,6 +110,13 @@ PILLARPREP_BACKEND_API_KEY=...
 
 When `PILLARPREP_BACKEND_URL` is absent, the app uses the local demo generator.
 
+The Lambda reference writes generated output to S3 and DynamoDB when these environment variables are present:
+
+```bash
+ARTIFACT_BUCKET=...
+PROJECT_TABLE=...
+```
+
 Minimum IAM permissions for the Lambda execution role:
 
 ```json

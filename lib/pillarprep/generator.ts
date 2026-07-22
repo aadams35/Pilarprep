@@ -32,6 +32,15 @@ function industryFocus(industry: string) {
   return "modernization, reliability, security, and measurable business outcomes";
 }
 
+function toProjectId(company: string) {
+  const slug = company
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return slug ? `demo-${slug}` : "demo-customer";
+}
+
 export function generateDemoBrief(input: BriefRequest): BriefResponse {
   const company = input.company.trim() || "the customer";
   const pillars = input.pillars.length ? input.pillars : ["Security", "Reliability"];
@@ -44,6 +53,9 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
   return {
     provider: "demo",
     generatedAt: new Date().toISOString(),
+    metadata: {
+      projectId: toProjectId(company),
+    },
     technical: [
       `${company} should be framed around ${compactList(pillars)} with current-state validation before architecture commitment.`,
       `Validate identity boundaries, data classification, integration dependencies, RTO/RPO, observability, and operational ownership across ${input.companySize.toLowerCase()} teams.`,

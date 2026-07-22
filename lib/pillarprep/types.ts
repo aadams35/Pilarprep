@@ -17,6 +17,12 @@ export type BriefRequest = {
 export type BriefResponse = {
   provider: "demo" | "bedrock" | "strands";
   generatedAt: string;
+  metadata?: {
+    projectId?: string;
+    artifactKey?: string;
+    stateKey?: string;
+    storageWarning?: string;
+  };
   technical: string[];
   executive: string[];
   gameplan: string[];

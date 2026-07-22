@@ -7,6 +7,8 @@ import boto3
 
 MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20241022-v2:0")
 REGION = os.getenv("AWS_REGION", "us-east-1")
+ARTIFACT_BUCKET = os.getenv("ARTIFACT_BUCKET", "")
+PROJECT_TABLE = os.getenv("PROJECT_TABLE", "")
 
 
 def _response(status_code, body):
@@ -66,6 +68,56 @@ def _invoke_bedrock(prompt):
     return result["output"]["message"]["content"][0]["text"]
 
 
+def _project_id(payload):
+    company = payload.get("company") or "customer"
+    slug = "".join(char.lower() if char.isalnum() else "-" for char in company)
+    slug = "-".join(part for part in slug.split("-") if part)
+    return payload.get("projectId") or slug or "customer"
+
+
+def _store_project_artifacts(payload, generated):
+    metadata = {"projectId": _project_id(payload)}
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    document = {
+        "request": payload,
+        "response": generated,
+        "storedAt": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        if ARTIFACT_BUCKET:
+            artifact_key = f"projects/{metadata['projectId']}/briefs/{timestamp}.json"
+            s3 = boto3.client("s3", region_name=REGION)
+            s3.put_object(
+                Bucket=ARTIFACT_BUCKET,
+                Key=artifact_key,
+                Body=json.dumps(document).encode("utf-8"),
+                ContentType="application/json",
+            )
+            metadata["artifactKey"] = artifact_key
+
+        if PROJECT_TABLE:
+            state_key = f"BRIEF#{timestamp}"
+            dynamodb = boto3.client("dynamodb", region_name=REGION)
+            dynamodb.put_item(
+                TableName=PROJECT_TABLE,
+                Item={
+                    "projectId": {"S": metadata["projectId"]},
+                    "sortKey": {"S": state_key},
+                    "company": {"S": payload.get("company", "")},
+                    "industry": {"S": payload.get("industry", "")},
+                    "meetingType": {"S": payload.get("meetingType", "")},
+                    "provider": {"S": "bedrock"},
+                    "createdAt": {"S": document["storedAt"]},
+                },
+            )
+            metadata["stateKey"] = state_key
+    except Exception as error:  # Keep generation useful even if storage is misconfigured.
+        metadata["storageWarning"] = str(error)
+
+    return metadata
+
+
 def handler(event, _context):
     try:
         payload = json.loads(event.get("body") or "{}")
@@ -95,5 +147,6 @@ def handler(event, _context):
 
     generated["provider"] = "bedrock"
     generated["generatedAt"] = datetime.now(timezone.utc).isoformat()
+    generated["metadata"] = _store_project_artifacts(payload, generated)
 
     return _response(200, generated)

@@ -26,6 +26,11 @@ PillarPrep uses one structured request and one structured response across demo m
 {
   "provider": "bedrock",
   "generatedAt": "2026-07-22T00:00:00Z",
+  "metadata": {
+    "projectId": "apex-mutual",
+    "artifactKey": "projects/apex-mutual/briefs/20260722T000000Z.json",
+    "stateKey": "BRIEF#20260722T000000Z"
+  },
   "technical": ["..."],
   "executive": ["..."],
   "gameplan": ["..."],
