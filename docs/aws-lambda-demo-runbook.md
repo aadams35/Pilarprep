@@ -28,31 +28,28 @@ This mocks Bedrock and verifies that the Lambda handler accepts API Gateway even
 
 ## AWS Sandbox Setup
 
+If `aws sts get-caller-identity` says credentials are missing, run your normal AWS sign-in first. On this machine the AWS CLI is installed, but credentials were not active during the last check.
+
 1. Confirm the AWS account has Amazon Bedrock model access enabled for the selected model.
 2. Confirm local AWS credentials are active.
-3. Deploy the SAM backend.
+3. Deploy the backend with the AWS CLI script. This packages and deploys API Gateway, Lambda, S3, and DynamoDB through CloudFormation.
 
 ```bash
-cd backend/bedrock_lambda
-sam build
-sam deploy --guided
+.\scripts\deploy-aws-backend.ps1 -Region us-east-1 -AllowedOrigin http://127.0.0.1:3002
 ```
 
-Suggested guided values:
+Optional parameters:
 
 ```text
-Stack Name: pillarprep-bedrock
-AWS Region: us-east-1
-Parameter BedrockModelId: anthropic.claude-3-5-sonnet-20241022-v2:0
-Parameter AllowedOrigin: http://127.0.0.1:3002
-Confirm changes before deploy: Y
-Allow SAM CLI IAM role creation: Y
-Save arguments to configuration file: Y
+-StackName pillarprep-bedrock
+-Region us-east-1
+-AllowedOrigin http://127.0.0.1:3002
+-BedrockModelId anthropic.claude-3-5-sonnet-20241022-v2:0
 ```
 
 ## Connect Frontend To Lambda
 
-After SAM deploys, copy the `BriefApiUrl` output into local env:
+After the script deploys, copy the `BriefApiUrl` output into local env:
 
 ```text
 PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
@@ -64,3 +61,4 @@ Restart the local app, generate a brief, and confirm the provider badge says `be
 ## Demo Fallback Plan
 
 If Bedrock access or AWS credentials are not ready, leave `PILLARPREP_BACKEND_URL` blank. The local demo provider still exercises the full workflow: pre-brief refinement, stakeholder lens, Project Brain ask loop, two-week plan, risk register, stakeholder map, and follow-up email artifact.
+

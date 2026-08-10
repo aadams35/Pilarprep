@@ -112,17 +112,17 @@ Response:
 
 The Lambda reference lives in `backend/bedrock_lambda/app.py`.
 
-The SAM template lives in `backend/bedrock_lambda/template.yaml`.
+The CloudFormation/SAM-compatible template lives in `backend/bedrock_lambda/template.yaml`.
 
-Deploy from that folder when the AWS sandbox is ready:
+The fastest deployment path for this machine is the AWS CLI script:
 
 ```bash
-cd backend/bedrock_lambda
-sam build
-sam deploy --guided
+.\scripts\deploy-aws-backend.ps1 -Region us-east-1 -AllowedOrigin http://127.0.0.1:3002
 ```
 
-After deployment, set the frontend environment variable to the SAM output URL:
+That script packages and deploys API Gateway, Lambda, S3, and DynamoDB. Full deployment steps are in `docs/aws-lambda-demo-runbook.md`, and the current infrastructure map is in `docs/aws-infrastructure-design.md`.
+
+After deployment, set the frontend environment variable to the stack output URL:
 
 ```bash
 PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
@@ -143,17 +143,7 @@ ARTIFACT_BUCKET=...
 PROJECT_TABLE=...
 ```
 
-Minimum IAM permissions for the Lambda execution role:
-
-```json
-{
-  "Effect": "Allow",
-  "Action": ["bedrock:InvokeModel"],
-  "Resource": "*"
-}
-```
-
-For production, scope `Resource` to the selected model ARN and add permissions for S3, DynamoDB, CloudWatch Logs, and Knowledge Bases as those features are implemented.
+For production, scope Bedrock IAM permissions to the selected model ARN and add CloudWatch dashboards, alarms, guardrails, and lightweight auth before public sharing.
 
 Optional Strands reference:
 
@@ -173,3 +163,4 @@ npm run eval:briefs
 The local app works without AWS credentials because `/api/brief` currently uses the demo provider. Swap the API implementation to the Bedrock Lambda once the AWS sandbox is ready.
 
 The browser also stores the current workspace locally so the demo can survive refreshes. Use `Reset workspace` in the UI when you want to return to the default scenario.
+
