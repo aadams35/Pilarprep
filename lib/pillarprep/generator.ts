@@ -2,6 +2,7 @@ import type {
   BriefRequest,
   BriefResponse,
   DecisionMakerContext,
+  ProjectArtifacts,
 } from "./types";
 
 function compactList(items: string[]) {
@@ -69,6 +70,98 @@ function describeDecisionMaker(person: DecisionMakerContext, focus: string) {
   return `${name}${title}: map questions to their priorities and confirm what success, risk, and blockers look like from their seat.${context}${source}`;
 }
 
+function buildProjectArtifacts(
+  input: BriefRequest,
+  company: string,
+  pillars: string[],
+  decisionMakers: DecisionMakerContext[],
+  focus: string
+): ProjectArtifacts {
+  const primaryPillar = pillars[0] ?? "Security";
+  const sponsor = decisionMakers[0]?.name || "executive sponsor";
+
+  return {
+    twoWeekPlan: [
+      {
+        title: "Days 1-2",
+        owner: "SA / Sales",
+        status: "Ready",
+        detail: `Confirm ${company} stakeholders, success criteria, decision process, and the business event driving urgency.`,
+      },
+      {
+        title: "Days 3-5",
+        owner: "SA / Engineer",
+        status: "Ready",
+        detail: `Validate current-state assumptions and the top ${primaryPillar.toLowerCase()} risks before proposing architecture.`,
+      },
+      {
+        title: "Days 6-8",
+        owner: "Engineer",
+        status: "Draft",
+        detail:
+          "Map integration boundaries, data flow, rollback requirements, observability, and the smallest useful pilot scope.",
+      },
+      {
+        title: "Days 9-10",
+        owner: "PM / Sponsor",
+        status: "Draft",
+        detail: `Publish the decision log, risk register, pilot recommendation, and sponsor alignment path with ${sponsor}.`,
+      },
+    ],
+    riskRegister: [
+      {
+        title: "Unvalidated assumptions",
+        owner: "SA",
+        status: "High",
+        detail: `Generated recommendations can overfit before ${company}'s current state is confirmed. Keep assumptions visible until discovery validates them.`,
+      },
+      {
+        title: `${primaryPillar} ownership gap`,
+        owner: "Customer owner",
+        status: "Medium",
+        detail:
+          "The project may stall if the highest-risk pillar lacks a named decision maker and technical owner.",
+      },
+      {
+        title: "Narrative drift",
+        owner: "PM",
+        status: "Medium",
+        detail:
+          "Technical and executive tracks can diverge. Keep every architecture task connected to a measurable business outcome.",
+      },
+    ],
+    stakeholderMap: decisionMakers.length
+      ? decisionMakers.map((person) => ({
+          title: person.name || "Decision maker",
+          owner: person.title || "Role to confirm",
+          status: "Validate",
+          detail:
+            person.context ||
+            `Confirm how this stakeholder defines success around ${focus}.`,
+        }))
+      : [
+          {
+            title: "Economic buyer",
+            owner: "To confirm",
+            status: "Needed",
+            detail:
+              "Identify who owns budget approval, business value, and final prioritization.",
+          },
+          {
+            title: "Technical owner",
+            owner: "To confirm",
+            status: "Needed",
+            detail:
+              "Identify who owns current-state validation, architecture decisions, and implementation tradeoffs.",
+          },
+        ],
+    followUpEmail: {
+      subject: `Follow-up from PillarPrep briefing for ${company}`,
+      body: `Thanks for the conversation. We captured ${focus} as the main business context and ${primaryPillar.toLowerCase()} as the first technical validation area.\n\nRecommended next step: run a focused working session to confirm stakeholders, current-state assumptions, success criteria, risks, and pilot scope.\n\nWe will use the approved brief, decision-maker notes, meeting outcomes, and owner list as the shared project context.`,
+    },
+  };
+}
+
 export function generateDemoBrief(input: BriefRequest): BriefResponse {
   const company = input.company.trim() || "the customer";
   const pillars = input.pillars.length ? input.pillars : ["Security", "Reliability"];
@@ -82,6 +175,13 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
   const stakeholderText = stakeholderLead
     ? `Decision-maker angle: anchor the conversation to ${stakeholderLead.name || "the primary stakeholder"}${stakeholderLead.title ? ` (${stakeholderLead.title})` : ""} and validate the priorities captured in the approved profile notes.`
     : "Decision-maker angle: add approved stakeholder notes to tailor the opening, questions, and objection handling.";
+  const projectArtifacts = buildProjectArtifacts(
+    input,
+    company,
+    pillars,
+    decisionMakers,
+    focus
+  );
 
   return {
     provider: "demo",
@@ -126,6 +226,7 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
       input.mode === "project"
         ? `For ${input.role ?? "the project team"}, start from the approved brief, meeting outcomes, stakeholder notes, open risks, and owners. For the prompt "${input.prompt ?? "What should we do next?"}", recommend a two-week sprint to validate ${primaryPillar.toLowerCase()}, publish a decision log, and align the sponsor on success criteria${stakeholderLead ? ` with ${stakeholderLead.name || "the primary stakeholder"}` : ""}.`
         : `After approval, promote ${company}'s final brief, decision-maker context, and meeting notes into Project Brain so sales, executives, PMs, engineers, and new team members can ask role-specific follow-up questions.`,
+    projectArtifacts,
     citations: [
       "Customer-provided context",
       ...(decisionMakers.length

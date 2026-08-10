@@ -11,6 +11,8 @@
     "start": "vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "eval:briefs": "npm run build && node evals/brief-quality.mjs",
+    "lambda:test": "python -m unittest discover backend/bedrock_lambda/tests",
+    "verify:demo": "npm test && npm run eval:briefs && npm run lambda:test",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },

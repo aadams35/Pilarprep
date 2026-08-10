@@ -12,7 +12,8 @@
 8. Approve the pre-brief.
 9. Promote the brief into Project Brain.
 10. Ask as `PM`: `Create the first two-week plan.`
-11. Close with the AWS story: Bedrock generates and refines, S3 stores artifacts, DynamoDB tracks state, Knowledge Bases ground follow-up, and Strands can orchestrate Project Brain tools.
+11. Click `Ask Project Brain` and point out the generated sprint plan, risk list, stakeholder map, and follow-up email artifacts.
+12. Close with the AWS story: Bedrock generates and refines, S3 stores artifacts, DynamoDB tracks state, Knowledge Bases ground follow-up, and Strands can orchestrate Project Brain tools.
 
 ## One-Sentence Pitch
 

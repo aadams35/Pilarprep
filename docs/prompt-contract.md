@@ -45,6 +45,36 @@ PillarPrep uses one structured request and one structured response across demo m
   "gameplan": ["..."],
   "objections": ["..."],
   "projectAnswer": "...",
+  "projectArtifacts": {
+    "twoWeekPlan": [
+      {
+        "title": "Days 1-2",
+        "detail": "Confirm stakeholders, success criteria, and decision process.",
+        "owner": "SA / Sales",
+        "status": "Ready"
+      }
+    ],
+    "riskRegister": [
+      {
+        "title": "Unvalidated assumptions",
+        "detail": "Generated recommendations must be validated in discovery.",
+        "owner": "SA",
+        "status": "High"
+      }
+    ],
+    "stakeholderMap": [
+      {
+        "title": "Lena Ortiz",
+        "detail": "Validate modernization governance and board visibility priorities.",
+        "owner": "CIO",
+        "status": "Validate"
+      }
+    ],
+    "followUpEmail": {
+      "subject": "Follow-up from PillarPrep briefing for Apex Mutual",
+      "body": "..."
+    }
+  },
   "citations": [
     "Customer context",
     "Decision-maker context (user-provided)",
@@ -62,6 +92,7 @@ PillarPrep uses one structured request and one structured response across demo m
 - Include AWS services only when they help the conversation.
 - Use decision-maker context only when it is customer-approved or manually provided.
 - Never claim that PillarPrep scraped, browsed, or verified LinkedIn.
+- Return practical project artifacts for Phase 2: sprint plan, risks, stakeholder map, and follow-up email.
 - Return strict JSON only.
 
 ## Strands Phase 2 Behavior

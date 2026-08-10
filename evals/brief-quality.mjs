@@ -45,6 +45,8 @@ function scoreBrief(scenario, brief) {
   if (scenario.decisionMakers?.some((person) => allText.includes(person.name))) {
     score += 10;
   }
+  if (brief.projectArtifacts?.twoWeekPlan?.length >= 3) score += 10;
+  if (brief.projectArtifacts?.riskRegister?.length >= 2) score += 5;
   if (/Bedrock|Knowledge Bases|Well-Architected/.test(technicalText)) score += 10;
 
   if (/API Gateway|Lambda|DynamoDB|CloudWatch/.test(executiveText)) {

@@ -18,9 +18,12 @@ https://pillarprep-console.adamsaustin35.chatgpt.site
 - Local API contract: `POST /api/brief`
 - Demo provider: deterministic local generator in `lib/pillarprep/generator.ts`
 - Decision-maker context: manual/customer-approved profile notes, not automated LinkedIn scraping
+- Working Project Brain loop: role/prompt ask flow plus generated handoff artifacts
+- Local workspace persistence: browser saves the current demo workspace until reset
 - AWS implementation target: `backend/bedrock_lambda/`
 - Prompt contract: `docs/prompt-contract.md`
 - Architecture notes: `docs/aws-architecture.md`
+- AWS Lambda demo runbook: `docs/aws-lambda-demo-runbook.md`
 - Demo script: `docs/demo-script.md`
 - Project Brain tools: `docs/project-brain-tools.md`
 - Brief quality eval: `npm run eval:briefs`
@@ -92,6 +95,15 @@ Response:
   "gameplan": [],
   "objections": [],
   "projectAnswer": "",
+  "projectArtifacts": {
+    "twoWeekPlan": [],
+    "riskRegister": [],
+    "stakeholderMap": [],
+    "followUpEmail": {
+      "subject": "",
+      "body": ""
+    }
+  },
   "citations": []
 }
 ```
@@ -159,3 +171,5 @@ npm run eval:briefs
 ```
 
 The local app works without AWS credentials because `/api/brief` currently uses the demo provider. Swap the API implementation to the Bedrock Lambda once the AWS sandbox is ready.
+
+The browser also stores the current workspace locally so the demo can survive refreshes. Use `Reset workspace` in the UI when you want to return to the default scenario.

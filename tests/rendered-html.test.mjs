@@ -42,6 +42,8 @@ test("server-renders the PillarPrep console", async () => {
   assert.match(html, /Set up the customer/);
   assert.match(html, /Decision maker context/);
   assert.match(html, /Stakeholder lens/);
+  assert.match(html, /Ask Project Brain/);
+  assert.match(html, /Reset workspace/);
   assert.match(html, /Phase 1/);
   assert.match(html, /Phase 2/);
   assert.match(html, /Approved brief/);
@@ -103,7 +105,45 @@ test("generates a demo brief through the API contract", async () => {
   assert.match(payload.technical.join("\n"), /Apex Mutual/);
   assert.match(payload.executive.join("\n"), /auditability/);
   assert.match(payload.stakeholders.join("\n"), /Lena Ortiz/);
+  assert.ok(payload.projectArtifacts.twoWeekPlan.length >= 3);
+  assert.ok(payload.projectArtifacts.riskRegister.length >= 2);
   assert.match(payload.projectAnswer, /Project Brain|promote/i);
+});
+
+test("generates a role-aware Project Brain answer", async () => {
+  const response = await fetchWorker("/api/brief", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      mode: "project",
+      company: "Apex Mutual",
+      industry: "Financial Services",
+      meetingType: "Executive Briefing",
+      companySize: "Enterprise",
+      pillars: ["Security", "Reliability"],
+      context: "Modernizing a customer portal with audit and migration risk.",
+      meetingNotes: "CIO approved a pilot if security evidence is clear.",
+      decisionMakers: [
+        {
+          name: "Lena Ortiz",
+          title: "CIO",
+          source: "Customer-approved profile notes",
+          context: "Modernization governance and board visibility.",
+        },
+      ],
+      role: "Sales",
+      prompt: "What should we say in the follow-up email?",
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.provider, "demo");
+  assert.match(payload.projectArtifacts.followUpEmail.subject, /Apex Mutual/);
+  assert.match(payload.projectAnswer, /Sales|Lena Ortiz|stakeholder/i);
 });
 
 test("rejects incomplete brief API requests", async () => {
@@ -121,4 +161,27 @@ test("rejects incomplete brief API requests", async () => {
   assert.equal(response.status, 400);
   const payload = await response.json();
   assert.match(payload.error, /company is required/);
+});
+
+test("rejects malformed decision maker context", async () => {
+  const response = await fetchWorker("/api/brief", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      company: "Apex Mutual",
+      industry: "Financial Services",
+      meetingType: "Executive Briefing",
+      companySize: "Enterprise",
+      pillars: ["Security", "Reliability"],
+      context: "Modernizing a customer portal with audit and migration risk.",
+      decisionMakers: "not an array",
+    }),
+  });
+
+  assert.equal(response.status, 400);
+  const payload = await response.json();
+  assert.match(payload.error, /decisionMakers must be an array/);
 });

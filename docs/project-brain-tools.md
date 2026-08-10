@@ -20,6 +20,8 @@ backend/bedrock_lambda/project_tools.py
 
 The Strands reference agent in `backend/bedrock_lambda/strands_agent.py` imports these functions as tools. That lets Phase 2 become more than a Q&A bot: it can create repeatable artifacts for sales, executives, PMs, engineers, and new team members.
 
+The local demo provider also returns these artifacts in `projectArtifacts`, so the front end can show working Phase 2 output before the AWS sandbox is deployed.
+
 ## Demo Talking Point
 
 Bedrock handles generation and grounding. Strands turns the promoted project context into tool-using workflows.

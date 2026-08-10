@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 from datetime import datetime, timezone
@@ -22,6 +23,21 @@ def _response(status_code, body):
     }
 
 
+def _load_payload(event):
+    body = event.get("body") if isinstance(event, dict) else None
+
+    if isinstance(body, dict):
+        return body
+
+    if body is None:
+        return {}
+
+    if event.get("isBase64Encoded"):
+        body = base64.b64decode(body).decode("utf-8")
+
+    return json.loads(body or "{}")
+
+
 def _build_prompt(payload):
     decision_makers = json.dumps(
         payload.get("decisionMakers", []),
@@ -32,8 +48,12 @@ def _build_prompt(payload):
 You are PillarPrep, an AWS Solutions Architect briefing assistant.
 
 Return strict JSON with these keys:
-technical, executive, stakeholders, gameplan, objections, projectAnswer, citations.
+technical, executive, stakeholders, gameplan, objections, projectAnswer, projectArtifacts, citations.
 Each of technical/executive/stakeholders/gameplan/objections/citations must be an array of strings.
+projectArtifacts must be an object with these keys:
+twoWeekPlan, riskRegister, stakeholderMap, followUpEmail.
+twoWeekPlan/riskRegister/stakeholderMap must be arrays of objects with title, detail, owner, and status.
+followUpEmail must be an object with subject and body.
 
 Company: {payload.get("company")}
 Industry: {payload.get("industry")}
@@ -70,7 +90,7 @@ def _invoke_bedrock(prompt):
         ],
         inferenceConfig={
             "temperature": 0.3,
-            "maxTokens": 1800,
+            "maxTokens": 2400,
         },
     )
     return result["output"]["message"]["content"][0]["text"]
@@ -112,6 +132,9 @@ def _parse_model_response(model_text):
         "gameplan": _as_string_list(parsed.get("gameplan")),
         "objections": _as_string_list(parsed.get("objections")),
         "projectAnswer": str(parsed.get("projectAnswer", "")),
+        "projectArtifacts": parsed.get("projectArtifacts")
+        if isinstance(parsed.get("projectArtifacts"), dict)
+        else {},
         "citations": _as_string_list(parsed.get("citations")),
     }
 
@@ -168,8 +191,8 @@ def _store_project_artifacts(payload, generated):
 
 def handler(event, _context):
     try:
-        payload = json.loads(event.get("body") or "{}")
-    except json.JSONDecodeError:
+        payload = _load_payload(event)
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
         return _response(400, {"error": "Invalid JSON payload"})
 
     required = ["company", "industry", "meetingType", "companySize", "pillars", "context"]
@@ -181,12 +204,15 @@ def handler(event, _context):
     if "decisionMakers" in payload and not isinstance(payload["decisionMakers"], list):
         return _response(400, {"error": "decisionMakers must be an array"})
 
+    if not isinstance(payload.get("pillars"), list):
+        return _response(400, {"error": "pillars must be an array"})
+
     prompt = _build_prompt(payload)
     model_text = _invoke_bedrock(prompt)
 
     try:
         generated = _parse_model_response(model_text)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
         generated = {
             "technical": [model_text],
             "executive": [],
@@ -194,6 +220,7 @@ def handler(event, _context):
             "gameplan": [],
             "objections": [],
             "projectAnswer": "",
+            "projectArtifacts": {},
             "citations": ["Amazon Bedrock model response"],
         }
 

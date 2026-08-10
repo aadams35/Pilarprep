@@ -1,4 +1,8 @@
 import { generateDemoBrief, validateBriefRequest } from "@/lib/pillarprep/generator";
+import {
+  extractBackendError,
+  normalizeBriefResponse,
+} from "@/lib/pillarprep/response";
 import type { BriefRequest } from "@/lib/pillarprep/types";
 
 const backendUrl = process.env.PILLARPREP_BACKEND_URL?.trim();
@@ -28,19 +32,26 @@ async function forwardToAwsBackend(payload: BriefRequest) {
   if (!response.ok) {
     return Response.json(
       {
-        error: body || "AWS backend request failed",
+        error: extractBackendError(body),
       },
       { status: response.status }
     );
   }
 
-  return new Response(body, {
-    status: 200,
-    headers: {
-      "cache-control": "no-store",
-      "content-type": response.headers.get("content-type") ?? "application/json",
-    },
-  });
+  try {
+    return Response.json(normalizeBriefResponse(JSON.parse(body), "bedrock"), {
+      headers: {
+        "cache-control": "no-store",
+      },
+    });
+  } catch {
+    return Response.json(
+      {
+        error: "AWS backend returned invalid JSON",
+      },
+      { status: 502 }
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -59,13 +70,27 @@ export async function POST(request: Request) {
   }
 
   const briefRequest = payload as BriefRequest;
-  const awsResponse = await forwardToAwsBackend(briefRequest);
+  let awsResponse: Response | null;
+
+  try {
+    awsResponse = await forwardToAwsBackend(briefRequest);
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          error instanceof Error
+            ? `AWS backend request failed: ${error.message}`
+            : "AWS backend request failed",
+      },
+      { status: 502 }
+    );
+  }
 
   if (awsResponse) {
     return awsResponse;
   }
 
-  const brief = generateDemoBrief(briefRequest);
+  const brief = normalizeBriefResponse(generateDemoBrief(briefRequest), "demo");
 
   return Response.json(brief, {
     headers: {

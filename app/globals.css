@@ -931,6 +931,24 @@ body {
   font-weight: 900;
 }
 
+.workspace-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid #d8ded2;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0.68rem 0.8rem;
+}
+
+.workspace-tools span {
+  color: #607067;
+  font-size: 0.76rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
 .error-note {
   border: 1px solid #f0c7c7;
   border-radius: 8px;
@@ -1787,6 +1805,37 @@ textarea:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.project-answer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.project-ask-button {
+  display: inline-flex;
+  min-height: 1.9rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #9fd7c0;
+  border-radius: 999px;
+  background: #9fd7c0;
+  color: #17201c;
+  padding: 0 0.68rem;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.project-ask-button:hover {
+  transform: translateY(-1px);
+}
+
 .project-state-live {
   background: rgba(159, 215, 192, 0.16);
   color: #b7f0d8;
@@ -1798,7 +1847,7 @@ textarea:focus-visible {
 }
 
 .artifact-tile {
-  min-height: 5.6rem;
+  min-height: 9.4rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.045);
@@ -1815,10 +1864,36 @@ textarea:focus-visible {
 
 .artifact-tile strong {
   display: block;
-  margin-top: 1.15rem;
+  margin-top: 0.85rem;
   color: rgba(255, 255, 255, 0.86);
   font-size: 0.84rem;
   line-height: 1.25;
+}
+
+.artifact-tile small {
+  display: inline-flex;
+  min-height: 1.55rem;
+  align-items: center;
+  margin-top: 0.55rem;
+  border-radius: 999px;
+  background: rgba(159, 215, 192, 0.12);
+  color: #b7f0d8;
+  padding: 0 0.55rem;
+  font-size: 0.62rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.artifact-tile p {
+  display: -webkit-box;
+  margin-top: 0.55rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.72rem;
+  line-height: 1.45;
 }
 
 .meeting-panel {
@@ -1976,6 +2051,7 @@ textarea:focus-visible {
   }
 
   .decision-context-head,
+  .workspace-tools,
   .stakeholder-mini {
     align-items: flex-start;
     flex-direction: column;

@@ -22,6 +22,25 @@ export type BriefRequest = {
   prompt?: string;
 };
 
+export type ProjectArtifactItem = {
+  title: string;
+  detail: string;
+  owner?: string;
+  status?: string;
+};
+
+export type FollowUpEmailArtifact = {
+  subject: string;
+  body: string;
+};
+
+export type ProjectArtifacts = {
+  twoWeekPlan: ProjectArtifactItem[];
+  riskRegister: ProjectArtifactItem[];
+  stakeholderMap: ProjectArtifactItem[];
+  followUpEmail: FollowUpEmailArtifact;
+};
+
 export type BriefResponse = {
   provider: "demo" | "bedrock" | "strands";
   generatedAt: string;
@@ -37,5 +56,6 @@ export type BriefResponse = {
   gameplan: string[];
   objections: string[];
   projectAnswer: string;
+  projectArtifacts?: ProjectArtifacts;
   citations: string[];
 };

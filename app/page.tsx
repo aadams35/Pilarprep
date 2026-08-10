@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   BriefResponse,
   DecisionMakerContext,
@@ -200,6 +200,10 @@ const feedbackOptions = [
   "Customer is migrating from on-prem",
 ];
 
+const defaultFeedback = ["Make it more executive", "Focus on security"];
+const defaultRole: AudienceRole = "PM";
+const workspaceStorageKey = "pillarprep.workspace.v1";
+
 const rolePrompts: Record<AudienceRole, string[]> = {
   Sales: [
     "What should we say in the follow-up email?",
@@ -375,6 +379,10 @@ function riskWidth(level: RiskLevel) {
   return "34%";
 }
 
+function cloneDecisionMakers(decisionMakers: DecisionMakerContext[]) {
+  return decisionMakers.map((person) => ({ ...person }));
+}
+
 export default function Home() {
   const [scenarioId, setScenarioId] = useState("apex");
   const activeScenario =
@@ -388,26 +396,179 @@ export default function Home() {
   );
   const [context, setContext] = useState(activeScenario.context);
   const [decisionMakers, setDecisionMakers] = useState<DecisionMakerContext[]>(
-    () => activeScenario.decisionMakers.map((person) => ({ ...person }))
+    () => cloneDecisionMakers(activeScenario.decisionMakers)
   );
   const [meetingNotes, setMeetingNotes] = useState(
     activeScenario.meetingNotes
   );
   const [activeTab, setActiveTab] = useState<BriefTab>("technical");
   const [briefVersion, setBriefVersion] = useState(1);
-  const [feedback, setFeedback] = useState<string[]>([
-    "Make it more executive",
-    "Focus on security",
-  ]);
+  const [feedback, setFeedback] = useState<string[]>(defaultFeedback);
   const [approved, setApproved] = useState(false);
   const [promoted, setPromoted] = useState(false);
-  const [role, setRole] = useState<AudienceRole>("PM");
-  const [activePrompt, setActivePrompt] = useState(
-    "Create the first two-week plan."
-  );
+  const [role, setRole] = useState<AudienceRole>(defaultRole);
+  const [activePrompt, setActivePrompt] = useState(rolePrompts[defaultRole][0]);
   const [generatedBrief, setGeneratedBrief] = useState<BriefResponse | null>(null);
+  const [projectBrainAnswer, setProjectBrainAnswer] = useState("");
+  const [projectAnswerKey, setProjectAnswerKey] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState("");
+  const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const rawWorkspace = window.localStorage.getItem(workspaceStorageKey);
+
+      if (!rawWorkspace) {
+        return;
+      }
+
+      const saved = JSON.parse(rawWorkspace) as Record<string, unknown>;
+      const savedScenarioId =
+        typeof saved.scenarioId === "string" &&
+        scenarios.some((scenario) => scenario.id === saved.scenarioId)
+          ? saved.scenarioId
+          : scenarioId;
+      const savedRole =
+        typeof saved.role === "string" && saved.role in rolePrompts
+          ? (saved.role as AudienceRole)
+          : defaultRole;
+
+      setScenarioId(savedScenarioId);
+      setCompany(typeof saved.company === "string" ? saved.company : company);
+      setIndustry(typeof saved.industry === "string" ? saved.industry : industry);
+      setMeetingType(
+        typeof saved.meetingType === "string" ? saved.meetingType : meetingType
+      );
+      setCompanySize(
+        typeof saved.companySize === "string" ? saved.companySize : companySize
+      );
+      setSelectedPillars(
+        Array.isArray(saved.selectedPillars)
+          ? saved.selectedPillars.filter(
+              (pillar): pillar is string => typeof pillar === "string"
+            )
+          : selectedPillars
+      );
+      setContext(typeof saved.context === "string" ? saved.context : context);
+      setDecisionMakers(
+        Array.isArray(saved.decisionMakers)
+          ? saved.decisionMakers
+              .filter(
+                (person): person is Record<string, unknown> =>
+                  typeof person === "object" && person !== null
+              )
+              .map((person) => ({
+                name: typeof person.name === "string" ? person.name : "",
+                title: typeof person.title === "string" ? person.title : "",
+                source: typeof person.source === "string" ? person.source : "",
+                context:
+                  typeof person.context === "string" ? person.context : "",
+              }))
+          : decisionMakers
+      );
+      setMeetingNotes(
+        typeof saved.meetingNotes === "string" ? saved.meetingNotes : meetingNotes
+      );
+      setActiveTab(
+        typeof saved.activeTab === "string" &&
+          ["technical", "executive", "stakeholders", "gameplan", "objections"].includes(
+            saved.activeTab
+          )
+          ? (saved.activeTab as BriefTab)
+          : "technical"
+      );
+      setBriefVersion(
+        typeof saved.briefVersion === "number" && saved.briefVersion > 0
+          ? saved.briefVersion
+          : 1
+      );
+      setFeedback(
+        Array.isArray(saved.feedback)
+          ? saved.feedback.filter(
+              (item): item is string => typeof item === "string"
+            )
+          : defaultFeedback
+      );
+      setApproved(Boolean(saved.approved));
+      setPromoted(Boolean(saved.promoted));
+      setRole(savedRole);
+      setActivePrompt(
+        typeof saved.activePrompt === "string"
+          ? saved.activePrompt
+          : rolePrompts[savedRole][0]
+      );
+      setGeneratedBrief(
+        typeof saved.generatedBrief === "object" && saved.generatedBrief !== null
+          ? (saved.generatedBrief as BriefResponse)
+          : null
+      );
+      setProjectBrainAnswer(
+        typeof saved.projectBrainAnswer === "string"
+          ? saved.projectBrainAnswer
+          : ""
+      );
+      setProjectAnswerKey(
+        typeof saved.projectAnswerKey === "string" ? saved.projectAnswerKey : ""
+      );
+    } catch {
+      window.localStorage.removeItem(workspaceStorageKey);
+    } finally {
+      setWorkspaceLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceLoaded) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      workspaceStorageKey,
+      JSON.stringify({
+        scenarioId,
+        company,
+        industry,
+        meetingType,
+        companySize,
+        selectedPillars,
+        context,
+        decisionMakers,
+        meetingNotes,
+        activeTab,
+        briefVersion,
+        feedback,
+        approved,
+        promoted,
+        role,
+        activePrompt,
+        generatedBrief,
+        projectBrainAnswer,
+        projectAnswerKey,
+      })
+    );
+  }, [
+    activePrompt,
+    activeTab,
+    approved,
+    briefVersion,
+    company,
+    companySize,
+    context,
+    decisionMakers,
+    feedback,
+    generatedBrief,
+    industry,
+    meetingNotes,
+    meetingType,
+    projectAnswerKey,
+    projectBrainAnswer,
+    promoted,
+    role,
+    scenarioId,
+    selectedPillars,
+    workspaceLoaded,
+  ]);
 
   const selectedPillarDetails = pillars.filter((pillar) =>
     selectedPillars.includes(pillar.id)
@@ -593,7 +754,11 @@ export default function Home() {
     return `This project started as an SA pre-brief for ${customerName}. The final brief, decision-maker context, meeting notes, assumptions, risks, and decisions become the source of truth for anyone joining later.`;
   }, [company, industryFocus, role, selectedPillars, usableDecisionMakers]);
 
-  const displayedProjectAnswer = generatedBrief?.projectAnswer ?? projectAnswer;
+  const currentProjectAnswerKey = `${role}::${activePrompt}`;
+  const displayedProjectAnswer =
+    projectBrainAnswer && projectAnswerKey === currentProjectAnswerKey
+      ? projectBrainAnswer
+      : projectAnswer;
 
   const handoffItems = [
     {
@@ -625,6 +790,50 @@ export default function Home() {
     },
   ];
 
+  const projectArtifactTiles = useMemo(() => {
+    const artifacts = generatedBrief?.projectArtifacts;
+    const firstPlan = artifacts?.twoWeekPlan?.[0];
+    const firstRisk = artifacts?.riskRegister?.[0];
+    const firstStakeholder = artifacts?.stakeholderMap?.[0];
+
+    return [
+      {
+        title: "Implementation plan",
+        status: artifacts?.twoWeekPlan?.length
+          ? `${artifacts.twoWeekPlan.length} steps`
+          : "Queued",
+        detail:
+          firstPlan?.detail ??
+          "Promote the brief to generate the first implementation sprint.",
+      },
+      {
+        title: "Risk list",
+        status: artifacts?.riskRegister?.length
+          ? `${artifacts.riskRegister.length} risks`
+          : "Queued",
+        detail:
+          firstRisk?.detail ??
+          "Promote the brief to generate delivery risks and mitigations.",
+      },
+      {
+        title: "Stakeholder map",
+        status: artifacts?.stakeholderMap?.length
+          ? `${artifacts.stakeholderMap.length} people`
+          : "Queued",
+        detail:
+          firstStakeholder?.detail ??
+          "Approved decision-maker notes become stakeholder validation points.",
+      },
+      {
+        title: "Follow-up email",
+        status: artifacts?.followUpEmail?.subject ? "Drafted" : "Queued",
+        detail:
+          artifacts?.followUpEmail?.subject ??
+          "Promote the brief to draft a concise customer follow-up.",
+      },
+    ];
+  }, [generatedBrief]);
+
   function loadScenario(nextScenario: Scenario) {
     setScenarioId(nextScenario.id);
     setCompany(nextScenario.company);
@@ -633,13 +842,15 @@ export default function Home() {
     setCompanySize(nextScenario.companySize);
     setSelectedPillars(nextScenario.pillars);
     setContext(nextScenario.context);
-    setDecisionMakers(nextScenario.decisionMakers.map((person) => ({ ...person })));
+    setDecisionMakers(cloneDecisionMakers(nextScenario.decisionMakers));
     setMeetingNotes(nextScenario.meetingNotes);
     setBriefVersion(1);
     setApproved(false);
     setPromoted(false);
     setActiveTab("technical");
     setGeneratedBrief(null);
+    setProjectBrainAnswer("");
+    setProjectAnswerKey("");
     setGenerationError("");
   }
 
@@ -692,6 +903,10 @@ export default function Home() {
   }
 
   async function requestBrief(mode: "prebrief" | "project" = "prebrief") {
+    const requestRole = role;
+    const requestPrompt = activePrompt;
+    const requestProjectAnswerKey = `${requestRole}::${requestPrompt}`;
+
     setIsGenerating(true);
     setGenerationError("");
 
@@ -712,8 +927,8 @@ export default function Home() {
           meetingNotes,
           feedback,
           decisionMakers: usableDecisionMakers,
-          role,
-          prompt: activePrompt,
+          role: requestRole,
+          prompt: requestPrompt,
         }),
       });
 
@@ -727,10 +942,21 @@ export default function Home() {
         );
       }
 
-      setGeneratedBrief(payload as BriefResponse);
-      setBriefVersion((version) => version + 1);
-      setApproved(false);
-      setPromoted(mode === "project");
+      const nextBrief = payload as BriefResponse;
+      setGeneratedBrief(nextBrief);
+
+      if (mode === "project") {
+        setApproved(true);
+        setPromoted(true);
+        setProjectBrainAnswer(nextBrief.projectAnswer);
+        setProjectAnswerKey(requestProjectAnswerKey);
+      } else {
+        setBriefVersion((version) => version + 1);
+        setApproved(false);
+        setPromoted(false);
+        setProjectBrainAnswer("");
+        setProjectAnswerKey("");
+      }
     } catch (error) {
       setGenerationError(
         error instanceof Error ? error.message : "Brief generation failed"
@@ -750,9 +976,21 @@ export default function Home() {
   }
 
   function promoteProject() {
-    setApproved(true);
-    setPromoted(true);
     void requestBrief("project");
+  }
+
+  function askProjectBrain() {
+    void requestBrief("project");
+  }
+
+  function resetWorkspace() {
+    const firstScenario = scenarios[0];
+
+    window.localStorage.removeItem(workspaceStorageKey);
+    setFeedback(defaultFeedback);
+    setRole(defaultRole);
+    setActivePrompt(rolePrompts[defaultRole][0]);
+    loadScenario(firstScenario);
   }
 
   return (
@@ -1222,6 +1460,12 @@ export default function Home() {
                     : "Ready for Bedrock"}
                 </strong>
               </div>
+              <div className="workspace-tools">
+                <span>Workspace saves locally in this browser</span>
+                <button className="text-action" type="button" onClick={resetWorkspace}>
+                  Reset workspace
+                </button>
+              </div>
               {generationError ? (
                 <p className="error-note">{generationError}</p>
               ) : null}
@@ -1642,16 +1886,26 @@ export default function Home() {
                             {activePrompt}
                           </h3>
                         </div>
-                        <span
-                          className={cx(
-                            "project-state",
-                            promoted
-                              ? "project-state-live"
-                              : "project-state-waiting"
-                          )}
-                        >
-                          {promoted ? "Project live" : "Waiting for promotion"}
-                        </span>
+                        <div className="project-answer-actions">
+                          <span
+                            className={cx(
+                              "project-state",
+                              promoted
+                                ? "project-state-live"
+                                : "project-state-waiting"
+                            )}
+                          >
+                            {promoted ? "Project live" : "Waiting for promotion"}
+                          </span>
+                          <button
+                            className="project-ask-button"
+                            type="button"
+                            disabled={isGenerating}
+                            onClick={askProjectBrain}
+                          >
+                            {isGenerating ? "Asking..." : "Ask Project Brain"}
+                          </button>
+                        </div>
                       </div>
                       <p className="mt-5 text-base leading-7 text-white/82">
                         {displayedProjectAnswer}
@@ -1659,15 +1913,12 @@ export default function Home() {
                     </div>
 
                     <div className="mt-5 grid gap-3 md:grid-cols-4">
-                      {[
-                        "Implementation plan",
-                        "Risk list",
-                        "Stakeholder map",
-                        "Onboarding answers",
-                      ].map((artifact) => (
-                        <div key={artifact} className="artifact-tile">
+                      {projectArtifactTiles.map((artifact) => (
+                        <div key={artifact.title} className="artifact-tile">
                           <span />
-                          <strong>{artifact}</strong>
+                          <strong>{artifact.title}</strong>
+                          <small>{artifact.status}</small>
+                          <p>{artifact.detail}</p>
                         </div>
                       ))}
                     </div>
