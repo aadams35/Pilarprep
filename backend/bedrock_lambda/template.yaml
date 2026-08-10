@@ -5,7 +5,7 @@ Description: PillarPrep Bedrock briefing backend
 Parameters:
   BedrockModelId:
     Type: String
-    Default: anthropic.claude-3-5-sonnet-20241022-v2:0
+    Default: us.amazon.nova-pro-v1:0
   AllowedOrigin:
     Type: String
     Default: "*"

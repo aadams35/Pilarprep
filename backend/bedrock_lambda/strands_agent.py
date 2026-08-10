@@ -14,7 +14,7 @@ from project_tools import (
 
 def build_project_brain_agent():
     model = BedrockModel(
-        model_id=os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20241022-v2:0"),
+        model_id=os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-pro-v1:0"),
         region_name=os.getenv("AWS_REGION", "us-east-1"),
         temperature=0.2,
         max_tokens=1600,

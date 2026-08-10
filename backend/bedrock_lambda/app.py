@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import boto3
 
 
-MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-pro-v1:0")
 REGION = os.getenv("AWS_REGION", "us-east-1")
 ARTIFACT_BUCKET = os.getenv("ARTIFACT_BUCKET", "")
 PROJECT_TABLE = os.getenv("PROJECT_TABLE", "")

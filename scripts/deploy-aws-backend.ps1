@@ -2,7 +2,7 @@ param(
   [string]$StackName = "pillarprep-bedrock",
   [string]$Region = "us-east-1",
   [string]$AllowedOrigin = "http://127.0.0.1:3002",
-  [string]$BedrockModelId = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+  [string]$BedrockModelId = "us.amazon.nova-pro-v1:0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +10,13 @@ $ErrorActionPreference = "Stop"
 function Require-Command($Name) {
   if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
     throw "$Name is required but was not found on PATH."
+  }
+}
+
+function Invoke-Aws {
+  & aws @args
+  if ($LASTEXITCODE -ne 0) {
+    throw "AWS CLI command failed: aws $($args -join ' ')"
   }
 }
 
@@ -21,7 +28,7 @@ $packagedPath = Join-Path $repoRoot "work\pillarprep-packaged.yaml"
 $workDir = Split-Path $packagedPath -Parent
 New-Item -ItemType Directory -Path $workDir -Force | Out-Null
 
-$identityJson = aws sts get-caller-identity --output json | ConvertFrom-Json
+$identityJson = Invoke-Aws sts get-caller-identity --output json | ConvertFrom-Json
 $accountId = $identityJson.Account
 if (-not $accountId) {
   throw "Could not determine AWS account. Run aws configure sso or aws configure first."
@@ -33,32 +40,31 @@ Write-Host "Packaging bucket: $bucketName"
 
 $bucketExists = $false
 try {
-  aws s3api head-bucket --bucket $bucketName --region $Region | Out-Null
+  Invoke-Aws s3api head-bucket --bucket $bucketName --region $Region | Out-Null
   $bucketExists = $true
 } catch {
   $bucketExists = $false
 }
 
 if (-not $bucketExists) {
-  if ($Region -eq "us-east-1") {
-    aws s3api create-bucket --bucket $bucketName --region $Region | Out-Null
-  } else {
-    aws s3api create-bucket --bucket $bucketName --region $Region --create-bucket-configuration LocationConstraint=$Region | Out-Null
-  }
+  Write-Host "Creating packaging bucket..."
+  Invoke-Aws s3 mb "s3://$bucketName" --region $Region | Out-Null
+  Invoke-Aws s3api wait bucket-exists --bucket $bucketName --region $Region
 
-  aws s3api put-public-access-block `
+  $publicAccessBlock = '{"BlockPublicAcls":true,"IgnorePublicAcls":true,"BlockPublicPolicy":true,"RestrictPublicBuckets":true}'
+  Invoke-Aws s3api put-public-access-block `
     --bucket $bucketName `
-    --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true `
+    --public-access-block-configuration $publicAccessBlock `
     --region $Region | Out-Null
 }
 
-aws cloudformation package `
+Invoke-Aws cloudformation package `
   --template-file $templatePath `
   --s3-bucket $bucketName `
   --output-template-file $packagedPath `
   --region $Region | Out-Null
 
-aws cloudformation deploy `
+Invoke-Aws cloudformation deploy `
   --template-file $packagedPath `
   --stack-name $StackName `
   --capabilities CAPABILITY_IAM `
@@ -67,7 +73,7 @@ aws cloudformation deploy `
 
 Write-Host ""
 Write-Host "Stack outputs:"
-aws cloudformation describe-stacks `
+Invoke-Aws cloudformation describe-stacks `
   --stack-name $StackName `
   --region $Region `
   --query "Stacks[0].Outputs" `

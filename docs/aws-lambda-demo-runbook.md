@@ -44,8 +44,10 @@ Optional parameters:
 -StackName pillarprep-bedrock
 -Region us-east-1
 -AllowedOrigin http://127.0.0.1:3002
--BedrockModelId anthropic.claude-3-5-sonnet-20241022-v2:0
+-BedrockModelId us.amazon.nova-pro-v1:0
 ```
+
+The first successful AWS smoke test used `us.amazon.nova-pro-v1:0`. Anthropic Sonnet profiles were visible in the account, but Lambda calls required the Anthropic use-case details form before they could be used reliably.
 
 ## Connect Frontend To Lambda
 
