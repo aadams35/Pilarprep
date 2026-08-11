@@ -63,6 +63,9 @@ test("removes the starter preview shell", async () => {
   assert.match(page, /Copy packet/);
   assert.match(page, /Cost guardrails/);
   assert.match(page, /under 1 USD per day/);
+  assert.match(page, /CloudFront \+ S3/);
+  assert.match(page, /IAM signed/);
+  assert.match(page, /brief-surface-busy/);
   assert.match(page, /const briefContent = isGenerating/);
   assert.match(page, /setGeneratedBrief\(null\);/);
   assert.match(page, /const displayedProjectAnswer = isGenerating/);

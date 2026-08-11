@@ -454,6 +454,13 @@ const demoSignals = [
   },
 ];
 
+const judgeProofPoints = [
+  { label: "Frontend", value: "CloudFront + S3" },
+  { label: "Auth", value: "IAM signed" },
+  { label: "Model", value: "Bedrock Nova" },
+  { label: "Cost", value: "Budget guardrail" },
+];
+
 const briefQualityTargets = [
   {
     label: "Long-form answers",
@@ -1402,6 +1409,14 @@ const industryFocus = useMemo(() => {
                 </div>
               ))}
             </div>
+            <div className="judge-proof-row" aria-label="Judge proof points">
+              {judgeProofPoints.map((point) => (
+                <div key={point.label} className="judge-proof-chip">
+                  <span>{point.label}</span>
+                  <strong>{point.value}</strong>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="hero-panel">
@@ -2026,7 +2041,7 @@ const industryFocus = useMemo(() => {
 
               <div className="grid gap-5 p-5 lg:grid-cols-[1fr_280px]">
                 <div className="space-y-4">
-                  <div className="brief-surface">
+                  <div className={cx("brief-surface", isGenerating && "brief-surface-busy")}>
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#527064]">
                         {activeTab === "technical"
@@ -2062,7 +2077,7 @@ const industryFocus = useMemo(() => {
                         ) : null}
                       </div>
                     </div>
-                    <div className="mt-4 space-y-3">
+                    <div className="mt-4 space-y-3 brief-output-canvas">
                       {briefContent[activeTab].map((item) => (
                         <p key={item} className="brief-line">
                           {item}
@@ -2319,7 +2334,7 @@ const industryFocus = useMemo(() => {
                       ))}
                     </div>
 
-                    <div className="project-answer">
+                    <div className={cx("project-answer", isGenerating && "project-answer-busy")}>
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9fd7c0]">
