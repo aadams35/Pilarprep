@@ -911,38 +911,54 @@ export default function Home() {
     setGenerationError("");
 
     try {
-      const response = await fetch("/api/brief", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          mode,
-          company,
-          industry,
-          meetingType,
-          companySize,
-          pillars: selectedPillars,
-          context,
-          meetingNotes,
-          feedback,
-          decisionMakers: usableDecisionMakers,
-          role: requestRole,
-          prompt: requestPrompt,
-        }),
-      });
+      const briefRequest = {
+        mode,
+        company,
+        industry,
+        meetingType,
+        companySize,
+        pillars: selectedPillars,
+        context,
+        meetingNotes,
+        feedback,
+        decisionMakers: usableDecisionMakers,
+        role: requestRole,
+        prompt: requestPrompt,
+      };
 
-      const payload = (await response.json()) as BriefResponse | { error?: string };
+      const staticDemoMode = import.meta.env.VITE_PILLARPREP_STATIC_DEMO === "true";
+      let nextBrief: BriefResponse;
 
-      if (!response.ok) {
-        throw new Error(
-          "error" in payload
-            ? payload.error ?? "Brief generation failed"
-            : "Brief generation failed"
-        );
+      if (staticDemoMode) {
+        const validationError = validateBriefRequest(briefRequest);
+
+        if (validationError) {
+          throw new Error(validationError);
+        }
+
+        nextBrief = normalizeBriefResponse(generateDemoBrief(briefRequest), "demo");
+      } else {
+        const response = await fetch("/api/brief", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(briefRequest),
+        });
+
+        const payload = (await response.json()) as BriefResponse | { error?: string };
+
+        if (!response.ok) {
+          throw new Error(
+            "error" in payload
+              ? payload.error ?? "Brief generation failed"
+              : "Brief generation failed"
+          );
+        }
+
+        nextBrief = payload as BriefResponse;
       }
 
-      const nextBrief = payload as BriefResponse;
       setGeneratedBrief(nextBrief);
 
       if (mode === "project") {

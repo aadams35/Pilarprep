@@ -14,7 +14,8 @@
     "lambda:test": "python -m unittest discover backend/bedrock_lambda/tests",
     "verify:demo": "npm test && npm run eval:briefs && npm run lambda:test",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "build:aws-frontend": "vite build --config vite.static.config.ts --mode aws-static"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

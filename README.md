@@ -7,14 +7,15 @@ The app has two loops:
 1. Pre-brief refinement: generate, review, refine, and approve a customer-ready SA brief.
 2. Follow-on project model: promote the final brief, decision-maker context, and meeting notes into Project Brain for sales, executives, PMs, engineers, and new project members.
 
-Live demo:
+Live demos:
 
-https://pillarprep-console.adamsaustin35.chatgpt.site
+- AWS CloudFront static frontend: https://d2e0btay0ynyf.cloudfront.net
+- OpenAI Sites demo: https://pillarprep-console.adamsaustin35.chatgpt.site
 
 ## Current Shape
 
 - Frontend: React, Next-compatible Vinext app
-- Hosted demo: OpenAI Sites
+- Hosted demo: AWS CloudFront static frontend and OpenAI Sites
 - Local API contract: `POST /api/brief`
 - Demo provider: deterministic local generator in `lib/pillarprep/generator.ts`
 - Decision-maker context: manual/customer-approved profile notes, not automated LinkedIn scraping
@@ -22,7 +23,7 @@ https://pillarprep-console.adamsaustin35.chatgpt.site
 - Local workspace persistence: browser saves the current demo workspace until reset
 - AWS implementation target: `backend/bedrock_lambda/`
 - Prompt contract: `docs/prompt-contract.md`
-- Architecture notes: `docs/aws-architecture.md`
+- Architecture notes: `docs/aws-infrastructure-design.md`
 - AWS Lambda demo runbook: `docs/aws-lambda-demo-runbook.md`
 - Demo script: `docs/demo-script.md`
 - Project Brain tools: `docs/project-brain-tools.md`
@@ -108,6 +109,21 @@ Response:
 }
 ```
 
+## AWS Frontend
+
+The AWS-hosted frontend uses a static Vite build of the existing React UI. It is deployed to a private S3 bucket behind CloudFront and runs in browser-only demo mode, so it does not call Bedrock or `/api/brief` while models are paused.
+
+```bash
+.\scripts\deploy-aws-frontend.ps1 -Region us-east-1
+```
+
+Current AWS frontend URL:
+
+```text
+https://d2e0btay0ynyf.cloudfront.net
+```
+
+Static frontend infrastructure lives in `backend/frontend_static/template.yaml`.
 ## AWS Backend
 
 The Lambda reference lives in `backend/bedrock_lambda/app.py`.

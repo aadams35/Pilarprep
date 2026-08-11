@@ -1,26 +1,39 @@
 # PillarPrep AWS Infrastructure Design
 
-This is the current deployment target for the hackathon backend. The goal is a working demo path first, then deeper production hardening.
+This is the current deployment target for the hackathon frontend and backend. The goal is a working AWS-native demo path first, then deeper production hardening.
 
-## Phase 1 Backend Stack
+## Phase 1 AWS Stack
 
 ```mermaid
 flowchart TD
-  UI[React PillarPrep Console] --> API[Amazon API Gateway HTTP API]
+  USER[User Browser] --> CF[Amazon CloudFront]
+  CF --> S3FRONT[S3 Static Frontend Bucket]
+  S3FRONT --> UI[React PillarPrep Console]
+  UI --> API[Amazon API Gateway HTTP API]
   API --> LAMBDA[AWS Lambda Python Handler]
-  LAMBDA --> BEDROCK[Amazon Bedrock Claude Model]
+  LAMBDA --> BEDROCK[Amazon Bedrock Model]
   BEDROCK --> LAMBDA
   LAMBDA --> ARTIFACTS[S3 Brief Artifact Bucket]
   LAMBDA --> STATE[DynamoDB Project State Table]
   LAMBDA --> UI
 ```
 
-## Request Flow
+## Current Frontend Mode
+
+The AWS-hosted frontend is deployed to S3 + CloudFront and currently runs in browser-only demo mode. It does not call `/api/brief`, API Gateway, Lambda, or Bedrock while models are paused.
+
+Current frontend URL:
+
+```text
+https://d2e0btay0ynyf.cloudfront.net
+```
+
+## Request Flow With Models Enabled
 
 1. The user enters customer context, Well-Architected pillar priorities, decision-maker notes, and meeting notes.
-2. The frontend posts the structured request to `/api/brief`.
+2. The frontend posts the structured request to `/api/brief` or a configured API Gateway endpoint.
 3. In local demo mode, the frontend API route uses the deterministic demo generator.
-4. In AWS mode, the frontend API route forwards the same request to API Gateway.
+4. In AWS model mode, the frontend route forwards the same request to API Gateway.
 5. API Gateway invokes the Lambda handler.
 6. Lambda builds the Bedrock prompt contract and invokes the configured model.
 7. Lambda normalizes the model JSON and stores the request/response artifact in S3.
@@ -28,6 +41,13 @@ flowchart TD
 9. The frontend receives technical brief, executive brief, stakeholder lens, game plan, objections, Project Brain answer, and Phase 2 artifacts.
 
 ## Deployed Resources
+
+The frontend stack deploys these resources:
+
+- `FrontendBucket`: private, encrypted, versioned S3 bucket for static React assets
+- `FrontendDistribution`: CloudFront distribution with HTTPS redirect and SPA fallback
+- `FrontendOriginAccessControl`: CloudFront OAC for private S3 access
+- `FrontendBucketPolicy`: grants read access only to the CloudFront distribution
 
 The backend stack deploys these resources:
 
@@ -41,18 +61,20 @@ The backend stack deploys these resources:
 
 Working now:
 
+- AWS CloudFront static frontend
+- Browser-only deterministic generator for no-model demos
 - Local frontend demo
 - Local deterministic generator
 - Local Project Brain ask loop
 - Local Lambda unit tests with mocked Bedrock
+- AWS CLI deployment script for S3 + CloudFront frontend hosting
 - AWS CLI deployment script for API Gateway, Lambda, S3, and DynamoDB
 
-Still to confirm in AWS account:
+Still to decide:
 
-- Active AWS credentials
-- Bedrock model access in `us-east-1`
-- Successful CloudFormation deployment
-- Live API Gateway URL wired into `PILLARPREP_BACKEND_URL`
+- Whether to wire the CloudFront frontend directly to API Gateway when models are enabled
+- Whether to add a custom domain and ACM certificate
+- Whether to add lightweight auth before sharing beyond the hackathon team
 
 ## Later Hardening
 
