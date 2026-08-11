@@ -847,51 +847,60 @@ const industryFocus = useMemo(() => {
 
     return "modernization, reliability, security, and measurable business outcomes";
   }, [industry]);
-  const fallbackBriefContent = {
-      technical: [
-        `${company || "The customer"} likely needs a secure landing zone, governed identity model, observable application path, and migration pattern that reduces production risk.`,
-        `Discovery should validate current architecture, data classification, RTO/RPO, incident response, network dependencies, and ownership across ${companySize.toLowerCase()} teams.`,
-        `Recommended AWS references: Amazon Bedrock for generation, AWS Lambda and API Gateway for orchestration, Amazon S3 for artifacts, Amazon DynamoDB for project state, Amazon CloudWatch for observability, and AWS Well-Architected Tool for pillar alignment.`,
-      ],
-      executive: [
-        `${company || "The customer"} is balancing modernization speed with risk control. The conversation should stay centered on ${industryFocus}.`,
-        "Position AWS as a way to improve decision quality, reduce operational drag, and make progress measurable without forcing a risky all-at-once transformation.",
-        `Business framing: ${activeScenario.winTheme}`,
-      ],
-      stakeholders: usableDecisionMakers.length
-        ? usableDecisionMakers.map(
-            (person) =>
-              `${person.name || "Decision maker"}${person.title ? `, ${person.title}` : ""}: connect the opening to ${primaryConcern.toLowerCase()} and ask which outcome, risk, or blocker matters most from their seat. ${person.context ? `Signal: ${person.context}` : ""}`
-          )
-        : [
-            "Add approved stakeholder notes to tailor the opening, questions, and objection handling.",
-            `For ${company || "the customer"}, identify the economic buyer, technical owner, security approver, and project driver before the follow-up.`,
-            "Use pasted customer-approved context only; treat all profile-based insight as a hypothesis to validate.",
-          ],
-      gameplan: [
-        "Open by confirming the business event driving urgency, then map technical unknowns to business impact.",
-        `Spend the first half on the ranked priorities (${topRankedPillars.join(", ").toLowerCase()}) and use the final ten minutes to agree on success measures and next steps.`,
-        "Close with a crisp handoff: confirmed goals, known risks, unanswered questions, owners, timeline, and how the project workspace should be used.",
-      ],
-      objections: [
-        "Customer pushback: We cannot risk disruption during this program.",
-        `Response: propose a bounded pilot around ${selectedPillars[0]?.toLowerCase() || "the top priority"}, define rollback criteria, and connect each technical checkpoint to business continuity.`,
-        "Customer pushback: This sounds expensive. Response: start with unit-cost visibility, right-sizing, and a decision checkpoint before scaling the implementation.",
-      ],
+  const blankBriefContent: Record<BriefTab, string[]> = {
+    technical: [],
+    executive: [],
+    stakeholders: [],
+    gameplan: [],
+    objections: [],
   };
 
-  const briefContent = generatedBrief
-    ? {
-        technical: generatedBrief.technical,
-        executive: generatedBrief.executive,
-        stakeholders: generatedBrief.stakeholders?.length
-          ? generatedBrief.stakeholders
-          : fallbackBriefContent.stakeholders,
-        gameplan: generatedBrief.gameplan,
-        objections: generatedBrief.objections,
-      }
-    : fallbackBriefContent;
+  const fallbackBriefContent = {
+    technical: [
+      `${company || "The customer"} likely needs a secure landing zone, governed identity model, observable application path, and migration pattern that reduces production risk.`,
+      `Discovery should validate current architecture, data classification, RTO/RPO, incident response, network dependencies, and ownership across ${companySize.toLowerCase()} teams.`,
+      `Recommended AWS references: Amazon Bedrock for generation, AWS Lambda and API Gateway for orchestration, Amazon S3 for artifacts, Amazon DynamoDB for project state, Amazon CloudWatch for observability, and AWS Well-Architected Tool for pillar alignment.`,
+    ],
+    executive: [
+      `${company || "The customer"} is balancing modernization speed with risk control. The conversation should stay centered on ${industryFocus}.`,
+      "Position AWS as a way to improve decision quality, reduce operational drag, and make progress measurable without forcing a risky all-at-once transformation.",
+      `Business framing: ${activeScenario.winTheme}`,
+    ],
+    stakeholders: usableDecisionMakers.length
+      ? usableDecisionMakers.map(
+          (person) =>
+            `${person.name || "Decision maker"}${person.title ? `, ${person.title}` : ""}: connect the opening to ${primaryConcern.toLowerCase()} and ask which outcome, risk, or blocker matters most from their seat. ${person.context ? `Signal: ${person.context}` : ""}`
+        )
+      : [
+          "Add approved stakeholder notes to tailor the opening, questions, and objection handling.",
+          `For ${company || "the customer"}, identify the economic buyer, technical owner, security approver, and project driver before the follow-up.`,
+          "Use pasted customer-approved context only; treat all profile-based insight as a hypothesis to validate.",
+        ],
+    gameplan: [
+      "Open by confirming the business event driving urgency, then map technical unknowns to business impact.",
+      `Spend the first half on the ranked priorities (${topRankedPillars.join(", ").toLowerCase()}) and use the final ten minutes to agree on success measures and next steps.`,
+      "Close with a crisp handoff: confirmed goals, known risks, unanswered questions, owners, timeline, and how the project workspace should be used.",
+    ],
+    objections: [
+      "Customer pushback: We cannot risk disruption during this program.",
+      `Response: propose a bounded pilot around ${selectedPillars[0]?.toLowerCase() || "the top priority"}, define rollback criteria, and connect each technical checkpoint to business continuity.`,
+      "Customer pushback: This sounds expensive. Response: start with unit-cost visibility, right-sizing, and a decision checkpoint before scaling the implementation.",
+    ],
+  };
 
+  const briefContent = isGenerating
+    ? blankBriefContent
+    : generatedBrief
+      ? {
+          technical: generatedBrief.technical,
+          executive: generatedBrief.executive,
+          stakeholders: generatedBrief.stakeholders?.length
+            ? generatedBrief.stakeholders
+            : fallbackBriefContent.stakeholders,
+          gameplan: generatedBrief.gameplan,
+          objections: generatedBrief.objections,
+        }
+      : fallbackBriefContent;
   const activeBriefText = [
     `${company || "Customer"} - ${briefTabLabel(activeTab)}`,
     "",
@@ -931,8 +940,9 @@ const industryFocus = useMemo(() => {
   }, [company, industryFocus, role, selectedPillars, usableDecisionMakers]);
 
   const currentProjectAnswerKey = `${role}::${activePrompt}`;
-  const displayedProjectAnswer =
-    projectBrainAnswer && projectAnswerKey === currentProjectAnswerKey
+  const displayedProjectAnswer = isGenerating
+    ? ""
+    : projectBrainAnswer && projectAnswerKey === currentProjectAnswerKey
       ? projectBrainAnswer
       : projectAnswer;
   const handoffPacketText = (() => {
@@ -1199,7 +1209,12 @@ const industryFocus = useMemo(() => {
 
     setIsGenerating(true);
     setGenerationError("");
-
+    setGenerationNotice("");
+    setGeneratedBrief(null);
+    setProjectBrainAnswer("");
+    setProjectAnswerKey("");
+    setPromoted(false);
+    setApproved(false);
     try {
       const briefRequest = {
         mode,
