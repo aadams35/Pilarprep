@@ -309,6 +309,38 @@ const packetOutputs = [
   },
 ];
 
+const modelStoragePath = [
+  {
+    layer: "Bedrock model",
+    service: "AWS managed",
+    detail:
+      "PillarPrep invokes Amazon Nova Micro through Bedrock. The foundation model weights are not copied into our account or stored in the app.",
+  },
+  {
+    layer: "Prompt contract",
+    service: "Lambda code",
+    detail:
+      "The briefing instructions, JSON shape, and fallback rules live in the Lambda source and are versioned in GitHub.",
+  },
+  {
+    layer: "Generated brief",
+    service: "S3 artifacts",
+    detail:
+      "Every live response can be saved as a JSON artifact with the original request, model output, timestamp, and project metadata.",
+  },
+  {
+    layer: "Project state",
+    service: "DynamoDB",
+    detail:
+      "Project Brain uses projectId and sortKey records to track generated briefs, handoff state, provider, and creation time.",
+  },
+  {
+    layer: "Future memory",
+    service: "Knowledge Bases",
+    detail:
+      "Approved briefs and meeting notes can later be indexed for retrieval-backed answers without training a custom model.",
+  },
+];
 const awsRunway = [
   {
     layer: "Frontend",
@@ -1247,6 +1279,24 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="mx-auto max-w-[1500px] px-5 pt-5">
+        <div className="packet-band">
+          <div className="section-head">
+            <p>Model and memory storage</p>
+            <h2>What is stored, and what stays managed by AWS</h2>
+          </div>
+          <div className="packet-grid">
+            {modelStoragePath.map((item, index) => (
+              <div key={item.layer} className="packet-tile">
+                <span>{index + 1}</span>
+                <strong>{item.layer}</strong>
+                <small>{item.service}</small>
+                <p>{item.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
       <section className="mx-auto max-w-[1500px] px-5 pt-5">
         <div className="aws-runway">
           <div className="section-head">

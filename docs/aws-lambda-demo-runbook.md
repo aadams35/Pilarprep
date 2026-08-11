@@ -62,7 +62,7 @@ PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
 PILLARPREP_BACKEND_API_KEY=<private-demo-key>
 ```
 
-Restart the local app, select `Live AWS`, generate a brief, and confirm the provider badge says `bedrock provider`. The UI should also show the S3 artifact key and DynamoDB state key after a live generation.
+Restart the local app, select `Live AWS`, generate a brief, and confirm the provider badge says `bedrock provider`. The UI should also show the S3 artifact key, DynamoDB state key, Bedrock model ID, token count, and latency after a live generation.
 
 ## Demo Fallback Plan
 

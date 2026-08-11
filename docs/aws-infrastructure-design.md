@@ -40,6 +40,18 @@ https://d2e0btay0ynyf.cloudfront.net
 8. Lambda writes project state metadata to DynamoDB.
 9. The frontend receives technical brief, executive brief, stakeholder lens, game plan, objections, Project Brain answer, and Phase 2 artifacts.
 
+## Model And Storage Boundary
+
+PillarPrep does not store a copy of the Bedrock foundation model. The configured model ID, currently `us.amazon.nova-micro-v1:0`, is passed to Bedrock at invocation time and AWS manages the model weights, serving layer, and model lifecycle.
+
+Stored by PillarPrep:
+
+- Lambda code stores the prompt contract, schema instructions, and structured fallback behavior.
+- S3 stores generated brief artifacts as JSON documents containing the request, response, timestamp, provider, and project metadata.
+- DynamoDB stores project state records keyed by `projectId` and `sortKey` so Project Brain can track generated briefs and handoff state.
+- The browser stores unsaved local workspace state for demo continuity.
+
+Future retrieval should add Bedrock Knowledge Bases over approved S3 artifacts. That creates searchable project memory without training, fine-tuning, or hosting a custom model.
 ## Deployed Resources
 
 The frontend stack deploys these resources:

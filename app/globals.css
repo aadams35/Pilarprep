@@ -1737,6 +1737,20 @@ textarea:focus-visible {
   font-weight: 950;
 }
 
+.packet-tile small {
+  display: inline-flex;
+  min-height: 1.6rem;
+  align-items: center;
+  margin-top: 0.65rem;
+  border-radius: 999px;
+  background: #eef4ea;
+  color: #526057;
+  padding: 0 0.55rem;
+  font-size: 0.62rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 .packet-tile strong {
   display: block;
   margin-top: 1.1rem;

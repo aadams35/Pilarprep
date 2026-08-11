@@ -109,6 +109,18 @@ Response:
 }
 ```
 
+## Model And Memory Storage
+
+PillarPrep does not store or host the foundation model. Amazon Bedrock manages the Amazon Nova Micro model and PillarPrep invokes it on demand through Lambda.
+
+What PillarPrep stores:
+
+- Prompt contract and fallback rules: versioned in the Lambda code and GitHub repo.
+- Generated brief artifact: request, response, timestamp, provider, and project metadata in S3.
+- Project state index: projectId, sortKey, company, meeting type, provider, and createdAt in DynamoDB.
+- Browser workspace: local draft state only, stored in the user's browser until reset.
+
+Future Project Brain memory should use Bedrock Knowledge Bases over approved S3 artifacts and meeting notes. That is retrieval over project documents, not fine-tuning or custom model training.
 ## Cost Posture
 
 The demo uses Amazon Bedrock on-demand inference with Amazon Nova Micro, so there is no always-on model endpoint. Normal demo usage should stay well under $1/day as long as Live AWS mode is used only for team demos and the public CloudFront build remains demo-only. Avoid Provisioned Throughput, Nova Act, large batch jobs, public unauthenticated model access, or automated refresh loops until budgets/alarms are added.
