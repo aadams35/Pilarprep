@@ -109,6 +109,12 @@ Allowed headers=accept,authorization,content-type,x-amz-content-sha256,x-amz-dat
 Allowed methods=OPTIONS,POST
 ```
 
+Run the repeatable smoke test:
+
+```bash
+npm run smoke:aws
+```
+
 A successful live brief should return:
 
 ```text

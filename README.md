@@ -27,6 +27,7 @@ Live demos:
 - AWS Lambda demo runbook: `docs/aws-lambda-demo-runbook.md`
 - Demo script: `docs/demo-script.md`
 - Demo-day checklist: `docs/demo-day-readiness-checklist.md`
+- Judge walkthrough: `docs/judge-walkthrough.md`
 - Project model tools: `docs/project-model-tools.md`
 - Brief quality eval: `npm run eval:briefs`
 
@@ -197,6 +198,7 @@ npm run dev
 npm test
 npm run eval:briefs
 npm run lambda:test
+npm run smoke:aws
 ```
 
 When the Cognito demo variables are present, AI model mode signs API Gateway requests with a limited IAM role. When backend settings are absent, the app falls back to the deterministic demo provider.
