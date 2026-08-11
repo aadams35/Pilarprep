@@ -17,6 +17,7 @@ type BriefTab =
 type AudienceRole = "Sales" | "Executive" | "PM" | "Engineer" | "New member";
 type RiskLevel = "Low" | "Medium" | "High";
 type GenerationMode = "demo" | "live";
+type ConsolePage = "setup" | "brief" | "project" | "aws";
 
 type Scenario = {
   id: string;
@@ -368,6 +369,13 @@ const implementationBacklog = [
   "CloudWatch dashboard",
 ];
 
+const consolePages: Array<{ id: ConsolePage; label: string; detail: string }> = [
+  { id: "setup", label: "1. Setup", detail: "Customer context" },
+  { id: "brief", label: "2. Brief", detail: "Review and refine" },
+  { id: "project", label: "3. Project Brain", detail: "Follow-on model" },
+  { id: "aws", label: "AWS", detail: "Infra and demo map" },
+];
+
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -420,6 +428,7 @@ export default function Home() {
   const [generationError, setGenerationError] = useState("");
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const [generationMode, setGenerationMode] = useState<GenerationMode>("demo");
+  const [activePage, setActivePage] = useState<ConsolePage>("setup");
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- Mount-only localStorage hydration restores saved demo workspace state. */
@@ -1036,9 +1045,17 @@ export default function Home() {
               >
                 Live AWS
               </button>
-              <a href="#setup">1. Setup</a>
-              <a href="#brief">2. Brief</a>
-              <a href="#project-brain">3. Project Brain</a>
+              {consolePages.map((page) => (
+                <button
+                  key={page.id}
+                  className={cx("command-tab", activePage === page.id && "command-tab-active")}
+                  type="button"
+                  onClick={() => setActivePage(page.id)}
+                >
+                  <span>{page.label}</span>
+                  <small>{page.detail}</small>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -1165,7 +1182,9 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-[1500px] px-5 pt-5">
+      {activePage === "aws" ? (
+        <div className="page-view">
+        <section className="mx-auto max-w-[1500px] px-5 pt-5">
         <div className="spotlight-grid">
           <div className="spotlight-card">
             <span>Customer signal</span>
@@ -1261,8 +1280,12 @@ export default function Home() {
           </div>
         </div>
       </section>
+          </div>
+        ) : null}
 
       <section className="linear-workflow mx-auto max-w-[1500px] px-5 py-5">
+        {activePage === "setup" ? (
+          <div className="page-view">
         <div className="workflow-heading" id="setup">
           <span>Step 1</span>
           <div>
@@ -1518,7 +1541,11 @@ export default function Home() {
             </div>
           </section>
         </div>
+          </div>
+        ) : null}
 
+        {activePage === "brief" ? (
+          <div className="page-view">
         <div className="workflow-heading" id="brief">
           <span>Step 2</span>
           <div>
@@ -1853,7 +1880,12 @@ export default function Home() {
               ))}
             </div>
           </section>
+          </div>
+          </div>
+        ) : null}
 
+          {activePage === "project" ? (
+            <div className="page-view">
           <div className="workflow-heading workflow-heading-dark" id="project-brain">
             <span>Step 3</span>
             <div>
@@ -2010,7 +2042,8 @@ export default function Home() {
               </div>
             </div>
           </section>
-        </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );

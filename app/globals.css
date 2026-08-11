@@ -148,6 +148,59 @@ body {
   transform: translateY(-1px);
 }
 
+
+.command-tab {
+  display: grid;
+  min-height: 2.7rem;
+  align-content: center;
+  gap: 0.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.72);
+  padding: 0.3rem 0.75rem;
+  text-align: left;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.command-tab:hover {
+  transform: translateY(-1px);
+  background: rgba(159, 215, 192, 0.13);
+  color: #ffffff;
+}
+
+.command-tab span {
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.command-tab small {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.command-tab-active {
+  border-color: rgba(159, 215, 192, 0.44);
+  background: #9fd7c0;
+  color: #17201c;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+.command-tab-active small {
+  color: rgba(23, 32, 28, 0.62);
+}
+
+.page-view {
+  display: grid;
+  gap: 1rem;
+}
 .hero-copy,
 .hero-panel {
   border: 1px solid rgba(255, 255, 255, 0.11);
