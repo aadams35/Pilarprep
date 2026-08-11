@@ -39,23 +39,13 @@ test("server-renders the PillarPrep console", async () => {
   assert.match(html, /1\. Setup/);
   assert.match(html, /2\. Brief/);
   assert.match(html, /3\. Project Brain/);
-  assert.match(html, /Set up the customer/);
-  assert.match(html, /Decision maker context/);
-  assert.match(html, /Stakeholder lens/);
-  assert.match(html, /Ask Project Brain/);
-  assert.match(html, /Reset workspace/);
-  assert.match(html, /Phase 1/);
-  assert.match(html, /Phase 2/);
-  assert.match(html, /Approved brief/);
-  assert.match(html, /Pre-brief refinement/);
-  assert.match(html, /Follow-on project model/);
+  assert.match(html, /Run the demo as a clean story/);
+  assert.match(html, /Auto-builds? Project Brain/);
   assert.match(html, /Project Brain/);
+  assert.match(html, /Auto-build the project model/);
   assert.match(html, /AWS-ready deployment path/);
-  assert.match(html, /AWS-native architecture/);
-  assert.match(html, /AWS run path/);
-  assert.match(html, /S3 \+ CloudFront/);
   assert.match(html, /Live signal profile/);
-  assert.match(html, /Implementation queue/);
+  assert.doesNotMatch(html, /Ask Project Brain|Promote to Project|`r`n/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/i);
 });
 
@@ -67,7 +57,9 @@ test("removes the starter preview shell", async () => {
   ]);
 
   assert.match(page, /Project Brain/);
-  assert.match(page, /Promote to Project/);
+  assert.match(page, /Build Project Brain/);
+  assert.match(page, /Generate brief \+ project model/);
+  assert.doesNotMatch(page, /Ask Project Brain|Promote to Project|`r`n/);
   assert.match(layout, /PillarPrep \| AWS SA Briefing Copilot/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview/);
@@ -107,7 +99,7 @@ test("generates a demo brief through the API contract", async () => {
   assert.match(payload.stakeholders.join("\n"), /Lena Ortiz/);
   assert.ok(payload.projectArtifacts.twoWeekPlan.length >= 3);
   assert.ok(payload.projectArtifacts.riskRegister.length >= 2);
-  assert.match(payload.projectAnswer, /Project Brain|promote/i);
+  assert.match(payload.projectAnswer, /latest brief|two-week sprint|decision log/i);
 });
 
 test("generates a role-aware Project Brain answer", async () => {

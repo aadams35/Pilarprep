@@ -256,7 +256,7 @@ const lifecycleStages = [
   "Generate",
   "Refine",
   "Approve",
-  "Promote",
+  "Project",
   "Execute",
 ];
 
@@ -280,13 +280,13 @@ const demoBeats = [
   },
   {
     time: "0:50",
-    title: "Promote to project",
-    detail: "Capture meeting outcomes and turn the brief into shared delivery memory.",
+    title: "Auto-build Project Brain",
+    detail: "Use the generated brief and notes to create shared delivery memory automatically.",
   },
   {
     time: "1:15",
-    title: "Ask Project Brain",
-    detail: "Switch roles and generate the plan, exec summary, or onboarding answer.",
+    title: "Review follow-on outputs",
+    detail: "Switch roles to see the plan, exec framing, risks, and onboarding view.",
   },
 ];
 
@@ -312,15 +312,15 @@ const demoGuideCards = [
   },
   {
     label: "Winning twist",
-    title: "Promote the brief into memory",
+    title: "Auto-build the project model",
     detail:
-      "After the meeting, the approved brief becomes Project Brain for sales, execs, PMs, engineers, and new team members.",
+      "After generation, the brief and notes become Project Brain for sales, execs, PMs, engineers, and new team members.",
   },
 ];
 
 const judgeModeOutcomes = [
   "Generates the refined pre-brief with no live model cost",
-  "Approves the brief and promotes it into Project Brain",
+  "Auto-builds Project Brain from the generated brief",
   "Opens the most demo-friendly tab with copy-ready outputs",
 ];
 
@@ -397,7 +397,7 @@ const awsRunway = [
   {
     layer: "API",
     service: "API Gateway + Lambda",
-    detail: "Thin request layer for brief generation, feedback capture, and project promotion.",
+    detail: "Thin request layer for brief generation, feedback capture, and project model updates.",
   },
   {
     layer: "AI generation",
@@ -831,12 +831,12 @@ export default function Home() {
       },
       {
         label: "Handoff readiness",
-        value: approved ? (promoted ? 96 : 84) : 62,
+        value: promoted ? 96 : approved ? 84 : 62,
         detail: promoted
-          ? "Project workspace is ready"
+          ? "Project model auto-built from latest brief"
           : approved
-            ? "Ready to promote after meeting"
-            : "Approve final brief first",
+            ? "Ready for project handoff"
+            : "Generate the first brief",
       },
       {
         label: "Grounding path",
@@ -878,7 +878,7 @@ export default function Home() {
       gameplan: [
         "Open by confirming the business event driving urgency, then map technical unknowns to business impact.",
         `Spend the first half on ${selectedPillars.join(", ").toLowerCase()} and use the final ten minutes to agree on success measures and next steps.`,
-        "Close with a crisp handoff: confirmed goals, known risks, unanswered questions, owners, timeline, and whether the brief should be promoted into a project workspace.",
+        "Close with a crisp handoff: confirmed goals, known risks, unanswered questions, owners, timeline, and how the project workspace should be used.",
       ],
       objections: [
         "Customer pushback: We cannot risk disruption during this program.",
@@ -963,7 +963,7 @@ export default function Home() {
     },
     {
       title: "Project memory",
-      status: promoted ? "Live" : "Pending",
+      status: promoted ? "Live" : "Waiting",
       detail: "Brief, notes, risks, actions, and decisions",
     },
     {
@@ -987,7 +987,7 @@ export default function Home() {
           : "Queued",
         detail:
           firstPlan?.detail ??
-          "Promote the brief to generate the first implementation sprint.",
+          "Generate the brief to create the first implementation sprint.",
       },
       {
         title: "Risk list",
@@ -996,7 +996,7 @@ export default function Home() {
           : "Queued",
         detail:
           firstRisk?.detail ??
-          "Promote the brief to generate delivery risks and mitigations.",
+          "Generate the brief to create delivery risks and mitigations.",
       },
       {
         title: "Stakeholder map",
@@ -1012,7 +1012,7 @@ export default function Home() {
         status: artifacts?.followUpEmail?.subject ? "Drafted" : "Queued",
         detail:
           artifacts?.followUpEmail?.subject ??
-          "Promote the brief to draft a concise customer follow-up.",
+          "Generate the brief to draft a concise customer follow-up.",
       },
     ];
   }, [generatedBrief]);
@@ -1178,18 +1178,15 @@ export default function Home() {
       }
 
       setGeneratedBrief(nextBrief);
+      setProjectBrainAnswer(nextBrief.projectAnswer || projectAnswer);
+      setProjectAnswerKey(requestProjectAnswerKey);
+      setPromoted(true);
 
       if (mode === "project") {
         setApproved(true);
-        setPromoted(true);
-        setProjectBrainAnswer(nextBrief.projectAnswer);
-        setProjectAnswerKey(requestProjectAnswerKey);
       } else {
         setBriefVersion((version) => version + 1);
         setApproved(false);
-        setPromoted(false);
-        setProjectBrainAnswer("");
-        setProjectAnswerKey("");
       }
     } catch (error) {
       setGenerationError(
@@ -1207,15 +1204,18 @@ export default function Home() {
 
   function approveBrief() {
     setApproved(true);
-    setPromoted(false);
+    setPromoted(Boolean(generatedBrief));
   }
 
-  function promoteProject() {
+  function openProjectBrain() {
     setActivePage("project");
-    void requestBrief("project");
+
+    if (!generatedBrief) {
+      void requestBrief("prebrief");
+    }
   }
 
-  function askProjectBrain() {
+  function refreshProjectModel() {
     setActivePage("project");
     void requestBrief("project");
   }
@@ -1352,7 +1352,7 @@ export default function Home() {
             </div>
             <p className="mt-5 max-w-3xl text-base leading-7 text-white/74">
               An SA briefing cockpit that turns customer context into a refined
-              pre-meeting plan, then promotes the final brief into a living
+              pre-meeting plan, then auto-builds the final brief into a living
               project brain for the team that has to execute.
             </p>
             <div className="product-strip" aria-label="Hackathon value signals">
@@ -1391,7 +1391,7 @@ export default function Home() {
                 </strong>
               </div>
               <span className="hero-pill">
-                {promoted ? "Project live" : approved ? "Brief approved" : "In refinement"}
+                {promoted ? "Project model ready" : approved ? "Brief approved" : "In refinement"}
               </span>
             </div>
             <div className="mt-6">
@@ -1474,12 +1474,12 @@ export default function Home() {
           <div className="spotlight-card spotlight-card-strong">
             <span>AWS value path</span>
             <strong>{primaryConcern}</strong>
-            <p>Briefs are mapped to Well-Architected priorities and promoted into delivery context.</p>
+            <p>Briefs are mapped to Well-Architected priorities and converted into delivery context.</p>
           </div>
           <div className="spotlight-card">
             <span>Next best action</span>
-            <strong>{promoted ? "Run the project brain" : approved ? "Capture meeting outcomes" : "Refine the pre-brief"}</strong>
-            <p>{promoted ? "Generate plans, status summaries, and onboarding answers." : "Turn the customer conversation into reusable team memory."}</p>
+            <strong>{promoted ? "Review Project Brain" : approved ? "Capture meeting outcomes" : "Generate the workspace"}</strong>
+            <p>{promoted ? "Plans, risks, summaries, and onboarding answers are ready." : "Turn the customer conversation into reusable team memory."}</p>
           </div>
         </div>
       </section>
@@ -1598,7 +1598,7 @@ export default function Home() {
                 <h2>One-click judge walkthrough</h2>
                 <p>
                   Judge Mode uses the local demo generator, so it costs nothing,
-                  creates a polished brief, promotes it into Project Brain, and
+                  creates a polished brief, auto-builds Project Brain, and
                   leaves the app ready for a confident live walkthrough.
                 </p>
               </div>
@@ -1859,8 +1859,8 @@ export default function Home() {
                       ? "Generating with AI..."
                       : "Generating brief..."
                     : generationMode === "live"
-                      ? "Generate with AI model"
-                      : "Generate / refine brief"}
+                      ? "Generate AI brief + project model"
+                      : "Generate brief + project model"}
                 </button>
                 <button
                   className="secondary-link"
@@ -1952,8 +1952,8 @@ export default function Home() {
 
             <div className="phase-bridge">
               <div>
-                <span>Approved brief</span>
-                <strong>{approved ? "Ready for handoff" : "Waiting for approval"}</strong>
+                <span>Project model</span>
+                <strong>{promoted ? "Auto-built" : generatedBrief ? "Ready" : "Waiting for brief"}</strong>
               </div>
               <button
                 className={cx(
@@ -1961,11 +1961,12 @@ export default function Home() {
                   promoted && "promote-button-done"
                 )}
                 type="button"
-                onClick={promoteProject}
+                disabled={isGenerating}
+                onClick={openProjectBrain}
               >
-                Promote to Project
+                {promoted ? "View Project Brain" : generatedBrief ? "Open Project Brain" : "Build Project Brain"}
               </button>
-              <p>Final brief becomes project context</p>
+              <p>Latest brief and notes become project context</p>
             </div>
 
             <div className="phase-card phase-card-project">
@@ -1973,12 +1974,12 @@ export default function Home() {
                 <div className="loop-badge loop-badge-project">Phase 2</div>
                 <h2>Follow-on project model</h2>
                 <p>
-                  Capture meeting outcomes, promote the brief into shared
+                  Capture meeting outcomes, auto-build the brief into shared
                   memory, and use Project Brain for delivery follow-through.
                 </p>
               </div>
               <div className="phase-steps">
-                {["Capture notes", "Promote", "Ask", "Update"].map(
+                {["Capture notes", "Auto-build", "Plan", "Update"].map(
                   (step, index) => (
                     <div key={step} className="flow-step project-step">
                       <span>{index + 1}</span>
@@ -2217,7 +2218,7 @@ export default function Home() {
                     ))}
                   </div>
                   <p className="mt-4 text-sm leading-6 text-[#536158]">
-                    Bedrock generates the brief, Knowledge Bases ground the
+                    Bedrock generates the brief and Project Brain output, Knowledge Bases ground the
                     Project Brain, S3 stores artifacts, and DynamoDB tracks
                     project state.
                   </p>
@@ -2270,7 +2271,7 @@ export default function Home() {
           <div className="workflow-heading workflow-heading-dark" id="project-brain">
             <span>Step 3</span>
             <div>
-              <p>Promote after the meeting</p>
+              <p>Auto-build after generation</p>
               <h2>Turn the final brief into the follow-on project model</h2>
             </div>
           </div>
@@ -2283,7 +2284,7 @@ export default function Home() {
                 </p>
                 <h2 className="mt-1 text-xl font-black">Project Brain</h2>
                 <p className="mt-3 text-sm leading-6 text-white/70">
-                  Once promoted, the final brief becomes an askable project
+                  Once generated, the final brief becomes an auto-built project
                   model for people who need to implement, manage, sell, or
                   explain the work.
                 </p>
@@ -2354,7 +2355,7 @@ export default function Home() {
                                 : "project-state-waiting"
                             )}
                           >
-                            {promoted ? "Project live" : "Waiting for promotion"}
+                            {promoted ? "Project model ready" : "Auto-build pending"}
                           </span>
                           <button
                             className="copy-button copy-button-dark"
@@ -2366,14 +2367,6 @@ export default function Home() {
                           {copiedLabel === "Follow-up email" ? (
                             <span className="copy-state copy-state-dark">Copied</span>
                           ) : null}
-                          <button
-                            className="project-ask-button"
-                            type="button"
-                            disabled={isGenerating}
-                            onClick={askProjectBrain}
-                          >
-                            {isGenerating ? "Asking..." : "Ask Project Brain"}
-                          </button>
                         </div>
                       </div>
                       <p className="mt-5 text-base leading-7 text-white/82">
@@ -2420,13 +2413,13 @@ export default function Home() {
                       )}
                       type="button"
                       disabled={isGenerating}
-                      onClick={promoteProject}
+                      onClick={refreshProjectModel}
                     >
-                      {promoted
-                        ? isGenerating
-                          ? "Updating project model..."
-                          : "Project model updated"
-                        : "Promote notes into Project Brain"}
+                      {isGenerating
+                        ? "Updating project model..."
+                        : promoted
+                          ? "Refresh from latest notes"
+                          : "Build project model"}
                     </button>
                   </div>
                 </div>

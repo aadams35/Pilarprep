@@ -190,8 +190,8 @@ Content requirements:
 - stakeholders: exactly 3 complete sentences based only on supplied decision-maker context; say what to validate if context is thin.
 - gameplan: exactly 3 complete sentences for how the SA should run the meeting.
 - objections: exactly 3 complete sentences in "Concern: ... Response: ..." form.
-- projectAnswer: answer the requested follow-on role and prompt using the brief context.
-- projectArtifacts: include exactly 3 two-week plan items, exactly 3 risks, exactly 3 stakeholder map items, and one follow-up email.
+- projectAnswer: always answer the requested follow-on role and prompt using the generated brief context so Project Brain can auto-build from the same response.
+- projectArtifacts: always include exactly 3 two-week plan items, exactly 3 risks, exactly 3 stakeholder map items, and one follow-up email in the same response.
 - citations: 2-4 short labels only, such as "Customer context", "Decision-maker notes", or "AWS Well-Architected pillars".
 - Tie technical content to the selected AWS Well-Architected pillars.
 - Include AWS services only when useful for the conversation.
@@ -385,7 +385,7 @@ def _fallback_generated(payload, model_text=""):
         "gameplan": [
             "Open by confirming the business event driving urgency, then map each technical unknown to business impact.",
             f"Spend the technical portion on {primary_pillar.lower()}, current-state constraints, dependencies, risks, and evidence the customer needs to proceed.",
-            "Close with confirmed goals, open questions, owners, next meeting, and whether the final brief should be promoted into Project Brain.",
+            "Close with confirmed goals, open questions, owners, next meeting, and how the generated Project Brain handoff should be used.",
         ],
         "objections": [
             "Concern: We cannot risk disruption. Response: propose a bounded pilot with rollback criteria and a checkpoint before broader rollout.",

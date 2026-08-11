@@ -212,20 +212,17 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
         ? `Ask ${stakeholderLead.name || "the primary stakeholder"} what would make this meeting successful and what concern would slow approval.`
         : "Identify the economic buyer, technical owner, security approver, and project driver before going deep.",
       `Spend the middle of the meeting on ${primaryPillar.toLowerCase()} tradeoffs and unknowns.`,
-      "Close with an agreed success measure, owner list, risks, timeline, and whether the final brief should be promoted into Project Brain.",
+      "Close with an agreed success measure, owner list, risks, timeline, and how the Project Brain handoff should be used.",
     ],
     objections: [
       "Concern: We do not have enough reliable context. Response: treat generated content as hypotheses, then validate assumptions in discovery.",
       `Concern: This may be too AWS-heavy. Response: tune the executive version around outcomes and keep service names in the technical brief.`,
       stakeholderLead
         ? `Concern: ${stakeholderLead.name || "The sponsor"} may challenge relevance. Response: connect the recommendation to the priorities captured in the approved stakeholder notes, then ask what changed.`
-        : "Concern: We may not know what the decision makers care about. Response: capture approved stakeholder context before the follow-up and update Project Brain.",
-      `Concern: Follow-through gets lost after the meeting. Response: promote the approved brief plus notes into a role-aware Project Brain.`,
+        : "Concern: We may not know what the decision makers care about. Response: capture approved stakeholder context before the follow-up and refresh Project Brain.",
+      `Concern: Follow-through gets lost after the meeting. Response: use the generated brief plus notes to auto-build a role-aware Project Brain.`,
     ],
-    projectAnswer:
-      input.mode === "project"
-        ? `For ${input.role ?? "the project team"}, start from the approved brief, meeting outcomes, stakeholder notes, open risks, and owners. For the prompt "${input.prompt ?? "What should we do next?"}", recommend a two-week sprint to validate ${primaryPillar.toLowerCase()}, publish a decision log, and align the sponsor on success criteria${stakeholderLead ? ` with ${stakeholderLead.name || "the primary stakeholder"}` : ""}.`
-        : `After approval, promote ${company}'s final brief, decision-maker context, and meeting notes into Project Brain so sales, executives, PMs, engineers, and new team members can ask role-specific follow-up questions.`,
+    projectAnswer: `For ${input.role ?? "the project team"}, start from the latest brief, meeting outcomes, stakeholder notes, open risks, and owners. For the prompt "${input.prompt ?? "What should we do next?"}", recommend a two-week sprint to validate ${primaryPillar.toLowerCase()}, publish a decision log, and align the sponsor on success criteria${stakeholderLead ? ` with ${stakeholderLead.name || "the primary stakeholder"}` : ""}.`,
     projectArtifacts,
     citations: [
       "Customer-provided context",
