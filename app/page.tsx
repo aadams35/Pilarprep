@@ -192,14 +192,14 @@ const pillars = [
     short: "Cost",
     tone: "Connect spend to outcomes and unit economics.",
     risk: "High" as RiskLevel,
-    color: "bg-emerald-500",
+    color: "bg-sky-600",
   },
   {
     id: "Sustainability",
     short: "Sustainability",
     tone: "Right-size resources and reduce waste.",
     risk: "Low" as RiskLevel,
-    color: "bg-lime-500",
+    color: "bg-slate-500",
   },
 ];
 
@@ -1506,7 +1506,7 @@ const industryFocus = useMemo(() => {
   }
 
   return (
-    <main className={cx("app-shell min-h-screen text-[#17201c]", judgeMode && "judge-mode-on")}>
+    <main className={cx("app-shell min-h-screen text-[#111827]", judgeMode && "judge-mode-on")}>
       <section className="hero-shell">
         <div className="mx-auto max-w-[1500px] px-5 pt-4">
           <div className="top-command">
@@ -1603,7 +1603,7 @@ const industryFocus = useMemo(() => {
             </div>
             <div className="hero-demo-state">
               <div>
-                <p className="eyebrow text-[#9fd7c0]">Workspace state</p>
+                <p className="eyebrow text-[#7dd3fc]">Workspace state</p>
                 <h2>{promoted ? "Project model built" : generatedBrief ? "Brief generated" : "Ready to generate"}</h2>
                 <p>
                   Ranked priorities, richer questions, and follow-on artifacts are generated in one clean pass.
@@ -1807,9 +1807,9 @@ const industryFocus = useMemo(() => {
         </div>
 
         <div className="setup-grid">
-          <section className="rounded-lg border border-[#d8ded2] bg-white shadow-sm">
-            <div className="border-b border-[#e2e7de] p-5">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#527064]">
+          <section className="rounded-lg border border-[#d7dee8] bg-white shadow-sm">
+            <div className="border-b border-[#e0e7ef] p-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#446076]">
                 Sample scenarios
               </p>
               <h2 className="mt-1 text-xl font-black">Start from a customer scenario</h2>
@@ -1832,9 +1832,9 @@ const industryFocus = useMemo(() => {
             </div>
           </section>
 
-          <section className="rounded-lg border border-[#d8ded2] bg-white shadow-sm">
-            <div className="border-b border-[#e2e7de] p-5">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#527064]">
+          <section className="rounded-lg border border-[#d7dee8] bg-white shadow-sm">
+            <div className="border-b border-[#e0e7ef] p-5">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#446076]">
                 Loop 1 input
               </p>
               <h2 className="mt-1 text-xl font-black">Customer context</h2>
@@ -2209,16 +2209,16 @@ const industryFocus = useMemo(() => {
           </section>
 
           <section className="grid gap-5 2xl:grid-cols-[1fr_360px]">
-            <div className="rounded-lg border border-[#d8ded2] bg-white shadow-sm">
-              <div className="flex flex-col gap-4 border-b border-[#e2e7de] p-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="rounded-lg border border-[#d7dee8] bg-white shadow-sm">
+              <div className="flex flex-col gap-4 border-b border-[#e0e7ef] p-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#527064]">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#446076]">
                     Final pre-brief workspace
                   </p>
                   <h2 className="mt-1 text-xl font-black">
                     {company || "Customer"} {meetingType}
                   </h2>
-                  <p className="mt-1 text-sm text-[#536158]">
+                  <p className="mt-1 text-sm text-[#526070]">
                     {activeScenario.name}: {activeScenario.winTheme}
                   </p>
                 </div>
@@ -2255,7 +2255,7 @@ const industryFocus = useMemo(() => {
                 <div className="space-y-4">
                   <div className={cx("brief-surface", isGenerating && "brief-surface-busy")}>
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#527064]">
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#446076]">
                         {activeTab === "technical"
                           ? "Technical brief"
                           : activeTab === "executive"
@@ -2373,7 +2373,7 @@ const industryFocus = useMemo(() => {
 
                 <div className="space-y-4">
                   <div className="summary-panel stakeholder-summary">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#527064]">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#446076]">
                       Decision makers
                     </p>
                     <div className="mt-4 space-y-2">
@@ -2394,7 +2394,7 @@ const industryFocus = useMemo(() => {
                   </div>
 
                   <div className="summary-panel">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#527064]">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#446076]">
                       Ranked pillars
                     </p>
                     <div className="mt-4 space-y-2">
@@ -2411,7 +2411,7 @@ const industryFocus = useMemo(() => {
                   </div>
 
                   <div className="summary-panel">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#527064]">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#446076]">
                       Brief quality target
                     </p>
                     <div className="mt-4 space-y-3">
@@ -2438,9 +2438,9 @@ const industryFocus = useMemo(() => {
             </div>
 
             <div className="space-y-5">
-              <section className="rounded-lg border border-[#d8ded2] bg-white shadow-sm">
-                <div className="border-b border-[#e2e7de] p-5">
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#527064]">
+              <section className="rounded-lg border border-[#d7dee8] bg-white shadow-sm">
+                <div className="border-b border-[#e0e7ef] p-5">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#446076]">
                     Ranked pillar narrative
                   </p>
                   <h2 className="mt-1 text-xl font-black">Why this matters</h2>
@@ -2531,10 +2531,10 @@ const industryFocus = useMemo(() => {
             </div>
           </div>
 
-          <section className="rounded-lg border border-[#d8ded2] bg-[#17201c] text-white shadow-sm">
+          <section className="rounded-lg border border-[#d7dee8] bg-[#111827] text-white shadow-sm">
             <div className="grid gap-0 2xl:grid-cols-[380px_1fr]">
               <div className="border-b border-white/10 p-5 2xl:border-b-0 2xl:border-r">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9fd7c0]">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7dd3fc]">
                   Loop 2 output
                 </p>
                 <h2 className="mt-1 text-xl font-black">Project model</h2>
@@ -2594,7 +2594,7 @@ const industryFocus = useMemo(() => {
                     <div className={cx("project-answer", isGenerating && "project-answer-busy")}>
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9fd7c0]">
+                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7dd3fc]">
                             Answer for {role}
                           </p>
                           <h3 className="mt-1 text-lg font-black">
