@@ -24,6 +24,7 @@ Live demos:
 - Local workspace persistence: browser saves the current demo workspace until reset
 - Prompt contract: `docs/prompt-contract.md`
 - Architecture notes: `docs/aws-infrastructure-design.md`
+- Demo architecture slide: `docs/pillarprep-architecture-slide.pptx`
 - AWS Lambda demo runbook: `docs/aws-lambda-demo-runbook.md`
 - Demo script: `docs/demo-script.md`
 - Demo-day checklist: `docs/demo-day-readiness-checklist.md`

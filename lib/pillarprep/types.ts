@@ -55,9 +55,12 @@ export type BriefResponse = {
     clientId?: string;
     artifactKey?: string;
     docxArtifactKey?: string;
+    docxDownloadUrl?: string;
     artifactRetention?: string;
     stateKey?: string;
     storageWarning?: string;
+    guardrailId?: string;
+    guardrailVersion?: string;
     modelId?: string;
     inputTokens?: number;
     outputTokens?: number;

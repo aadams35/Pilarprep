@@ -1049,6 +1049,7 @@ const industryFocus = useMemo(() => {
       `Generation path: ${generatedBrief ? providerLabel(generatedBrief.provider) : "Not generated yet"}`,
       metadata?.artifactKey ? `S3 JSON: ${metadata.artifactKey}` : "S3 JSON: Not saved yet",
       metadata?.docxArtifactKey ? `S3 DOCX: ${metadata.docxArtifactKey}` : "S3 DOCX: Not saved yet",
+      metadata?.docxDownloadUrl ? `DOCX download: ${metadata.docxDownloadUrl}` : "DOCX download: Not generated yet",
       metadata?.stateKey ? `DynamoDB state: ${metadata.stateKey}` : "DynamoDB state: Not saved yet",
       "",
       "Ranked AWS priorities",
@@ -1156,6 +1157,40 @@ const industryFocus = useMemo(() => {
       },
     ];
   }, [generatedBrief]);
+
+  const awsProofItems = useMemo(() => {
+    const metadata = generatedBrief?.metadata;
+    return [
+      {
+        label: "Access",
+        value: generationMode === "live" && hostedIamMode ? "IAM browser role" : "Backend mediated",
+      },
+      {
+        label: "Model",
+        value: metadata?.modelId ?? (generatedBrief ? providerLabel(generatedBrief.provider) : "Waiting"),
+      },
+      {
+        label: "Guardrail",
+        value: metadata?.guardrailId
+          ? `${metadata.guardrailId}${metadata.guardrailVersion ? ` v${metadata.guardrailVersion}` : ""}`
+          : generatedBrief?.provider === "bedrock"
+            ? "Configured"
+            : "Demo fallback",
+      },
+      {
+        label: "Latest DOCX",
+        value: metadata?.docxArtifactKey ? "Saved in S3" : "Not saved yet",
+      },
+      {
+        label: "Project state",
+        value: metadata?.stateKey ? "Tracked in DynamoDB" : "Not written yet",
+      },
+      {
+        label: "Retention",
+        value: metadata?.artifactRetention ?? "latest-only",
+      },
+    ];
+  }, [generatedBrief, generationMode, hostedIamMode]);
 
   function loadScenario(nextScenario: Scenario) {
     setScenarioId(nextScenario.id);
@@ -1409,8 +1444,13 @@ const industryFocus = useMemo(() => {
   function copyFollowUpEmail() {
     void copyText("Follow-up email", followUpEmailText);
   }
+
   function copyHandoffPacket() {
     void copyText("Handoff packet", handoffPacketText);
+  }
+
+  function copyDocxPath() {
+    void copyText("DOCX path", generatedBrief?.metadata?.docxArtifactKey ?? "");
   }
 
   function resetWorkspace() {
@@ -1978,6 +2018,41 @@ const industryFocus = useMemo(() => {
                   {generatedBrief.metadata.storageWarning ? <span>{generatedBrief.metadata.storageWarning}</span> : null}
                 </div>
               ) : null}
+              <div className="artifact-actions">
+                {generatedBrief?.metadata?.docxDownloadUrl ? (
+                  <a
+                    className="artifact-action artifact-action-primary"
+                    href={generatedBrief.metadata.docxDownloadUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Download DOCX
+                  </a>
+                ) : null}
+                <button
+                  className="artifact-action"
+                  type="button"
+                  disabled={!generatedBrief?.metadata?.docxArtifactKey}
+                  onClick={copyDocxPath}
+                >
+                  Copy DOCX path
+                </button>
+                {copiedLabel === "DOCX path" ? <span className="copy-state">DOCX path copied</span> : null}
+              </div>
+              <div className="aws-proof-panel">
+                <div className="aws-proof-head">
+                  <span>AWS proof</span>
+                  <strong>{generatedBrief ? "Live run evidence" : "Ready when generated"}</strong>
+                </div>
+                <div className="aws-proof-grid">
+                  {awsProofItems.map((item) => (
+                    <div className="aws-proof-item" key={item.label}>
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="workspace-tools">
                 <span>Workspace saves locally in this browser</span>
                 <button className="text-action" type="button" onClick={resetWorkspace}>

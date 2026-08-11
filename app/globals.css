@@ -1055,6 +1055,106 @@ body {
   font-weight: 900;
 }
 
+
+.artifact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.artifact-action {
+  display: inline-flex;
+  min-height: 2.35rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfd8cb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1d2a24;
+  padding: 0 0.82rem;
+  font-size: 0.73rem;
+  font-weight: 950;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.artifact-action-primary {
+  border-color: #214c3a;
+  background: #214c3a;
+  color: #ffffff;
+}
+
+.artifact-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.aws-proof-panel {
+  border: 1px solid #d8ded2;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0.8rem;
+}
+
+.aws-proof-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.68rem;
+}
+
+.aws-proof-head span {
+  color: #607067;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.aws-proof-head strong {
+  color: #17201c;
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.aws-proof-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.52rem;
+}
+
+.aws-proof-item {
+  min-width: 0;
+  border: 1px solid #edf0e8;
+  border-radius: 8px;
+  background: #fbfcf8;
+  padding: 0.58rem 0.62rem;
+}
+
+.aws-proof-item span,
+.aws-proof-item strong {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aws-proof-item span {
+  color: #66766d;
+  font-size: 0.64rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.aws-proof-item strong {
+  margin-top: 0.18rem;
+  color: #1d2a24;
+  font-size: 0.74rem;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
 .workspace-tools {
   display: flex;
   align-items: center;

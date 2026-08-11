@@ -220,6 +220,7 @@ class LambdaHandlerTest(unittest.TestCase):
     def test_store_project_artifacts_replaces_previous_s3_outputs(self):
         generated = json.loads(MODEL_RESPONSE)
         put_objects = []
+        presigned_requests = []
         delete_batches = []
         dynamodb_items = []
 
@@ -250,6 +251,10 @@ class LambdaHandlerTest(unittest.TestCase):
             def put_object(self, **kwargs):
                 put_objects.append(kwargs)
 
+            def generate_presigned_url(self, operation, **kwargs):
+                presigned_requests.append({"operation": operation, **kwargs})
+                return "https://download.example/latest.docx"
+
         class FakeDynamoDB:
             def put_item(self, **kwargs):
                 dynamodb_items.append(kwargs)
@@ -273,10 +278,14 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertEqual(paginator_calls[0]["Prefix"], "clients/apex-mutual/brief/")
         self.assertEqual(metadata["artifactKey"], "clients/apex-mutual/brief/latest.json")
         self.assertEqual(metadata["docxArtifactKey"], "clients/apex-mutual/brief/latest.docx")
+        self.assertEqual(metadata["docxDownloadUrl"], "https://download.example/latest.docx")
         self.assertEqual(metadata["stateKey"], "BRIEF#LATEST")
         self.assertEqual(metadata["artifactRetention"], "latest-only")
         self.assertEqual(delete_batches[0]["Delete"]["Objects"][0]["Key"], "clients/apex-mutual/brief/old.json")
         self.assertEqual(len(put_objects), 2)
+        self.assertEqual(presigned_requests[0]["operation"], "get_object")
+        self.assertEqual(presigned_requests[0]["Params"]["Key"], "clients/apex-mutual/brief/latest.docx")
+        self.assertEqual(presigned_requests[0]["ExpiresIn"], 3600)
         self.assertEqual(put_objects[0]["ContentType"], "application/json")
         self.assertEqual(put_objects[1]["ContentType"], "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         self.assertTrue(put_objects[1]["Body"].startswith(b"PK"))

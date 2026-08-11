@@ -772,6 +772,11 @@ def _store_project_artifacts(payload, generated):
             )
             metadata["artifactKey"] = artifact_key
             metadata["docxArtifactKey"] = docx_artifact_key
+            metadata["docxDownloadUrl"] = s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": ARTIFACT_BUCKET, "Key": docx_artifact_key},
+                ExpiresIn=3600,
+            )
             metadata["briefVersion"] = timestamp
 
         if PROJECT_TABLE:

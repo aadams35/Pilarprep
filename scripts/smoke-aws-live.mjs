@@ -163,8 +163,8 @@ if (body.provider !== "bedrock") {
   throw new Error(`Expected provider=bedrock, got ${body.provider}.`);
 }
 
-if (!body.metadata?.artifactKey || !body.metadata?.docxArtifactKey || !body.metadata?.stateKey) {
-  throw new Error("Live response did not include S3 JSON, S3 DOCX, and DynamoDB state metadata.");
+if (!body.metadata?.artifactKey || !body.metadata?.docxArtifactKey || !body.metadata?.docxDownloadUrl || !body.metadata?.stateKey) {
+  throw new Error("Live response did not include S3 JSON, S3 DOCX, DOCX download URL, and DynamoDB state metadata.");
 }
 
 if (!body.metadata.artifactKey.startsWith("clients/") || !body.metadata.docxArtifactKey.startsWith("clients/")) {
@@ -177,6 +177,10 @@ if (!body.metadata.artifactKey.endsWith("/brief/latest.json") || !body.metadata.
 
 if (body.metadata.stateKey !== "BRIEF#LATEST") {
   throw new Error(`Expected DynamoDB stateKey BRIEF#LATEST, got ${body.metadata.stateKey}.`);
+}
+
+if (!body.metadata.docxDownloadUrl.startsWith("https://")) {
+  throw new Error("Live response did not issue an HTTPS DOCX download URL.");
 }
 
 if (!body.metadata?.guardrailId || !body.metadata?.guardrailVersion) {
@@ -193,6 +197,7 @@ console.table({
   clientId: body.metadata.clientId ?? "n/a",
   artifactKey: body.metadata.artifactKey,
   docxArtifactKey: body.metadata.docxArtifactKey,
+  docxDownloadUrl: "issued",
   stateKey: body.metadata.stateKey,
   totalTokens: body.metadata.totalTokens ?? "n/a",
   latencyMs: body.metadata.latencyMs ?? "n/a",
