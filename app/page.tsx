@@ -26,7 +26,7 @@ type AudienceRole = "Sales" | "Executive" | "PM" | "Engineer" | "New member";
 type RiskLevel = "Low" | "Medium" | "High";
 type GenerationMode = "demo" | "live";
 type ModelStatus = { checked: boolean; liveConfigured: boolean; apiKeyConfigured: boolean; authMode?: string };
-type ConsolePage = "guide" | "setup" | "brief" | "project" | "aws";
+type ConsolePage = "setup" | "brief" | "project" | "aws";
 
 type Scenario = {
   id: string;
@@ -278,11 +278,11 @@ const rolePrompts: Record<AudienceRole, string[]> = {
 
 const lifecycleStages = [
   "Context",
-  "Generate",
-  "Refine",
+  "AI Brief",
+  "Review",
   "Approve",
-  "Project",
-  "Execute",
+  "Project Model",
+  "Handoff",
 ];
 
 const evidenceSources = [
@@ -292,7 +292,7 @@ const evidenceSources = [
   "Bedrock Knowledge Base",
 ];
 
-const demoBeats = [
+const storyBeats = [
   {
     time: "0:00",
     title: "Select the customer",
@@ -305,7 +305,7 @@ const demoBeats = [
   },
   {
     time: "0:50",
-    title: "Auto-build Project Brain",
+    title: "Auto-build Project model",
     detail: "Use the generated brief and notes to create shared delivery memory automatically.",
   },
   {
@@ -315,47 +315,13 @@ const demoBeats = [
   },
 ];
 
-const judgeFeedback = [
-  "Reduce AWS jargon",
-  "Add cost angle",
-  "Improve discovery questions",
-  "Customer is migrating from on-prem",
-];
-
-const demoGuideCards = [
-  {
-    label: "Opening move",
-    title: "Show the problem in one click",
-    detail:
-      "Start with a realistic customer scenario, generate a pre-brief, and explain the time SAs normally spend preparing manually.",
-  },
-  {
-    label: "AWS center",
-    title: "Make Bedrock the engine",
-    detail:
-      "Point to API Gateway, Lambda, Bedrock, S3, DynamoDB, and CloudWatch as a low-cost production path the judges can recognize.",
-  },
-  {
-    label: "Winning twist",
-    title: "Auto-build the project model",
-    detail:
-      "After generation, the brief and notes become Project Brain for sales, execs, PMs, engineers, and new team members.",
-  },
-];
-
-const judgeModeOutcomes = [
-  "Generates the refined pre-brief with no live model cost",
-  "Auto-builds Project Brain from the generated brief",
-  "Opens the most demo-friendly tab with copy-ready outputs",
-];
-
 const architectureFlow = [
   "Context",
   "Bedrock",
   "Refine",
   "S3",
   "Knowledge Base",
-  "Project Brain",
+  "Project model",
 ];
 
 const packetOutputs = [
@@ -404,7 +370,7 @@ const modelStoragePath = [
     layer: "Project state",
     service: "DynamoDB",
     detail:
-      "Project Brain uses projectId and sortKey records to track generated briefs, handoff state, provider, and creation time.",
+      "Project model uses projectId and sortKey records to track generated briefs, handoff state, provider, and creation time.",
   },
   {
     layer: "Future memory",
@@ -461,7 +427,7 @@ const demoSignals = [
   },
   {
     label: "Project handoff",
-    detail: "The approved brief auto-builds Project Brain context for follow-through.",
+    detail: "The approved brief auto-builds Project model context for follow-through.",
   },
 ];
 
@@ -476,14 +442,14 @@ const briefQualityTargets = [
   },
   {
     label: "Model handoff",
-    detail: "The same response creates Project Brain output and implementation artifacts.",
+    detail: "The same response creates project model output and implementation artifacts.",
   },
 ];
 
 const heroProofPoints = [
   "Bedrock generation loop",
   "Well-Architected pillar ranking",
-  "Project Brain handoff",
+  "Project model handoff",
   "AWS-ready deployment path",
 ];
 
@@ -497,15 +463,26 @@ const implementationBacklog = [
 ];
 
 const consolePages: Array<{ id: ConsolePage; label: string; detail: string }> = [
-  { id: "guide", label: "Guide", detail: "Demo flow" },
-  { id: "setup", label: "1. Setup", detail: "Customer context" },
-  { id: "brief", label: "2. Brief", detail: "Review and refine" },
-  { id: "project", label: "3. Project Brain", detail: "Follow-on model" },
-  { id: "aws", label: "AWS", detail: "Infra and demo map" },
+  { id: "setup", label: "1. Context", detail: "Customer input" },
+  { id: "brief", label: "2. Brief", detail: "Review output" },
+  { id: "project", label: "3. Project", detail: "Team handoff" },
+  { id: "aws", label: "AWS", detail: "Infrastructure" },
 ];
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
+}
+
+function providerLabel(provider: BriefResponse["provider"]) {
+  if (provider === "bedrock") {
+    return "Bedrock AI";
+  }
+
+  if (provider === "strands") {
+    return "Strands agent";
+  }
+
+  return "Local fallback";
 }
 
 function briefTabLabel(tab: BriefTab) {
@@ -558,6 +535,7 @@ export default function Home() {
   const [projectAnswerKey, setProjectAnswerKey] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState("");
+  const [generationNotice, setGenerationNotice] = useState("");
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const [generationMode, setGenerationMode] = useState<GenerationMode>(
     liveModeAvailable ? "live" : "demo"
@@ -579,10 +557,10 @@ export default function Home() {
     []
   );
   const [copiedLabel, setCopiedLabel] = useState("");
-  const [activePage, setActivePage] = useState<ConsolePage>("guide");
+  const [activePage, setActivePage] = useState<ConsolePage>("setup");
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- Mount-only localStorage hydration restores saved demo workspace state. */
+    /* eslint-disable react-hooks/set-state-in-effect -- Mount-only localStorage hydration restores the saved workspace state. */
     try {
       const rawWorkspace = window.localStorage.getItem(workspaceStorageKey);
 
@@ -1092,7 +1070,7 @@ const industryFocus = useMemo(() => {
   async function requestLiveBrief(briefRequest: BriefRequest) {
     if (hostedIamMode) {
       if (!hostedCredentials) {
-        throw new Error("Hosted IAM demo is missing Cognito credentials configuration.");
+        throw new Error("Hosted IAM access is missing Cognito credentials configuration.");
       }
 
       const response = await signedJsonFetch(
@@ -1166,20 +1144,28 @@ const industryFocus = useMemo(() => {
       }
 
       let nextBrief: BriefResponse;
-      const useLiveAws = generationMode === "live";
+      const liveBackendConfigured = hostedIamMode || modelStatus.liveConfigured;
+      const shouldTryLiveAws = liveModeAvailable && (generationMode === "live" || liveBackendConfigured);
 
-      if (!useLiveAws) {
-        nextBrief = normalizeBriefResponse(generateDemoBrief(briefRequest), "demo");
-      } else {
-        if (!liveModeAvailable) {
-          throw new Error("AI model mode is not configured for this build.");
-        }
-
-        if (!hostedIamMode && modelStatus.checked && !modelStatus.liveConfigured) {
+      if (shouldTryLiveAws) {
+        if (!liveBackendConfigured && modelStatus.checked) {
           throw new Error("AI model mode is not configured on this server. Add PILLARPREP_BACKEND_URL and restart the app.");
         }
 
-        nextBrief = await requestLiveBrief(briefRequest);
+        try {
+          nextBrief = await requestLiveBrief(briefRequest);
+          setGenerationMode("live");
+        } catch (error) {
+          nextBrief = normalizeBriefResponse(generateDemoBrief(briefRequest), "demo");
+          setGenerationMode("demo");
+          setGenerationNotice(
+            error instanceof Error
+              ? `AI model call failed; local fallback was generated: ${error.message}`
+              : "AI model call failed; local fallback was generated."
+          );
+        }
+      } else {
+        nextBrief = normalizeBriefResponse(generateDemoBrief(briefRequest), "demo");
       }
 
       setGeneratedBrief(nextBrief);
@@ -1249,50 +1235,6 @@ const industryFocus = useMemo(() => {
     void copyText("Follow-up email", followUpEmailText);
   }
 
-  function runJudgeMode() {
-    const demoFeedback = Array.from(new Set([...feedback, ...judgeFeedback]));
-    const requestRole: AudienceRole = "PM";
-    const requestPrompt = rolePrompts[requestRole][0];
-    const briefRequest = {
-      mode: "project" as const,
-      company,
-      industry,
-      meetingType,
-      companySize,
-      pillars: selectedPillars,
-      pillarRanking,
-      context,
-      meetingNotes,
-      feedback: demoFeedback,
-      decisionMakers: usableDecisionMakers,
-      role: requestRole,
-      prompt: requestPrompt,
-    };
-    const validationError = validateBriefRequest(briefRequest);
-
-    if (validationError) {
-      setGenerationError(validationError);
-      setActivePage("setup");
-      return;
-    }
-
-    const nextBrief = normalizeBriefResponse(generateDemoBrief(briefRequest), "demo");
-
-    setGenerationMode("demo");
-    setFeedback(demoFeedback);
-    setRole(requestRole);
-    setActivePrompt(requestPrompt);
-    setGeneratedBrief(nextBrief);
-    setProjectBrainAnswer(nextBrief.projectAnswer);
-    setProjectAnswerKey(`${requestRole}::${requestPrompt}`);
-    setBriefVersion((version) => version + 1);
-    setApproved(true);
-    setPromoted(true);
-    setActiveTab("gameplan");
-    setActivePage("brief");
-    setGenerationError("");
-  }
-
   function resetWorkspace() {
     const firstScenario = scenarios[0];
 
@@ -1310,27 +1252,9 @@ const industryFocus = useMemo(() => {
           <div className="top-command">
             <div className="top-command-title">
               <span className="status-dot" />
-              PillarPrep demo console
+              PillarPrep workspace
             </div>
             <div className="top-command-actions">
-              <button
-                className={cx("text-action", generationMode === "demo" && "tab-active")}
-                type="button"
-                onClick={() => setGenerationMode("demo")}
-              >
-                Demo mode
-              </button>
-              <button
-                className={cx("text-action", generationMode === "live" && "tab-active")}
-                type="button"
-                disabled={!liveModeAvailable || (!hostedIamMode && modelStatus.checked && !modelStatus.liveConfigured)}
-                onClick={() => setGenerationMode("live")}
-              >
-                AI model
-              </button>
-              <button className="judge-command" type="button" onClick={runJudgeMode}>
-                Run Judge Mode
-              </button>
               {consolePages.map((page) => (
                 <button
                   key={page.id}
@@ -1350,7 +1274,7 @@ const industryFocus = useMemo(() => {
             <div className="flex items-center gap-4">
               <div className="brand-mark">PP</div>
               <div>
-                <p className="eyebrow">AWS Hackathon Product Console</p>
+                <p className="eyebrow">AWS Product Console</p>
                 <h1 className="mt-1 text-3xl font-black text-white sm:text-5xl">
                   PillarPrep
                 </h1>
@@ -1359,9 +1283,9 @@ const industryFocus = useMemo(() => {
             <p className="mt-5 max-w-3xl text-base leading-7 text-white/74">
               An SA briefing cockpit that turns customer context into a refined
               pre-meeting plan, then auto-builds the final brief into a living
-              project brain for the team that has to execute.
+              project model for the team that has to execute.
             </p>
-            <div className="product-strip" aria-label="Hackathon value signals">
+            <div className="product-strip" aria-label="Product value signals">
               {heroProofPoints.map((point, index) => (
                 <span key={point}>
                   <i>{String(index + 1).padStart(2, "0")}</i>
@@ -1386,12 +1310,12 @@ const industryFocus = useMemo(() => {
           <div className="hero-panel">
             <div className="panel-status">
               <span>AI-backed AWS workload</span>
-              <strong>{generationMode === "live" ? "Bedrock ready" : "Demo mode"}</strong>
+              <strong>{generationMode === "live" ? "Bedrock ready" : "Fallback ready"}</strong>
             </div>
             <div className="hero-demo-state">
               <div>
-                <p className="eyebrow text-[#9fd7c0]">Demo state</p>
-                <h2>{promoted ? "Project Brain built" : generatedBrief ? "Brief generated" : "Ready to generate"}</h2>
+                <p className="eyebrow text-[#9fd7c0]">Workspace state</p>
+                <h2>{promoted ? "Project model built" : generatedBrief ? "Brief generated" : "Ready to generate"}</h2>
                 <p>
                   Ranked priorities, richer questions, and follow-on artifacts are generated in one clean pass.
                 </p>
@@ -1411,7 +1335,7 @@ const industryFocus = useMemo(() => {
               </div>
               <div className="mini-stat">
                 <span>Runtime</span>
-                <strong>{generationMode === "live" ? "AWS" : "Demo"}</strong>
+                <strong>{generationMode === "live" ? "AWS" : "Fallback"}</strong>
               </div>
             </div>
             <div className="demo-signal-list">
@@ -1464,7 +1388,7 @@ const industryFocus = useMemo(() => {
           </div>
           <div className="spotlight-card">
             <span>Next best action</span>
-            <strong>{promoted ? "Review Project Brain" : approved ? "Capture meeting outcomes" : "Generate the workspace"}</strong>
+            <strong>{promoted ? "Review project model" : approved ? "Capture meeting outcomes" : "Generate the workspace"}</strong>
             <p>{promoted ? "Plans, risks, summaries, and onboarding answers are ready." : "Turn the customer conversation into reusable team memory."}</p>
           </div>
         </div>
@@ -1474,11 +1398,11 @@ const industryFocus = useMemo(() => {
         <div className="demo-grid">
           <div className="demo-panel">
             <div className="section-head">
-              <p>Hackathon demo lane</p>
+              <p>Presentation path</p>
               <h2>90-second story</h2>
             </div>
             <div className="demo-beats">
-              {demoBeats.map((beat) => (
+              {storyBeats.map((beat) => (
                 <div key={beat.time} className="demo-beat">
                   <time>{beat.time}</time>
                   <div>
@@ -1568,60 +1492,6 @@ const industryFocus = useMemo(() => {
         ) : null}
 
       <section className="linear-workflow mx-auto max-w-[1500px] px-5 py-5">
-        {activePage === "guide" ? (
-          <div className="page-view">
-            <div className="workflow-heading" id="demo-guide">
-              <span>Guide</span>
-              <div>
-                <p>Hackathon guide lane</p>
-                <h2>Run the demo as a clean story, then show the AWS spine</h2>
-              </div>
-            </div>
-
-            <section className="judge-panel">
-              <div>
-                <p className="eyebrow text-[#1f7a63]">Recommended demo path</p>
-                <h2>One-click judge walkthrough</h2>
-                <p>
-                  Judge Mode uses the local demo generator, so it costs nothing,
-                  creates a polished brief, auto-builds Project Brain, and
-                  leaves the app ready for a confident live walkthrough.
-                </p>
-              </div>
-              <div className="judge-outcomes">
-                {judgeModeOutcomes.map((outcome, index) => (
-                  <div key={outcome} className="judge-outcome">
-                    <span>{index + 1}</span>
-                    <strong>{outcome}</strong>
-                  </div>
-                ))}
-              </div>
-              <div className="guide-actions">
-                <button className="judge-primary" type="button" onClick={runJudgeMode}>
-                  Run Judge Mode
-                </button>
-                <button
-                  className="secondary-link"
-                  type="button"
-                  onClick={() => setActivePage("setup")}
-                >
-                  Start manually
-                </button>
-              </div>
-            </section>
-
-            <div className="guide-grid">
-              {demoGuideCards.map((card) => (
-                <section key={card.title} className="guide-card">
-                  <span>{card.label}</span>
-                  <strong>{card.title}</strong>
-                  <p>{card.detail}</p>
-                </section>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
         {activePage === "setup" ? (
           <div className="page-view">
         <div className="workflow-heading" id="setup">
@@ -1636,9 +1506,9 @@ const industryFocus = useMemo(() => {
           <section className="rounded-lg border border-[#d8ded2] bg-white shadow-sm">
             <div className="border-b border-[#e2e7de] p-5">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#527064]">
-                Demo scenarios
+                Sample scenarios
               </p>
-              <h2 className="mt-1 text-xl font-black">Pick the story</h2>
+              <h2 className="mt-1 text-xl font-black">Start from a customer scenario</h2>
             </div>
             <div className="grid gap-2 p-5">
               {scenarios.map((scenario) => (
@@ -1869,19 +1739,20 @@ const industryFocus = useMemo(() => {
                 <button
                   className="secondary-link"
                   type="button"
+                  disabled={!generatedBrief}
                   onClick={() => setActivePage("brief")}
                 >
-                  Review generated brief
+                  {generatedBrief ? "Review generated brief" : "Review after generation"}
                 </button>
               </div>
               <div className="provider-note">
-                <span>{generationMode === "live" ? "AI model mode" : "Demo mode"}</span>
+                <span>Generation path</span>
                 <strong>
                   {generatedBrief
-                    ? `${generatedBrief.provider} provider - ${new Date(generatedBrief.generatedAt).toLocaleTimeString()}`
+                    ? `${providerLabel(generatedBrief.provider)} - ${new Date(generatedBrief.generatedAt).toLocaleTimeString()}`
                     : generationMode === "live"
                       ? hostedIamMode
-                        ? "Cognito demo role ready"
+                        ? "IAM browser role ready"
                         : modelStatus.checked
                         ? modelStatus.liveConfigured
                           ? modelStatus.authMode === "iam"
@@ -1889,7 +1760,7 @@ const industryFocus = useMemo(() => {
                             : "Bedrock backend ready"
                           : "Backend not configured"
                         : "Checking Bedrock backend"
-                      : "No model calls"}
+                      : "Fallback ready"}
                 </strong>
               </div>
               <div className="provider-note">
@@ -1912,6 +1783,9 @@ const industryFocus = useMemo(() => {
                   Reset workspace
                 </button>
               </div>
+              {generationNotice ? (
+                <p className="notice-note">{generationNotice}</p>
+              ) : null}
               {generationError ? (
                 <p className="error-note">{generationError}</p>
               ) : null}
@@ -1968,7 +1842,7 @@ const industryFocus = useMemo(() => {
                 disabled={isGenerating}
                 onClick={openProjectBrain}
               >
-                {promoted ? "View Project Brain" : generatedBrief ? "Open Project Brain" : "Build Project Brain"}
+                {promoted ? "View project model" : generatedBrief ? "Open project model" : "Generate project model"}
               </button>
               <p>Latest brief and notes become project context</p>
             </div>
@@ -1979,7 +1853,7 @@ const industryFocus = useMemo(() => {
                 <h2>Follow-on project model</h2>
                 <p>
                   Capture meeting outcomes, auto-build the brief into shared
-                  memory, and use Project Brain for delivery follow-through.
+                  memory, and use the project model for delivery follow-through.
                 </p>
               </div>
               <div className="phase-steps">
@@ -2203,8 +2077,8 @@ const industryFocus = useMemo(() => {
                     ))}
                   </div>
                   <p className="mt-4 text-sm leading-6 text-[#536158]">
-                    Bedrock generates the brief and Project Brain output, Knowledge Bases ground the
-                    Project Brain, S3 stores artifacts, and DynamoDB tracks
+                    Bedrock generates the brief and project model output, Knowledge Bases ground the
+                    Project model, S3 stores artifacts, and DynamoDB tracks
                     project state.
                   </p>
                 </div>
@@ -2268,7 +2142,7 @@ const industryFocus = useMemo(() => {
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9fd7c0]">
                   Loop 2 output
                 </p>
-                <h2 className="mt-1 text-xl font-black">Project Brain</h2>
+                <h2 className="mt-1 text-xl font-black">Project model</h2>
                 <p className="mt-3 text-sm leading-6 text-white/70">
                   Once generated, the final brief becomes an auto-built project
                   model for people who need to implement, manage, sell, or
@@ -2405,7 +2279,7 @@ const industryFocus = useMemo(() => {
                         ? "Updating project model..."
                         : promoted
                           ? "Refresh from latest notes"
-                          : "Build project model"}
+                          : "Generate project model"}
                     </button>
                   </div>
                 </div>

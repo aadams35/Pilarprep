@@ -17,34 +17,87 @@ if "boto3" not in sys.modules:
 import app
 
 
+MODEL_TECHNICAL = (
+    "For Apex Mutual, validate identity boundaries, audit evidence, data movement, recovery expectations, and operational ownership before proposing the target architecture. "
+    "Use the ranked pillar order to keep Security first while Reliability and Cost Optimization shape the secondary tradeoffs. "
+    "Tie each AWS service mention to an approval decision, control proof, or measurable reduction in migration risk. "
+    "Ask: \"Which current-state assumption would change the plan most if it proved wrong?\""
+)
+MODEL_EXECUTIVE = (
+    "Apex Mutual should treat the briefing as a decision-quality exercise, not a platform presentation. "
+    "The business value is reduced migration risk, clearer ownership, faster evidence collection, and better confidence before expanding beyond a pilot. "
+    "Keep the conversation focused on trust, governance, time to value, and the cost of avoidable rework. "
+    "Ask: \"What outcome would make the next thirty days visibly better for the business?\""
+)
+MODEL_STAKEHOLDER = (
+    "Lena Ortiz should be treated as the sponsor whose priorities need validation around board visibility, modernization governance, and customer trust. "
+    "Use the approved notes as hypotheses, then confirm what has changed before turning them into a talk track. "
+    "Map her success criteria to the first pilot decision and the evidence needed for approval. "
+    "Ask: \"What would make this initiative worth supporting now, and what risk would stop it?\""
+)
+MODEL_GAMEPLAN = (
+    "Open the meeting by confirming the business event driving urgency, then read back the ranked pillar order so the team can correct it early. "
+    "Move from business goals to current-state evidence, then from evidence to a bounded pilot decision. "
+    "Capture owners, open questions, risks, and next actions while the customer is still present. "
+    "Ask: \"Which unresolved question is most likely to block approval this week?\""
+)
+MODEL_OBJECTION = (
+    "Concern: \"We cannot risk disruption during the migration.\" Response: keep the first step bounded, name rollback criteria, and require evidence before expanding the scope. "
+    "Position the brief as a validation plan rather than a commitment to a final architecture. "
+    "Ask: \"Which workflow is small enough to validate safely but important enough to prove value?\""
+)
+MODEL_PROJECT_ANSWER = (
+    "For the PM, turn the approved brief into a two-week validation sprint with named owners, evidence checkpoints, and a visible decision log. "
+    "Start by confirming the sponsor, technical owner, security approver, and project driver. "
+    "Then validate the top Security assumptions with customer artifacts before architecture decisions harden. "
+    "Use the project model to track risks, dependencies, meeting notes, and open decisions so new contributors do not rediscover context. "
+    "Escalate first if the team cannot identify who owns approval for the pilot scope."
+)
+
 MODEL_RESPONSE = json.dumps(
     {
-        "technical": ["Validate current state."],
-        "executive": ["Reduce delivery risk."],
-        "stakeholders": ["Lena Ortiz: validate sponsor priorities."],
-        "gameplan": ["Confirm success criteria."],
-        "objections": ["Concern: disruption. Response: pilot safely."],
-        "projectAnswer": "Run a two-week sprint with Lena Ortiz aligned.",
+        "technical": [f"{MODEL_TECHNICAL} Item {index + 1}." for index in range(4)],
+        "executive": [f"{MODEL_EXECUTIVE} Item {index + 1}." for index in range(4)],
+        "stakeholders": [f"{MODEL_STAKEHOLDER} Item {index + 1}." for index in range(4)],
+        "gameplan": [f"{MODEL_GAMEPLAN} Item {index + 1}." for index in range(4)],
+        "objections": [f"{MODEL_OBJECTION} Item {index + 1}." for index in range(4)],
+        "projectAnswer": MODEL_PROJECT_ANSWER,
         "projectArtifacts": {
             "twoWeekPlan": [
                 {
-                    "title": "Days 1-2",
-                    "detail": "Confirm stakeholders.",
-                    "owner": "SA",
+                    "title": f"Sprint step {index + 1}",
+                    "detail": "Confirm owners, validate evidence, document risks, and prepare the next decision checkpoint.",
+                    "owner": "SA / PM",
                     "status": "Ready",
                 }
+                for index in range(4)
             ],
-            "riskRegister": [],
-            "stakeholderMap": [],
+            "riskRegister": [
+                {
+                    "title": f"Risk {index + 1}",
+                    "detail": "Track assumptions that could delay approval if customer evidence is not captured.",
+                    "owner": "SA",
+                    "status": "Medium",
+                }
+                for index in range(4)
+            ],
+            "stakeholderMap": [
+                {
+                    "title": f"Stakeholder {index + 1}",
+                    "detail": "Validate the role, approval concern, needed evidence, and follow-through owner.",
+                    "owner": "Customer team",
+                    "status": "Validate",
+                }
+                for index in range(4)
+            ],
             "followUpEmail": {
                 "subject": "Follow-up from PillarPrep briefing for Apex Mutual",
-                "body": "Thanks for the conversation.",
+                "body": "Thanks for the conversation. We captured owners, risks, evidence needs, and the next validation sprint.",
             },
         },
-        "citations": ["Customer context"],
+        "citations": ["Customer context", "Decision-maker notes", "AWS Well-Architected pillars"],
     }
 )
-
 
 VALID_PAYLOAD = {
     "mode": "project",
@@ -87,14 +140,14 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertEqual(response["statusCode"], 200)
         body = response["json"]
         self.assertEqual(body["provider"], "bedrock")
-        self.assertEqual(len(body["technical"]), 3)
-        self.assertEqual(len(body["executive"]), 3)
-        self.assertEqual(len(body["stakeholders"]), 3)
-        self.assertEqual(len(body["gameplan"]), 3)
-        self.assertEqual(len(body["objections"]), 3)
-        self.assertEqual(len(body["projectArtifacts"]["twoWeekPlan"]), 3)
-        self.assertEqual(len(body["projectArtifacts"]["riskRegister"]), 3)
-        self.assertEqual(len(body["projectArtifacts"]["stakeholderMap"]), 3)
+        self.assertEqual(len(body["technical"]), 4)
+        self.assertEqual(len(body["executive"]), 4)
+        self.assertEqual(len(body["stakeholders"]), 4)
+        self.assertEqual(len(body["gameplan"]), 4)
+        self.assertEqual(len(body["objections"]), 4)
+        self.assertEqual(len(body["projectArtifacts"]["twoWeekPlan"]), 4)
+        self.assertEqual(len(body["projectArtifacts"]["riskRegister"]), 4)
+        self.assertEqual(len(body["projectArtifacts"]["stakeholderMap"]), 4)
         self.assertTrue(body["projectArtifacts"]["followUpEmail"]["subject"].startswith("Follow-up"))
         self.assertEqual(body["metadata"]["projectId"], "apex-mutual")
 
@@ -144,6 +197,7 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertIn('"pillarRanking"', prompt)
         self.assertIn('"rank": 1', prompt)
         self.assertIn("rank 1 is the primary discovery lens", prompt)
+        self.assertIn("exactly 4 SA-facing paragraphs", prompt)
         self.assertIn("Ask:", prompt)
 
     def test_uses_safe_fallback_when_model_returns_plain_text(self):
@@ -152,15 +206,15 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertEqual(response["statusCode"], 200)
         body = response["json"]
         self.assertEqual(body["provider"], "bedrock")
-        self.assertEqual(len(body["technical"]), 3)
-        self.assertEqual(len(body["projectArtifacts"]["twoWeekPlan"]), 3)
+        self.assertEqual(len(body["technical"]), 4)
+        self.assertEqual(len(body["projectArtifacts"]["twoWeekPlan"]), 4)
         self.assertIn("Customer context", body["citations"])
 
     def test_parses_markdown_fenced_json(self):
         response = self.invoke(VALID_PAYLOAD, f"```json\n{MODEL_RESPONSE}\n```")
 
         self.assertEqual(response["statusCode"], 200)
-        self.assertEqual(response["json"]["projectAnswer"], "Run a two-week sprint with Lena Ortiz aligned.")
+        self.assertEqual(response["json"]["projectAnswer"], MODEL_PROJECT_ANSWER)
 
     def test_bedrock_invocation_failure_returns_502(self):
         event = {"body": json.dumps(VALID_PAYLOAD)}

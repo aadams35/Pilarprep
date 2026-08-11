@@ -972,15 +972,25 @@ body {
   line-height: 1.35;
 }
 
+.notice-note,
 .error-note {
-  border: 1px solid #f0c7c7;
   border-radius: 8px;
-  background: #fff7f7;
-  color: #8b2f2f;
   padding: 0.72rem 0.8rem;
   font-size: 0.82rem;
   font-weight: 850;
   line-height: 1.45;
+}
+
+.notice-note {
+  border: 1px solid #b9d8ce;
+  background: #f1fbf7;
+  color: #1f5f4b;
+}
+
+.error-note {
+  border: 1px solid #f0c7c7;
+  background: #fff7f7;
+  color: #8b2f2f;
 }
 
 button,

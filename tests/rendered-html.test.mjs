@@ -35,18 +35,18 @@ test("server-renders the PillarPrep console", async () => {
 
   const html = await response.text();
   assert.match(html, /PillarPrep/);
-  assert.match(html, /PillarPrep demo console/);
-  assert.match(html, /1\. Setup/);
+  assert.match(html, /PillarPrep workspace/);
+  assert.match(html, /1\. Context/);
   assert.match(html, /2\. Brief/);
-  assert.match(html, /3\. Project Brain/);
-  assert.match(html, /Run the demo as a clean story/);
-  assert.match(html, /Auto-builds? Project Brain/);
-  assert.match(html, /Project Brain/);
-  assert.match(html, /Auto-build the project model/);
+  assert.match(html, /3\. Project/);
+  assert.match(html, /Pick a scenario or enter real meeting context/);
+  assert.match(html, /Project model/);
+  assert.match(html, /Project model/);
+  assert.match(html, /Generate AI brief \+ project model|Generate brief \+ project model/);
   assert.match(html, /AWS-ready deployment path/);
-  assert.match(html, /Demo state/);
+  assert.match(html, /Workspace state/);
   assert.match(html, /Ranked discovery/);
-  assert.doesNotMatch(html, /Ask Project Brain|Promote to Project|Lifecycle progress|Quality gate|Pillar heatmap/);
+  assert.doesNotMatch(html, /Ask Project Brain|Ask Project model|Promote to Project|Lifecycle progress|Quality gate|Pillar heatmap|Run Judge Mode|Demo state|PillarPrep demo console/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/i);
 });
 
@@ -57,10 +57,10 @@ test("removes the starter preview shell", async () => {
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /Project Brain/);
-  assert.match(page, /Build Project Brain/);
+  assert.match(page, /Project model/);
+  assert.match(page, /Generate project model/);
   assert.match(page, /Generate brief \+ project model/);
-  assert.doesNotMatch(page, /Ask Project Brain|Promote to Project|hero-progress|quality-bar|telemetry-bar/);
+  assert.doesNotMatch(page, /Ask Project Brain|Ask Project model|Promote to Project|hero-progress|quality-bar|telemetry-bar|Run Judge Mode|Demo state|PillarPrep demo console/);
   assert.match(layout, /PillarPrep \| AWS SA Briefing Copilot/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview/);
@@ -109,7 +109,7 @@ test("generates a demo brief through the API contract", async () => {
   assert.match(payload.projectAnswer, /latest brief|two-week sprint|decision log/i);
 });
 
-test("generates a role-aware Project Brain answer", async () => {
+test("generates a role-aware project model answer", async () => {
   const response = await fetchWorker("/api/brief", {
     method: "POST",
     headers: {
