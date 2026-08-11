@@ -642,7 +642,7 @@ def _brief_docx_bytes(payload, generated, metadata):
     sections = [
         _docx_paragraph(f"PillarPrep Brief - {company}", "Title"),
         _docx_paragraph(f"Generated: {generated_at}"),
-        _docx_paragraph(f"Project ID: {metadata.get('projectId', 'customer')}"),
+        _docx_paragraph(f"Client ID: {metadata.get('clientId', metadata.get('projectId', 'customer'))}"),
         _docx_paragraph("Customer Context", "Heading1"),
         _docx_paragraph(f"Industry: {_clean_string(payload.get('industry')) or 'Not provided'}"),
         _docx_paragraph(f"Meeting type: {_clean_string(payload.get('meetingType')) or 'Not provided'}"),
@@ -740,10 +740,11 @@ def _delete_existing_brief_artifacts(s3, bucket, prefix):
 
 
 def _store_project_artifacts(payload, generated):
-    metadata = {"projectId": _project_id(payload), "artifactRetention": "latest-only"}
+    client_id = _project_id(payload)
+    metadata = {"projectId": client_id, "clientId": client_id, "artifactRetention": "latest-only"}
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     stored_at = datetime.now(timezone.utc).isoformat()
-    brief_prefix = f"projects/{metadata['projectId']}/briefs/"
+    brief_prefix = f"clients/{metadata['clientId']}/brief/"
     artifact_key = f"{brief_prefix}latest.json"
     docx_artifact_key = f"{brief_prefix}latest.docx"
     document = {

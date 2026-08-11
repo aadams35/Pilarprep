@@ -219,6 +219,7 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
     generatedAt: new Date().toISOString(),
     metadata: {
       projectId: toProjectId(company),
+      clientId: toProjectId(company),
       artifactRetention: "browser-local",
     },
     technical: [

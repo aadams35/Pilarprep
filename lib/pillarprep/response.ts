@@ -40,6 +40,7 @@ function asMetadata(value: unknown) {
 
   return {
     projectId: asString(value.projectId) || undefined,
+    clientId: asString(value.clientId) || undefined,
     artifactKey: asString(value.artifactKey) || undefined,
     docxArtifactKey: asString(value.docxArtifactKey) || undefined,
     artifactRetention: asString(value.artifactRetention) || undefined,

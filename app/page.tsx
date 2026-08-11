@@ -974,8 +974,9 @@ const industryFocus = useMemo(() => {
       `PillarPrep handoff packet - ${company || "Customer"}`,
       `Meeting: ${meetingType} | Industry: ${industry} | Size: ${companySize}`,
       `Generation path: ${generatedBrief ? providerLabel(generatedBrief.provider) : "Not generated yet"}`,
-      metadata?.artifactKey ? `S3 artifact: ${metadata.artifactKey}` : "S3 artifact: Not saved yet",
-      metadata?.stateKey ? `Project state: ${metadata.stateKey}` : "Project state: Not saved yet",
+      metadata?.artifactKey ? `S3 JSON: ${metadata.artifactKey}` : "S3 JSON: Not saved yet",
+      metadata?.docxArtifactKey ? `S3 DOCX: ${metadata.docxArtifactKey}` : "S3 DOCX: Not saved yet",
+      metadata?.stateKey ? `DynamoDB state: ${metadata.stateKey}` : "DynamoDB state: Not saved yet",
       "",
       "Ranked AWS priorities",
       ...selectedPillars.map((pillar, index) => `${index + 1}. ${pillar}`),
@@ -1896,7 +1897,7 @@ const industryFocus = useMemo(() => {
               </div>
               {generatedBrief?.metadata?.projectId || generatedBrief?.metadata?.stateKey ? (
                 <div className="evidence-tray">
-                  {generatedBrief.metadata.projectId ? <span>Project {generatedBrief.metadata.projectId}</span> : null}
+                  {generatedBrief.metadata.clientId || generatedBrief.metadata.projectId ? <span>Client {generatedBrief.metadata.clientId ?? generatedBrief.metadata.projectId}</span> : null}
                   {generatedBrief.metadata.stateKey ? <span>DynamoDB {generatedBrief.metadata.stateKey}</span> : null}
                   {generatedBrief.metadata.modelId ? <span>{generatedBrief.metadata.modelId}</span> : null}
                   {generatedBrief.metadata.totalTokens ? <span>{generatedBrief.metadata.totalTokens} tokens</span> : null}

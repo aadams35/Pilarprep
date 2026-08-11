@@ -113,10 +113,11 @@ Response:
   "citations": [],
   "metadata": {
     "modelId": "us.amazon.nova-micro-v1:0",
-    "artifactKey": "projects/apex-mutual/briefs/latest.json",
-    "docxArtifactKey": "projects/apex-mutual/briefs/latest.docx",
+    "artifactKey": "clients/apex-mutual/brief/latest.json",
+    "docxArtifactKey": "clients/apex-mutual/brief/latest.docx",
     "artifactRetention": "latest-only",
     "projectId": "...",
+    "clientId": "...",
     "stateKey": "..."
   }
 }

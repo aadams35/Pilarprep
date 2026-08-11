@@ -323,15 +323,15 @@ Resources:
                 Condition:
                   StringLike:
                     s3:prefix:
-                      - projects/*/briefs/
-                      - projects/*/briefs/*
+                      - clients/*/brief/
+                      - clients/*/brief/*
               - Sid: WriteBriefArtifacts
                 Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub "${BriefArtifactsBucket.Arn}/projects/*/briefs/*"
+                Resource: !Sub "${BriefArtifactsBucket.Arn}/clients/*/brief/*"
               - Sid: UpdateProjectState
                 Effect: Allow
                 Action:

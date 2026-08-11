@@ -57,8 +57,8 @@ PillarPrep does not store a copy of the Bedrock foundation model. The configured
 Stored by PillarPrep:
 
 - Lambda code stores the prompt contract, schema instructions, structured fallback behavior, and the Bedrock guardrail configuration reference.
-- S3 stores the current generated brief as `latest.json` for app/project memory and `latest.docx` for human handoff. The Lambda deletes prior current objects in that project brief prefix before saving the latest pair.
-- DynamoDB stores the current project state record keyed by `projectId` and `BRIEF#LATEST` so follow-on work points at the newest approved brief packet.
+- S3 stores the current generated brief as `latest.json` for app/project memory and `latest.docx` for human handoff. The Lambda deletes prior current objects in that client brief prefix before saving the latest pair.
+- DynamoDB stores the current project state record keyed by `projectId` and `BRIEF#LATEST`, with `clientId` included in metadata so follow-on work points at the newest approved brief packet.
 - The browser stores unsaved local workspace state for demo continuity.
 
 Future retrieval should add Bedrock Knowledge Bases over approved S3 artifacts. That creates searchable project memory without training, fine-tuning, or hosting a custom model.
@@ -101,7 +101,7 @@ Today the public hackathon demo uses an unauthenticated Cognito Identity Pool so
 
 For a real customer or internal pilot, users should log in as themselves, then choose a client workspace they are authorized to access. The clean AWS path is Cognito User Pool for the hackathon/private pilot, or IAM Identity Center/SAML/OIDC for enterprise SSO. The login token should carry group or tenant claims such as `client:apex-mutual`, and Lambda should map those claims to allowed `clientId` values before reading or writing any project data.
 
-Once that is in place, every stored object and record is scoped by client. S3 keys become `clients/{clientId}/projects/{projectId}/briefs/latest.json` and `latest.docx`; DynamoDB partitioning can use `clientId#projectId` or separate tenant and project keys; the UI only shows client workspaces from the user's allowed list. The model is still Bedrock-managed, but each client can have its own prompt profile, approved artifacts, Knowledge Base, guardrail policy, and retrieval filters.
+Once that is in place, every stored object and record is scoped by client. S3 keys become `clients/{clientId}/brief/latest.json` and `latest.docx`; DynamoDB partitioning can use `clientId#projectId` or separate tenant and project keys; the UI only shows client workspaces from the user's allowed list. The model is still Bedrock-managed, but each client can have its own prompt profile, approved artifacts, Knowledge Base, guardrail policy, and retrieval filters.
 
 Demo explanation: "You do not log into a model. You log into a client workspace. PillarPrep then loads that client's configuration, approved project memory, and safety policy before it calls Bedrock."
 ## Current Demo Boundary

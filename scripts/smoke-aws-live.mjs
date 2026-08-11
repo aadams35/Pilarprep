@@ -167,7 +167,11 @@ if (!body.metadata?.artifactKey || !body.metadata?.docxArtifactKey || !body.meta
   throw new Error("Live response did not include S3 JSON, S3 DOCX, and DynamoDB state metadata.");
 }
 
-if (!body.metadata.artifactKey.endsWith("/latest.json") || !body.metadata.docxArtifactKey.endsWith("/latest.docx")) {
+if (!body.metadata.artifactKey.startsWith("clients/") || !body.metadata.docxArtifactKey.startsWith("clients/")) {
+  throw new Error("Live response did not save client-first artifact keys.");
+}
+
+if (!body.metadata.artifactKey.endsWith("/brief/latest.json") || !body.metadata.docxArtifactKey.endsWith("/brief/latest.docx")) {
   throw new Error("Live response did not save latest-only JSON and DOCX artifact keys.");
 }
 
@@ -186,6 +190,7 @@ console.table({
   modelId: body.metadata.modelId,
   guardrailId: body.metadata.guardrailId,
   guardrailVersion: body.metadata.guardrailVersion,
+  clientId: body.metadata.clientId ?? "n/a",
   artifactKey: body.metadata.artifactKey,
   docxArtifactKey: body.metadata.docxArtifactKey,
   stateKey: body.metadata.stateKey,

@@ -231,8 +231,8 @@ class LambdaHandlerTest(unittest.TestCase):
                 return [
                     {
                         "Contents": [
-                            {"Key": "projects/apex-mutual/briefs/old.json"},
-                            {"Key": "projects/apex-mutual/briefs/old.docx"},
+                            {"Key": "clients/apex-mutual/brief/old.json"},
+                            {"Key": "clients/apex-mutual/brief/old.docx"},
                         ]
                     }
                 ]
@@ -270,12 +270,12 @@ class LambdaHandlerTest(unittest.TestCase):
 
         self.assertEqual(paginator_names, ["list_objects_v2"])
         self.assertEqual(paginator_calls[0]["Bucket"], "artifact-bucket")
-        self.assertEqual(paginator_calls[0]["Prefix"], "projects/apex-mutual/briefs/")
-        self.assertEqual(metadata["artifactKey"], "projects/apex-mutual/briefs/latest.json")
-        self.assertEqual(metadata["docxArtifactKey"], "projects/apex-mutual/briefs/latest.docx")
+        self.assertEqual(paginator_calls[0]["Prefix"], "clients/apex-mutual/brief/")
+        self.assertEqual(metadata["artifactKey"], "clients/apex-mutual/brief/latest.json")
+        self.assertEqual(metadata["docxArtifactKey"], "clients/apex-mutual/brief/latest.docx")
         self.assertEqual(metadata["stateKey"], "BRIEF#LATEST")
         self.assertEqual(metadata["artifactRetention"], "latest-only")
-        self.assertEqual(delete_batches[0]["Delete"]["Objects"][0]["Key"], "projects/apex-mutual/briefs/old.json")
+        self.assertEqual(delete_batches[0]["Delete"]["Objects"][0]["Key"], "clients/apex-mutual/brief/old.json")
         self.assertEqual(len(put_objects), 2)
         self.assertEqual(put_objects[0]["ContentType"], "application/json")
         self.assertEqual(put_objects[1]["ContentType"], "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
