@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated local artifacts:
+    "dist/**",
+    "work/**",
+    ".vinext/**",
+    "outputs/**",
   ]),
 ]);
 

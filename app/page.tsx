@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { generateDemoBrief, validateBriefRequest } from "@/lib/pillarprep/generator";
+import { normalizeBriefResponse } from "@/lib/pillarprep/response";
 import type {
   BriefResponse,
   DecisionMakerContext,
@@ -203,6 +205,9 @@ const feedbackOptions = [
 const defaultFeedback = ["Make it more executive", "Focus on security"];
 const defaultRole: AudienceRole = "PM";
 const workspaceStorageKey = "pillarprep.workspace.v1";
+const staticDemoMode =
+  ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
+    ?.VITE_PILLARPREP_STATIC_DEMO ?? "") === "true";
 
 const rolePrompts: Record<AudienceRole, string[]> = {
   Sales: [
@@ -416,6 +421,7 @@ export default function Home() {
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- Mount-only localStorage hydration restores saved demo workspace state. */
     try {
       const rawWorkspace = window.localStorage.getItem(workspaceStorageKey);
 
@@ -516,6 +522,8 @@ export default function Home() {
     } finally {
       setWorkspaceLoaded(true);
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -672,8 +680,7 @@ export default function Home() {
     ]
   );
 
-  const fallbackBriefContent = useMemo(
-    () => ({
+  const fallbackBriefContent = {
       technical: [
         `${company || "The customer"} likely needs a secure landing zone, governed identity model, observable application path, and migration pattern that reduces production risk.`,
         `Discovery should validate current architecture, data classification, RTO/RPO, incident response, network dependencies, and ownership across ${companySize.toLowerCase()} teams.`,
@@ -704,17 +711,7 @@ export default function Home() {
         `Response: propose a bounded pilot around ${selectedPillars[0]?.toLowerCase() || "the top priority"}, define rollback criteria, and connect each technical checkpoint to business continuity.`,
         "Customer pushback: This sounds expensive. Response: start with unit-cost visibility, right-sizing, and a decision checkpoint before scaling the implementation.",
       ],
-    }),
-    [
-      activeScenario.winTheme,
-      company,
-      companySize,
-      industryFocus,
-      primaryConcern,
-      selectedPillars,
-      usableDecisionMakers,
-    ]
-  );
+  };
 
   const briefContent = generatedBrief
     ? {
@@ -925,8 +922,6 @@ export default function Home() {
         role: requestRole,
         prompt: requestPrompt,
       };
-
-      const staticDemoMode = import.meta.env.VITE_PILLARPREP_STATIC_DEMO === "true";
       let nextBrief: BriefResponse;
 
       if (staticDemoMode) {
