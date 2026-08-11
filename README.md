@@ -5,7 +5,7 @@ PillarPrep is an AWS-focused SA briefing generator for hackathon demos.
 The app has two loops:
 
 1. Pre-brief refinement: generate, review, refine, and approve a customer-ready SA brief.
-2. Follow-on project model: promote the final brief, decision-maker context, and meeting notes into Project Brain for sales, executives, PMs, engineers, and new project members.
+2. Follow-on project model: automatically turn the final brief, decision-maker context, and meeting notes into a Project model for sales, executives, PMs, engineers, and new project members.
 
 Live demos:
 
@@ -20,18 +20,19 @@ Live demos:
 - Backend: API Gateway HTTP API, Lambda, Amazon Bedrock, S3 artifacts, DynamoDB project state
 - Demo provider: deterministic local generator in `lib/pillarprep/generator.ts`
 - Decision-maker context: manual/customer-approved profile notes, not automated LinkedIn scraping
-- Working Project Brain loop: role/prompt ask flow plus generated handoff artifacts
+- Working Project model loop: role-based follow-on answers plus generated handoff artifacts
 - Local workspace persistence: browser saves the current demo workspace until reset
 - Prompt contract: `docs/prompt-contract.md`
 - Architecture notes: `docs/aws-infrastructure-design.md`
 - AWS Lambda demo runbook: `docs/aws-lambda-demo-runbook.md`
 - Demo script: `docs/demo-script.md`
-- Project Brain tools: `docs/project-brain-tools.md`
+- Demo-day checklist: `docs/demo-day-readiness-checklist.md`
+- Project model tools: `docs/project-model-tools.md`
 - Brief quality eval: `npm run eval:briefs`
 
 ## Why Bedrock First
 
-Amazon Bedrock is the core v1 choice because PillarPrep needs managed generation, role-aware refinement, guardrails, and a Knowledge Bases path for Project Brain. It avoids custom model hosting while keeping the architecture AWS-native. The demo default is Amazon Nova Micro through Bedrock so there is no always-on model server cost.
+Amazon Bedrock is the core v1 choice because PillarPrep needs managed generation, role-aware refinement, guardrails, and a Knowledge Bases path for the Project model. It avoids custom model hosting while keeping the architecture AWS-native. The demo default is Amazon Nova Micro through Bedrock so there is no always-on model server cost.
 
 Recommended production path:
 
@@ -45,17 +46,17 @@ React app
   -> S3 approved brief artifacts
   -> DynamoDB project state
   -> Bedrock Knowledge Bases
-  -> Project Brain answers
+  -> Project model answers
 ```
 
 ## Where Strands Fits
 
-Strands is the optional agent layer for Phase 2. Use it when Project Brain needs tool use, multi-step project workflows, role-aware implementation planning, or retrieval-backed follow-up actions.
+Strands is the optional agent layer for Phase 2. Use it when the Project model needs tool use, multi-step project workflows, role-aware implementation planning, or retrieval-backed follow-up actions.
 
 Recommended split:
 
 - Bedrock: brief generation, refinement, structured outputs, guardrails
-- Strands: follow-on agent orchestration for Project Brain
+- Strands: follow-on agent orchestration for the Project model
 - SageMaker: out of scope for v1 unless the team decides to train, fine-tune, or host custom models
 
 ## API Contract
@@ -128,7 +129,7 @@ What PillarPrep stores:
 - Project state index: projectId, sortKey, company, meeting type, provider, and createdAt in DynamoDB.
 - Browser workspace: local draft state only, stored in the user's browser until reset.
 
-Future Project Brain memory should use Bedrock Knowledge Bases over approved S3 artifacts and meeting notes. That is retrieval over project documents, not fine-tuning or custom model training.
+Future Project model memory should use Bedrock Knowledge Bases over approved S3 artifacts and meeting notes. That is retrieval over project documents, not fine-tuning or custom model training.
 
 ## Cost Posture
 

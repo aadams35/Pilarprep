@@ -1,6 +1,6 @@
-# Project Brain Tools
+# Project Model Tools
 
-Project Brain should not only answer questions. In Phase 2, it should also produce project artifacts that help the team move.
+The Project model should not only answer questions. In Phase 2, it should also produce project artifacts that help the team move.
 
 The reference tool functions live in:
 
@@ -24,4 +24,4 @@ The local demo provider also returns these artifacts in `projectArtifacts`, so t
 
 ## Demo Talking Point
 
-Bedrock handles generation and grounding. Strands turns the promoted project context into tool-using workflows.
+Bedrock handles generation and grounding. Strands turns the approved project context into tool-using workflows.

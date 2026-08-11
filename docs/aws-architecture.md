@@ -13,7 +13,7 @@ flowchart TD
   E --> G[S3 brief artifacts]
   E --> H[DynamoDB project state]
   G --> I[Bedrock Knowledge Bases]
-  H --> J[Project Brain]
+  H --> J[Project model]
   I --> J
   J --> K[Strands agent tools]
 ```
@@ -27,7 +27,7 @@ flowchart TD
 5. API Gateway enforces IAM authorization and invokes Lambda.
 6. Lambda invokes Bedrock and normalizes the structured JSON.
 7. Lambda stores the generated brief in S3 and writes project state to DynamoDB.
-8. Approved briefs, decision-maker context, and meeting notes become grounding material for Project Brain.
+8. Approved briefs, decision-maker context, and meeting notes become grounding material for Project model.
 9. Strands becomes the optional Phase 2 agent layer for tool-using follow-up and stakeholder mapping.
 
 ## Hackathon Talking Point

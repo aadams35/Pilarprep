@@ -30,7 +30,7 @@ def build_project_brain_agent():
             build_follow_up_email,
         ],
         system_prompt=(
-            "You are Project Brain for PillarPrep. Use the approved brief, "
+            "You are the Project model for PillarPrep. Use the approved brief, "
             "decision-maker context, meeting notes, risks, decisions, and "
             "owners to answer role-aware follow-on questions for sales, "
             "executives, PMs, engineers, and new project members. Be concise, "

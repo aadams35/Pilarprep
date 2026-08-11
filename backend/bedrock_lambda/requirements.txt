@@ -1,5 +1,5 @@
 boto3>=1.34.0
 
 # Optional for Phase 2 agent orchestration. Keep out of the Lambda package
-# until the Project Brain agent path is enabled.
+# until the Project model agent path is enabled.
 # strands-agents>=0.1.0

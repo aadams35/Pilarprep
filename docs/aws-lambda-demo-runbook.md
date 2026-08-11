@@ -126,7 +126,7 @@ Keep the public Cognito demo role limited to `execute-api:Invoke` on the single 
 
 ## Demo Fallback Plan
 
-If Bedrock access is interrupted, leave AI model mode off and use the deterministic demo provider. The UI still exercises the full workflow: pre-brief refinement, stakeholder lens, Project Brain ask loop, two-week plan, risk register, stakeholder map, and follow-up email artifact.
+If Bedrock access is interrupted, leave AI model mode off and use the deterministic demo provider. The UI still exercises the full workflow: pre-brief refinement, stakeholder lens, Project model follow-on loop, two-week plan, risk register, stakeholder map, and follow-up email artifact.
 
 ## CloudWatch Dashboard
 

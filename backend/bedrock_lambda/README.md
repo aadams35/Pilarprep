@@ -9,8 +9,8 @@ Recommended v1 path:
 3. Amazon Bedrock generates the structured pre-brief and Phase 2 handoff artifacts.
 4. S3 stores approved brief artifacts.
 5. DynamoDB tracks project state, feedback, owners, and timestamps.
-6. Bedrock Knowledge Bases ground the follow-on Project Brain.
-7. Strands can be added as the agent layer when Project Brain needs tools.
+6. Bedrock Knowledge Bases ground the follow-on Project model.
+7. Strands can be added as the agent layer when the Project model needs tools.
 
 Why Bedrock first:
 
@@ -20,7 +20,7 @@ Why Bedrock first:
 
 Why Strands second:
 
-- Use it when Project Brain needs agent behavior: tool calls, role-specific workflows, implementation planning, and multi-step follow-through.
+- Use it when the Project model needs agent behavior: tool calls, role-specific workflows, implementation planning, and multi-step follow-through.
 - Keep the first brief-generation loop simple until the Bedrock prompt contract is stable.
 
 SageMaker is intentionally out of scope for v1 because PillarPrep is not training, fine-tuning, or hosting a custom model.

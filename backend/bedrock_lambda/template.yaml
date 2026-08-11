@@ -329,7 +329,7 @@ Resources:
       - BriefFunctionLogGroup
     Properties:
       FunctionName: !Sub "${ResourcePrefix}-brief-generator"
-      Description: !Sub "${ProjectName} ${EnvironmentName} Bedrock brief generator and Project Brain handler"
+      Description: !Sub "${ProjectName} ${EnvironmentName} Bedrock brief generator and Project model handler"
       CodeUri: .
       Handler: app.handler
       Role: !GetAtt BriefFunctionRole.Arn

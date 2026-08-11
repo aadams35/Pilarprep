@@ -44,7 +44,7 @@ https://d2e0btay0ynyf.cloudfront.net
 6. Lambda builds the Bedrock prompt contract and invokes the configured model.
 7. Lambda normalizes the model JSON and stores the request/response artifact in S3.
 8. Lambda writes project state metadata to DynamoDB.
-9. The frontend receives technical brief, executive brief, stakeholder lens, game plan, objections, Project Brain answer, and Phase 2 artifacts.
+9. The frontend receives technical brief, executive brief, stakeholder lens, game plan, objections, Project model answer, and Phase 2 artifacts.
 
 ## Model And Storage Boundary
 
@@ -54,7 +54,7 @@ Stored by PillarPrep:
 
 - Lambda code stores the prompt contract, schema instructions, and structured fallback behavior.
 - S3 stores generated brief artifacts as JSON documents containing the request, response, timestamp, provider, and project metadata.
-- DynamoDB stores project state records keyed by `projectId` and `sortKey` so Project Brain can track generated briefs and handoff state.
+- DynamoDB stores project state records keyed by `projectId` and `sortKey` so the Project model can track generated briefs and handoff state.
 - The browser stores unsaved local workspace state for demo continuity.
 
 Future retrieval should add Bedrock Knowledge Bases over approved S3 artifacts. That creates searchable project memory without training, fine-tuning, or hosting a custom model.
@@ -105,7 +105,7 @@ Still to decide:
 
 - Whether to add a custom domain and ACM certificate
 - Whether to replace the public demo identity with Cognito User Pool, IAM Identity Center, or another real auth layer after the hackathon demo
-- Whether to add Bedrock Knowledge Bases and Strands for the full Project Brain follow-on loop
+- Whether to add Bedrock Knowledge Bases and Strands for the full Project model follow-on loop
 
 ## Later Hardening
 
@@ -115,5 +115,5 @@ After the first demo works:
 - Add CloudWatch alarms tied to Lambda/API errors and cost thresholds
 - Replace the unauthenticated demo identity with real user auth before broader sharing
 - Add Bedrock Knowledge Bases for retrieval over approved project artifacts
-- Add Strands runtime for richer Project Brain tool orchestration
+- Add Strands runtime for richer Project model tool orchestration
 - Add WAF rate-based rules or usage quotas if the public URL stays open
