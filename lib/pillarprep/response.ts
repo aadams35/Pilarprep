@@ -15,6 +15,10 @@ function asString(value: unknown, fallback = "") {
   return typeof value === "string" && value.trim() ? value : fallback;
 }
 
+function asNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function asStringList(value: unknown, fallback: string[] = []) {
   if (Array.isArray(value)) {
     return value
@@ -39,6 +43,11 @@ function asMetadata(value: unknown) {
     artifactKey: asString(value.artifactKey) || undefined,
     stateKey: asString(value.stateKey) || undefined,
     storageWarning: asString(value.storageWarning) || undefined,
+    modelId: asString(value.modelId) || undefined,
+    inputTokens: asNumber(value.inputTokens),
+    outputTokens: asNumber(value.outputTokens),
+    totalTokens: asNumber(value.totalTokens),
+    latencyMs: asNumber(value.latencyMs),
   };
 }
 

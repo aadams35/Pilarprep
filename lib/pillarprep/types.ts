@@ -49,6 +49,11 @@ export type BriefResponse = {
     artifactKey?: string;
     stateKey?: string;
     storageWarning?: string;
+    modelId?: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    latencyMs?: number;
   };
   technical: string[];
   executive: string[];

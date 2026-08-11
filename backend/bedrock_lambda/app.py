@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import boto3
 
 
-MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-pro-v1:0")
+MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-micro-v1:0")
 REGION = os.getenv("AWS_REGION", "us-east-1")
 ARTIFACT_BUCKET = os.getenv("ARTIFACT_BUCKET", "")
 PROJECT_TABLE = os.getenv("PROJECT_TABLE", "")
@@ -87,13 +87,22 @@ def _build_prompt(payload):
     return f"""
 You are PillarPrep, an AWS Solutions Architect briefing assistant.
 
-Return strict JSON with these keys:
+Return ONLY valid JSON. Do not use markdown fences, prose before JSON, or prose after JSON.
+Use exactly these top-level keys:
 technical, executive, stakeholders, gameplan, objections, projectAnswer, projectArtifacts, citations.
-Each of technical/executive/stakeholders/gameplan/objections/citations must be an array of strings.
-projectArtifacts must be an object with these keys:
-twoWeekPlan, riskRegister, stakeholderMap, followUpEmail.
-twoWeekPlan/riskRegister/stakeholderMap must be arrays of objects with title, detail, owner, and status.
-followUpEmail must be an object with subject and body.
+
+JSON shape requirements:
+- technical: exactly 3 concise strings for an SA technical conversation.
+- executive: exactly 3 concise strings with no AWS jargon.
+- stakeholders: exactly 3 concise strings based only on supplied decision-maker context.
+- gameplan: exactly 3 concise strings for how the SA should run the meeting.
+- objections: exactly 3 concise strings in "Concern: ... Response: ..." form.
+- projectAnswer: one useful paragraph for the follow-on role and prompt.
+- citations: 2-4 short source labels from supplied context, AWS Well-Architected, or Amazon Bedrock.
+- projectArtifacts.twoWeekPlan: exactly 3 objects with title, detail, owner, status.
+- projectArtifacts.riskRegister: exactly 3 objects with title, detail, owner, status.
+- projectArtifacts.stakeholderMap: exactly 3 objects with title, detail, owner, status.
+- projectArtifacts.followUpEmail: object with subject and body.
 
 Company: {payload.get("company")}
 Industry: {payload.get("industry")}
@@ -133,7 +142,11 @@ def _invoke_bedrock(prompt):
             "maxTokens": 2400,
         },
     )
-    return result["output"]["message"]["content"][0]["text"]
+    return {
+        "text": result["output"]["message"]["content"][0]["text"],
+        "usage": result.get("usage", {}),
+        "metrics": result.get("metrics", {}),
+    }
 
 
 def _as_string_list(value):
@@ -259,26 +272,38 @@ def handler(event, _context):
         return _response(400, {"error": "pillars must be an array"})
 
     prompt = _build_prompt(payload)
-    model_text = _invoke_bedrock(prompt)
+    bedrock_result = _invoke_bedrock(prompt)
+    if isinstance(bedrock_result, dict):
+        model_text = str(bedrock_result.get("text", ""))
+        usage = bedrock_result.get("usage", {})
+        metrics = bedrock_result.get("metrics", {})
+    else:
+        model_text = str(bedrock_result)
+        usage = {}
+        metrics = {}
 
     try:
         generated = _parse_model_response(model_text)
-    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+    except (AttributeError, json.JSONDecodeError, UnicodeDecodeError, ValueError):
         _metric("BriefErrors", ErrorType="ModelJsonFallback")
-        generated = {
-            "technical": [model_text],
-            "executive": [],
-            "stakeholders": [],
-            "gameplan": [],
-            "objections": [],
-            "projectAnswer": "",
-            "projectArtifacts": {},
-            "citations": ["Amazon Bedrock model response"],
-        }
+        generated = _fallback_generated(payload, model_text)
+
 
     generated["provider"] = "bedrock"
     generated["generatedAt"] = datetime.now(timezone.utc).isoformat()
-    generated["metadata"] = _store_project_artifacts(payload, generated)
+    metadata = _store_project_artifacts(payload, generated)
+    metadata["modelId"] = MODEL_ID
+    if isinstance(usage, dict):
+        for source_key, target_key in (
+            ("inputTokens", "inputTokens"),
+            ("outputTokens", "outputTokens"),
+            ("totalTokens", "totalTokens"),
+        ):
+            if source_key in usage:
+                metadata[target_key] = usage[source_key]
+    if isinstance(metrics, dict) and "latencyMs" in metrics:
+        metadata["latencyMs"] = metrics["latencyMs"]
+    generated["metadata"] = metadata
     _metric("BriefSuccess")
 
     return _response(200, generated)

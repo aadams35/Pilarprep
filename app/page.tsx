@@ -1526,6 +1526,9 @@ export default function Home() {
                 <div className="evidence-tray">
                   {generatedBrief.metadata.projectId ? <span>Project {generatedBrief.metadata.projectId}</span> : null}
                   {generatedBrief.metadata.stateKey ? <span>DynamoDB {generatedBrief.metadata.stateKey}</span> : null}
+                  {generatedBrief.metadata.modelId ? <span>{generatedBrief.metadata.modelId}</span> : null}
+                  {generatedBrief.metadata.totalTokens ? <span>{generatedBrief.metadata.totalTokens} tokens</span> : null}
+                  {generatedBrief.metadata.latencyMs ? <span>{generatedBrief.metadata.latencyMs} ms</span> : null}
                   {generatedBrief.metadata.storageWarning ? <span>{generatedBrief.metadata.storageWarning}</span> : null}
                 </div>
               ) : null}

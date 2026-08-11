@@ -31,7 +31,7 @@ Live demos:
 
 ## Why Bedrock First
 
-Amazon Bedrock is the core v1 choice because PillarPrep needs managed generation, role-aware refinement, guardrails, and a Knowledge Bases path for Project Brain. It avoids custom model hosting while keeping the architecture AWS-native.
+Amazon Bedrock is the core v1 choice because PillarPrep needs managed generation, role-aware refinement, guardrails, and a Knowledge Bases path for Project Brain. It avoids custom model hosting while keeping the architecture AWS-native. The demo default is Amazon Nova Micro through Bedrock so there is no always-on model server cost.
 
 Recommended production path:
 
@@ -109,6 +109,9 @@ Response:
 }
 ```
 
+## Cost Posture
+
+The demo uses Amazon Bedrock on-demand inference with Amazon Nova Micro, so there is no always-on model endpoint. Normal demo usage should stay well under $1/day as long as Live AWS mode is used only for team demos and the public CloudFront build remains demo-only. Avoid Provisioned Throughput, Nova Act, large batch jobs, public unauthenticated model access, or automated refresh loops until budgets/alarms are added.
 ## AWS Frontend
 
 The AWS-hosted frontend uses a static Vite build of the existing React UI. It is deployed to a private S3 bucket behind CloudFront and runs in browser-only demo mode, so it does not call Bedrock or `/api/brief` from the public bundle. Live AWS mode is kept behind the server-backed local/Vinext route so the API key stays private.

@@ -44,12 +44,15 @@ Optional parameters:
 -StackName pillarprep-bedrock
 -Region us-east-1
 -AllowedOrigin http://127.0.0.1:3002
--BedrockModelId us.amazon.nova-pro-v1:0
+-BedrockModelId us.amazon.nova-micro-v1:0
 -PillarPrepApiKey <private-demo-key>
 ```
 
-The first successful AWS smoke test used `us.amazon.nova-pro-v1:0`. Anthropic Sonnet profiles were visible in the account, but Lambda calls required the Anthropic use-case details form before they could be used reliably.
+The low-cost demo path uses `us.amazon.nova-micro-v1:0`. Anthropic Sonnet profiles were visible in the account, but Lambda calls required the Anthropic use-case details form before they could be used reliably.
 
+## Low-Cost Demo Guardrails
+
+Use `us.amazon.nova-micro-v1:0` for the default demo. Bedrock is on-demand, so model cost is token-based instead of hourly. Keep the public CloudFront bundle demo-only, keep the API key server-side, and avoid automated repeated calls. Add AWS Budgets or CloudWatch billing alarms before opening Live AWS mode beyond the hackathon team.
 ## Connect Frontend To Lambda
 
 After the script deploys, copy the `BriefApiUrl` output into local env:

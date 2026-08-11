@@ -2,7 +2,7 @@ param(
   [string]$StackName = "pillarprep-bedrock",
   [string]$Region = "us-east-1",
   [string]$AllowedOrigin = "http://127.0.0.1:3002",
-  [string]$BedrockModelId = "us.amazon.nova-pro-v1:0",
+  [string]$BedrockModelId = "us.amazon.nova-micro-v1:0",
   [string]$PillarPrepApiKey = ""
 )
 
@@ -17,7 +17,7 @@ function Require-Command($Name) {
 function Invoke-Aws {
   & aws @args
   if ($LASTEXITCODE -ne 0) {
-    throw "AWS CLI command failed: aws $($args -join ' ')"
+    throw "AWS CLI command failed. Re-run with AWS CLI debug output only if needed."
   }
 }
 
