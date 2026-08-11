@@ -228,18 +228,97 @@ function buildPillarRanking(items: string[]) {
     pillar,
   }));
 }
-const feedbackOptions = [
-  "Make it more executive",
-  "Add stronger technical depth",
-  "Reduce AWS jargon",
-  "Focus on security",
-  "Add cost angle",
-  "Improve discovery questions",
-  "Customer is already on AWS",
-  "Customer is migrating from on-prem",
+const feedbackCategories = [
+  {
+    title: "Executive lens",
+    description: "Make the brief sharper for business sponsors and decision makers.",
+    options: [
+      "Make it more board-ready",
+      "Reduce AWS jargon",
+      "Add ROI and decision criteria",
+      "Tighten the executive summary",
+    ],
+  },
+  {
+    title: "Technical depth",
+    description: "Push the technical brief toward architecture validation and tradeoffs.",
+    options: [
+      "Add stronger technical depth",
+      "Ask deeper architecture questions",
+      "Show likely current-state assumptions",
+      "Name AWS services with rationale",
+    ],
+  },
+  {
+    title: "Risk and compliance",
+    description: "Emphasize controls, evidence, resilience, and approval blockers.",
+    options: [
+      "Lead with security and evidence",
+      "Add compliance validation questions",
+      "Strengthen RTO and RPO discovery",
+      "Surface migration risk and rollback",
+    ],
+  },
+  {
+    title: "Cost and value",
+    description: "Make the output stronger on economics and measurable outcomes.",
+    options: [
+      "Add cost angle",
+      "Add time-to-value framing",
+      "Include success metrics",
+      "Separate quick wins from later bets",
+    ],
+  },
+  {
+    title: "Customer context",
+    description: "Tell the model how to frame the customer starting point.",
+    options: [
+      "Customer is already on AWS",
+      "Customer is migrating from on-prem",
+      "Customer has a hybrid environment",
+      "Customer has executive urgency",
+    ],
+  },
+  {
+    title: "Meeting execution",
+    description: "Improve what the SA can actually say and ask live.",
+    options: [
+      "Improve discovery questions",
+      "Add objection handling",
+      "Create a tighter meeting agenda",
+      "Clarify next-step owners",
+    ],
+  },
 ];
 
-const defaultFeedback = ["Make it more executive", "Focus on security"];
+const legacyFeedbackMap: Record<string, string> = {
+  "Make it more executive": "Executive lens: Make it more board-ready",
+  "Add stronger technical depth": "Technical depth: Add stronger technical depth",
+  "Reduce AWS jargon": "Executive lens: Reduce AWS jargon",
+  "Focus on security": "Risk and compliance: Lead with security and evidence",
+  "Add cost angle": "Cost and value: Add cost angle",
+  "Improve discovery questions": "Meeting execution: Improve discovery questions",
+  "Customer is already on AWS": "Customer context: Customer is already on AWS",
+  "Customer is migrating from on-prem": "Customer context: Customer is migrating from on-prem",
+};
+
+const defaultFeedback = [
+  "Executive lens: Make it more board-ready",
+  "Risk and compliance: Lead with security and evidence",
+];
+
+function normalizeFeedback(items: unknown) {
+  if (!Array.isArray(items)) {
+    return defaultFeedback;
+  }
+
+  const normalized = items
+    .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+    .map((item) => legacyFeedbackMap[item] ?? item)
+    .filter((item, index, list) => list.indexOf(item) === index);
+
+  return normalized.length ? normalized : defaultFeedback;
+}
 const defaultRole: AudienceRole = "PM";
 const workspaceStorageKey = "pillarprep.workspace.v1";
 const hostedBackendUrl = (import.meta.env.VITE_PILLARPREP_BACKEND_URL ?? "").trim();
@@ -660,13 +739,7 @@ export default function Home() {
           ? saved.briefVersion
           : 1
       );
-      setFeedback(
-        Array.isArray(saved.feedback)
-          ? saved.feedback.filter(
-              (item): item is string => typeof item === "string"
-            )
-          : defaultFeedback
-      );
+      setFeedback(normalizeFeedback(saved.feedback));
       setApproved(Boolean(saved.approved));
       setPromoted(Boolean(saved.promoted));
       setRole(savedRole);
@@ -2092,32 +2165,70 @@ const industryFocus = useMemo(() => {
                     </div>
                   </div>
 
-                  <div>
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-black">Refinement feedback</h3>
-                      <button
-                        className="small-action"
-                        type="button"
-                        disabled={isGenerating}
-                        onClick={refineBrief}
-                      >
-                        {isGenerating ? "Applying..." : "Apply feedback"}
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {feedbackOptions.map((option) => (
+                  <div className="refinement-panel">
+                    <div className="refinement-header">
+                      <div>
+                        <h3 className="text-sm font-black">Refinement feedback</h3>
+                        <p>{feedback.length} selected across {feedbackCategories.length} categories</p>
+                      </div>
+                      <div className="refinement-actions">
                         <button
-                          key={option}
-                          className={cx(
-                            "feedback-chip",
-                            feedback.includes(option) && "feedback-chip-active"
-                          )}
-                          onClick={() => toggleFeedback(option)}
+                          className="small-action"
                           type="button"
+                          disabled={!feedback.length || isGenerating}
+                          onClick={() => setFeedback([])}
                         >
-                          {option}
+                          Clear
                         </button>
-                      ))}
+                        <button
+                          className="small-action primary-small-action"
+                          type="button"
+                          disabled={isGenerating}
+                          onClick={refineBrief}
+                        >
+                          {isGenerating ? "Applying..." : "Apply feedback"}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="feedback-category-grid">
+                      {feedbackCategories.map((category) => {
+                        const categoryValues = category.options.map(
+                          (option) => `${category.title}: ${option}`
+                        );
+                        const selectedCount = categoryValues.filter((option) =>
+                          feedback.includes(option)
+                        ).length;
+
+                        return (
+                          <section className="feedback-category" key={category.title}>
+                            <div className="feedback-category-title">
+                              <div>
+                                <strong>{category.title}</strong>
+                                <span>{category.description}</span>
+                              </div>
+                              <em>{selectedCount}/{category.options.length}</em>
+                            </div>
+                            <div className="feedback-chip-row">
+                              {category.options.map((option) => {
+                                const value = `${category.title}: ${option}`;
+                                return (
+                                  <button
+                                    key={value}
+                                    className={cx(
+                                      "feedback-chip",
+                                      feedback.includes(value) && "feedback-chip-active"
+                                    )}
+                                    onClick={() => toggleFeedback(value)}
+                                    type="button"
+                                  >
+                                    {option}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

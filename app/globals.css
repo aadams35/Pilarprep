@@ -1805,6 +1805,100 @@ textarea:focus-visible {
   font-size: 0.78rem;
 }
 
+.refinement-panel {
+  border: 1px solid #d3dccf;
+  border-radius: 8px;
+  background: #fbfcf8;
+  padding: 0.9rem;
+}
+
+.refinement-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.85rem;
+}
+
+.refinement-header p {
+  margin-top: 0.16rem;
+  color: #607166;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.refinement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.primary-small-action {
+  border-color: #2367a2;
+  background: #2367a2;
+  color: #ffffff;
+}
+
+.feedback-category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.feedback-category {
+  border: 1px solid #d8ded2;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0.78rem;
+}
+
+.feedback-category-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin-bottom: 0.68rem;
+}
+
+.feedback-category-title strong,
+.feedback-category-title span,
+.feedback-category-title em {
+  display: block;
+}
+
+.feedback-category-title strong {
+  color: #17201c;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.feedback-category-title span {
+  margin-top: 0.18rem;
+  color: #66746a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.feedback-category-title em {
+  min-width: 2.2rem;
+  border: 1px solid #d8ded2;
+  border-radius: 999px;
+  background: #f5f7f1;
+  color: #536158;
+  padding: 0.16rem 0.42rem;
+  text-align: center;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.feedback-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
 .feedback-chip,
 .prompt-chip,
 .role-button {
@@ -2660,6 +2754,19 @@ textarea:focus-visible {
 
   .copy-actions-inline {
     justify-content: flex-start;
+  }
+
+  .refinement-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .refinement-actions {
+    justify-content: flex-start;
+  }
+
+  .feedback-category-grid {
+    grid-template-columns: 1fr;
   }
 
   .guide-actions {
