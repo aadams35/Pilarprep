@@ -16,8 +16,23 @@ Metadata:
           default: Frontend hosting
         Parameters:
           - FrontendBucketName
+          - WebACLId
+          - CloudFrontPriceClass
 
 Parameters:
+  WebACLId:
+    Type: String
+    Default: ""
+    Description: Optional existing AWS WAF web ACL ARN to keep attached to CloudFront.
+  CloudFrontPriceClass:
+    Type: String
+    Default: ""
+    Description: Optional CloudFront price class. Leave empty when using the CloudFront free pricing plan.
+    AllowedValues:
+      - ""
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
   ResourcePrefix:
     Type: String
     Default: pillarprep-demo
@@ -38,6 +53,10 @@ Parameters:
   FrontendBucketName:
     Type: String
     Description: Globally unique S3 bucket name for static frontend assets.
+
+Conditions:
+  HasWebAcl: !Not [!Equals [!Ref WebACLId, ""]]
+  HasPriceClass: !Not [!Equals [!Ref CloudFrontPriceClass, ""]]
 
 Resources:
   FrontendBucket:
@@ -93,10 +112,11 @@ Resources:
     Properties:
       DistributionConfig:
         Comment: !Sub "${ProjectName} ${EnvironmentName} static frontend"
+        WebACLId: !If [HasWebAcl, !Ref WebACLId, !Ref "AWS::NoValue"]
         Enabled: true
         HttpVersion: http2and3
         DefaultRootObject: index.html
-        PriceClass: PriceClass_100
+        PriceClass: !If [HasPriceClass, !Ref CloudFrontPriceClass, !Ref "AWS::NoValue"]
         Origins:
           - Id: FrontendS3Origin
             DomainName: !GetAtt FrontendBucket.RegionalDomainName

@@ -80,10 +80,11 @@ if (-not $bucketExists) {
     --region $Region | Out-Null
 }
 
-$packagingBucketTags = New-TagSetJson "$ResourcePrefix-cfn-package"
+$packagingBucketTagsPath = Join-Path $workDir "packaging-bucket-tags.json"
+[System.IO.File]::WriteAllText($packagingBucketTagsPath, (New-TagSetJson "$ResourcePrefix-cfn-package"), [System.Text.UTF8Encoding]::new($false))
 Invoke-Aws s3api put-bucket-tagging `
   --bucket $bucketName `
-  --tagging $packagingBucketTags `
+  --tagging "file://$packagingBucketTagsPath" `
   --region $Region | Out-Null
 
 Invoke-Aws cloudformation package `
@@ -115,13 +116,24 @@ $stackTags = @(
   "DataClassification=demo"
 )
 
-Invoke-Aws cloudformation deploy `
-  --template-file $packagedPath `
-  --stack-name $StackName `
-  --capabilities CAPABILITY_IAM `
-  --parameter-overrides $parameterOverrides `
-  --tags $stackTags `
-  --region $Region
+$deployArgs = @(
+  "cloudformation",
+  "deploy",
+  "--template-file",
+  $packagedPath,
+  "--stack-name",
+  $StackName,
+  "--capabilities",
+  "CAPABILITY_IAM",
+  "--parameter-overrides"
+) + $parameterOverrides + @(
+  "--tags"
+) + $stackTags + @(
+  "--region",
+  $Region
+)
+
+Invoke-Aws @deployArgs
 
 Write-Host ""
 Write-Host "Stack outputs:"

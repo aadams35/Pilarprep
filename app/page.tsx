@@ -17,6 +17,7 @@ type BriefTab =
 type AudienceRole = "Sales" | "Executive" | "PM" | "Engineer" | "New member";
 type RiskLevel = "Low" | "Medium" | "High";
 type GenerationMode = "demo" | "live";
+type ModelStatus = { checked: boolean; liveConfigured: boolean; apiKeyConfigured: boolean };
 type ConsolePage = "guide" | "setup" | "brief" | "project" | "aws";
 
 type Scenario = {
@@ -510,7 +511,14 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState("");
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
-  const [generationMode, setGenerationMode] = useState<GenerationMode>("demo");
+  const [generationMode, setGenerationMode] = useState<GenerationMode>(
+    liveModeAvailable ? "live" : "demo"
+  );
+  const [modelStatus, setModelStatus] = useState<ModelStatus>({
+    checked: staticDemoMode,
+    liveConfigured: !staticDemoMode,
+    apiKeyConfigured: false,
+  });
   const [copiedLabel, setCopiedLabel] = useState("");
   const [activePage, setActivePage] = useState<ConsolePage>("guide");
 
@@ -620,6 +628,50 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!liveModeAvailable) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadModelStatus() {
+      try {
+        const response = await fetch("/api/brief", {
+          method: "GET",
+          headers: { accept: "application/json" },
+        });
+        const status = (await response.json()) as Partial<ModelStatus>;
+
+        if (cancelled) {
+          return;
+        }
+
+        const liveConfigured = Boolean(status.liveConfigured);
+        setModelStatus({
+          checked: true,
+          liveConfigured,
+          apiKeyConfigured: Boolean(status.apiKeyConfigured),
+        });
+        setGenerationMode(liveConfigured ? "live" : "demo");
+      } catch {
+        if (!cancelled) {
+          setModelStatus({
+            checked: true,
+            liveConfigured: false,
+            apiKeyConfigured: false,
+          });
+          setGenerationMode("demo");
+        }
+      }
+    }
+
+    void loadModelStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   useEffect(() => {
     if (!workspaceLoaded) {
       return;
@@ -1041,7 +1093,11 @@ export default function Home() {
         nextBrief = normalizeBriefResponse(generateDemoBrief(briefRequest), "demo");
       } else {
         if (!liveModeAvailable) {
-          throw new Error("Live AWS mode needs the server-backed app so the API key stays private.");
+          throw new Error("AI model mode needs the server-backed app so the API key stays private.");
+        }
+
+        if (modelStatus.checked && !modelStatus.liveConfigured) {
+          throw new Error("AI model mode is not configured on this server. Add PILLARPREP_BACKEND_URL and restart the app.");
         }
 
         const response = await fetch("/api/brief", {
@@ -1206,10 +1262,10 @@ export default function Home() {
               <button
                 className={cx("text-action", generationMode === "live" && "tab-active")}
                 type="button"
-                disabled={!liveModeAvailable}
+                disabled={!liveModeAvailable || (modelStatus.checked && !modelStatus.liveConfigured)}
                 onClick={() => setGenerationMode("live")}
               >
-                Live AWS
+                AI model
               </button>
               <button className="judge-command" type="button" onClick={runJudgeMode}>
                 Run Judge Mode
@@ -1268,7 +1324,7 @@ export default function Home() {
 
           <div className="hero-panel">
             <div className="panel-status">
-              <span>Live AWS workload concept</span>
+              <span>AI-backed AWS workload</span>
               <strong>Hackathon ready</strong>
             </div>
             <div className="flex items-start justify-between gap-4">
@@ -1743,8 +1799,13 @@ export default function Home() {
                   onClick={refineBrief}
                 >
                   <span className="button-icon">+</span>
-                  {isGenerating ? "Generating brief..." : "Generate / refine brief"}
-                </button>
+                  {isGenerating
+                    ? generationMode === "live"
+                      ? "Generating with AI..."
+                      : "Generating brief..."
+                    : generationMode === "live"
+                      ? "Generate with AI model"
+                      : "Generate / refine brief"}`r`n                </button>
                 <button
                   className="secondary-link"
                   type="button"
@@ -1754,15 +1815,18 @@ export default function Home() {
                 </button>
               </div>
               <div className="provider-note">
-                <span>{generationMode === "live" ? "Live AWS mode" : "Demo mode"}</span>
+                <span>{generationMode === "live" ? "AI model mode" : "Demo mode"}</span>
                 <strong>
                   {generatedBrief
                     ? `${generatedBrief.provider} provider - ${new Date(generatedBrief.generatedAt).toLocaleTimeString()}`
                     : generationMode === "live"
-                      ? "Ready for API Gateway + Lambda"
+                      ? modelStatus.checked
+                        ? modelStatus.liveConfigured
+                          ? "Bedrock backend ready"
+                          : "Backend not configured"
+                        : "Checking Bedrock backend"
                       : "No model calls"}
-                </strong>
-              </div>
+                </strong>`r`n              </div>
               <div className="provider-note">
                 <span>Saved artifact</span>
                 <strong>{generatedBrief?.metadata?.artifactKey ?? "Not saved yet"}</strong>

@@ -123,10 +123,10 @@ What PillarPrep stores:
 Future Project Brain memory should use Bedrock Knowledge Bases over approved S3 artifacts and meeting notes. That is retrieval over project documents, not fine-tuning or custom model training.
 ## Cost Posture
 
-The demo uses Amazon Bedrock on-demand inference with Amazon Nova Micro, so there is no always-on model endpoint. Normal demo usage should stay well under $1/day as long as Live AWS mode is used only for team demos and the public CloudFront build remains demo-only. Avoid Provisioned Throughput, Nova Act, large batch jobs, public unauthenticated model access, or automated refresh loops until budgets/alarms are added.
+The demo uses Amazon Bedrock on-demand inference with Amazon Nova Micro, so there is no always-on model endpoint. Normal demo usage should stay well under $1/day as long as AI model mode is used only for team demos and the public CloudFront build remains demo-only. Avoid Provisioned Throughput, Nova Act, large batch jobs, public unauthenticated model access, or automated refresh loops until budgets/alarms are added.
 ## AWS Frontend
 
-The AWS-hosted frontend uses a static Vite build of the existing React UI. It is deployed to a private S3 bucket behind CloudFront and runs in browser-only demo mode, so it does not call Bedrock or `/api/brief` from the public bundle. Live AWS mode is kept behind the server-backed local/Vinext route so the API key stays private.
+The AWS-hosted frontend uses a static Vite build of the existing React UI. It is deployed to a private S3 bucket behind CloudFront and runs in browser-only demo mode, so it does not call Bedrock or `/api/brief` from the public bundle. AI model mode is kept behind the server-backed local Next.js route so the API key stays private.
 
 ```bash
 .\scripts\deploy-aws-frontend.ps1 -Region us-east-1
@@ -159,13 +159,13 @@ After deployment, set the frontend environment variable to the stack output URL:
 PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
 ```
 
-For Live AWS mode, set the protected API key on the server only:
+For AI model mode, set the protected API key on the server only:
 
 ```bash
 PILLARPREP_BACKEND_API_KEY=...
 ```
 
-When `PILLARPREP_BACKEND_URL` is absent, or when the UI is in Demo mode, the app uses the local demo generator. Live AWS mode forwards through the server route with the private API key.
+When `PILLARPREP_BACKEND_URL` is absent, or when the UI is in Demo mode, the app uses the local demo generator. AI model mode forwards through the server route with the private API key.
 
 The backend stack outputs `DashboardUrl` for the CloudWatch operations view. Live Bedrock responses also include metadata with `artifactKey`, `projectId`, and `stateKey` so the UI can show where the project artifact was saved.
 
@@ -193,6 +193,6 @@ npm test
 npm run eval:briefs
 ```
 
-The local app works without AWS credentials because `/api/brief` currently uses the demo provider. Swap the API implementation to the Bedrock Lambda once the AWS sandbox is ready.
+The server-backed local app now checks `/api/brief` model status on load. When `PILLARPREP_BACKEND_URL` and `PILLARPREP_BACKEND_API_KEY` are set, AI model mode becomes the default and briefs are generated through API Gateway, Lambda, and Amazon Bedrock. When those values are absent, the app falls back to the deterministic demo provider.
 
 The browser also stores the current workspace locally so the demo can survive refreshes. Use `Reset workspace` in the UI when you want to return to the default scenario.

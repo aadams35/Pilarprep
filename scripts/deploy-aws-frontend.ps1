@@ -6,7 +6,9 @@ param(
   [string]$ProjectName = "PillarPrep",
   [string]$EnvironmentName = "demo",
   [string]$Owner = "austin-adams",
-  [string]$CostCenter = "hackathon"
+  [string]$CostCenter = "hackathon",
+  [string]$WebACLId = "",
+  [string]$CloudFrontPriceClass = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,6 +47,30 @@ Write-Host "Using AWS account $accountId in $Region"
 Write-Host "Frontend bucket: $BucketName"
 Write-Host "Building static frontend with model calls disabled..."
 
+if (-not $WebACLId) {
+  try {
+    $existingDistributionId = Invoke-Aws cloudformation describe-stacks `
+      --stack-name $StackName `
+      --region $Region `
+      --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue | [0]" `
+      --output text
+
+    if ($existingDistributionId -and $existingDistributionId -ne "None") {
+      $existingWebAcl = Invoke-Aws cloudfront get-distribution-config `
+        --id $existingDistributionId `
+        --query "DistributionConfig.WebACLId" `
+        --output text
+
+      if ($existingWebAcl -and $existingWebAcl -ne "None") {
+        $WebACLId = $existingWebAcl
+        Write-Host "Preserving CloudFront Web ACL attachment."
+      }
+    }
+  } catch {
+    Write-Host "No existing CloudFront Web ACL detected."
+  }
+}
+
 Push-Location $repoRoot
 try {
   $env:VITE_PILLARPREP_STATIC_DEMO = "true"
@@ -62,7 +88,9 @@ $parameterOverrides = @(
   "EnvironmentName=$EnvironmentName",
   "Owner=$Owner",
   "CostCenter=$CostCenter",
-  "FrontendBucketName=$BucketName"
+  "FrontendBucketName=$BucketName",
+  "WebACLId=$WebACLId",
+  "CloudFrontPriceClass=$CloudFrontPriceClass"
 )
 
 $stackTags = @(
@@ -77,12 +105,22 @@ $stackTags = @(
   "DataClassification=demo"
 )
 
-Invoke-Aws cloudformation deploy `
-  --template-file $templatePath `
-  --stack-name $StackName `
-  --parameter-overrides $parameterOverrides `
-  --tags $stackTags `
-  --region $Region
+$deployArgs = @(
+  "cloudformation",
+  "deploy",
+  "--template-file",
+  $templatePath,
+  "--stack-name",
+  $StackName,
+  "--parameter-overrides"
+) + $parameterOverrides + @(
+  "--tags"
+) + $stackTags + @(
+  "--region",
+  $Region
+)
+
+Invoke-Aws @deployArgs
 
 $outputs = Invoke-Aws cloudformation describe-stacks `
   --stack-name $StackName `

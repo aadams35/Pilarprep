@@ -20,7 +20,7 @@ flowchart TD
 
 ## Current Frontend Mode
 
-The AWS-hosted frontend is deployed to S3 + CloudFront and currently runs in browser-only demo mode. It does not call `/api/brief`, API Gateway, Lambda, or Bedrock from the public bundle. Live AWS mode is available through the server-backed local/Vinext route so the API key stays private.
+The AWS-hosted frontend is deployed to S3 + CloudFront and currently runs in browser-only demo mode. It does not call `/api/brief`, API Gateway, Lambda, or Bedrock from the public bundle. AI model mode is available through the server-backed local Next.js route so the API key stays private.
 
 Current frontend URL:
 

@@ -59,7 +59,7 @@ The low-cost demo path uses `us.amazon.nova-micro-v1:0`. Anthropic Sonnet profil
 
 ## Low-Cost Demo Guardrails
 
-Use `us.amazon.nova-micro-v1:0` for the default demo. Bedrock is on-demand, so model cost is token-based instead of hourly. Keep the public CloudFront bundle demo-only, keep the API key server-side, and avoid automated repeated calls. Add AWS Budgets or CloudWatch billing alarms before opening Live AWS mode beyond the hackathon team.
+Use `us.amazon.nova-micro-v1:0` for the default demo. Bedrock is on-demand, so model cost is token-based instead of hourly. Keep the public CloudFront bundle demo-only, keep the API key server-side, and avoid automated repeated calls. Add AWS Budgets or CloudWatch billing alarms before opening AI model mode beyond the hackathon team.
 ## Connect Frontend To Lambda
 
 After the script deploys, copy the `BriefApiUrl` output into local env:
@@ -69,7 +69,7 @@ PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
 PILLARPREP_BACKEND_API_KEY=<private-demo-key>
 ```
 
-Restart the local app, select `Live AWS`, generate a brief, and confirm the provider badge says `bedrock provider`. The UI should also show the S3 artifact key, DynamoDB state key, Bedrock model ID, token count, and latency after a live generation.
+Restart the local app. If `PILLARPREP_BACKEND_URL` is configured, the UI selects `AI model` mode by default. Generate a brief and confirm the provider badge says `bedrock provider`. The UI should also show the S3 artifact key, DynamoDB state key, Bedrock model ID, token count, and latency after a live generation.
 
 ## Demo Fallback Plan
 

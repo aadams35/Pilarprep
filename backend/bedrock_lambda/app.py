@@ -11,6 +11,7 @@ REGION = os.getenv("AWS_REGION", "us-east-1")
 ARTIFACT_BUCKET = os.getenv("ARTIFACT_BUCKET", "")
 PROJECT_TABLE = os.getenv("PROJECT_TABLE", "")
 PILLARPREP_API_KEY = os.getenv("PILLARPREP_API_KEY", "")
+LIST_ITEM_COUNT = 3
 
 
 def _metric(name, value=1, **dimensions):
@@ -78,59 +79,94 @@ def _load_payload(event):
     return json.loads(body or "{}")
 
 
+def _system_prompt():
+    return """
+You are PillarPrep, an AWS Solutions Architect briefing assistant.
+Generate concise, practical meeting preparation for AWS pre-sales teams.
+Return strict JSON only. Do not include markdown fences, comments, or prose outside JSON.
+Treat all generated content as preparation hypotheses to validate with the customer.
+Never claim that PillarPrep scraped, browsed, or verified LinkedIn or external profiles.
+""".strip()
+
+
 def _build_prompt(payload):
-    decision_makers = json.dumps(
-        payload.get("decisionMakers", []),
-        ensure_ascii=True,
-    )
+    request_context = {
+        "company": payload.get("company", ""),
+        "industry": payload.get("industry", ""),
+        "meetingType": payload.get("meetingType", ""),
+        "companySize": payload.get("companySize", ""),
+        "pillars": payload.get("pillars", []),
+        "context": payload.get("context", ""),
+        "decisionMakers": payload.get("decisionMakers", []),
+        "meetingNotes": payload.get("meetingNotes", ""),
+        "feedback": payload.get("feedback", []),
+        "role": payload.get("role", ""),
+        "prompt": payload.get("prompt", ""),
+        "mode": payload.get("mode", "prebrief"),
+    }
+
+    schema = {
+        "technical": ["string", "string", "string"],
+        "executive": ["string", "string", "string"],
+        "stakeholders": ["string", "string", "string"],
+        "gameplan": ["string", "string", "string"],
+        "objections": [
+            "Concern: customer concern. Response: practical response.",
+            "Concern: customer concern. Response: practical response.",
+            "Concern: customer concern. Response: practical response.",
+        ],
+        "projectAnswer": "one useful paragraph for the requested follow-on role and prompt",
+        "projectArtifacts": {
+            "twoWeekPlan": [
+                {"title": "string", "detail": "string", "owner": "string", "status": "string"},
+                {"title": "string", "detail": "string", "owner": "string", "status": "string"},
+                {"title": "string", "detail": "string", "owner": "string", "status": "string"},
+            ],
+            "riskRegister": [
+                {"title": "string", "detail": "string", "owner": "string", "status": "string"},
+                {"title": "string", "detail": "string", "owner": "string", "status": "string"},
+                {"title": "string", "detail": "string", "owner": "string", "status": "string"},
+            ],
+            "stakeholderMap": [
+                {"title": "string", "detail": "string", "owner": "string", "status": "string"},
+                {"title": "string", "detail": "string", "owner": "string", "status": "string"},
+                {"title": "string", "detail": "string", "owner": "string", "status": "string"},
+            ],
+            "followUpEmail": {"subject": "string", "body": "string"},
+        },
+        "citations": ["string", "string"],
+    }
 
     return f"""
-You are PillarPrep, an AWS Solutions Architect briefing assistant.
+Generate a PillarPrep response for the request below.
 
-Return ONLY valid JSON. Do not use markdown fences, prose before JSON, or prose after JSON.
-Use exactly these top-level keys:
-technical, executive, stakeholders, gameplan, objections, projectAnswer, projectArtifacts, citations.
+Required JSON schema:
+{json.dumps(schema, ensure_ascii=True, indent=2)}
 
-JSON shape requirements:
-- technical: exactly 3 concise strings for an SA technical conversation.
-- executive: exactly 3 concise strings with no AWS jargon.
-- stakeholders: exactly 3 concise strings based only on supplied decision-maker context.
-- gameplan: exactly 3 concise strings for how the SA should run the meeting.
-- objections: exactly 3 concise strings in "Concern: ... Response: ..." form.
-- projectAnswer: one useful paragraph for the follow-on role and prompt.
-- citations: 2-4 short source labels from supplied context, AWS Well-Architected, or Amazon Bedrock.
-- projectArtifacts.twoWeekPlan: exactly 3 objects with title, detail, owner, status.
-- projectArtifacts.riskRegister: exactly 3 objects with title, detail, owner, status.
-- projectArtifacts.stakeholderMap: exactly 3 objects with title, detail, owner, status.
-- projectArtifacts.followUpEmail: object with subject and body.
-
-Company: {payload.get("company")}
-Industry: {payload.get("industry")}
-Meeting type: {payload.get("meetingType")}
-Company size: {payload.get("companySize")}
-AWS pillar priorities: {", ".join(payload.get("pillars", []))}
-Known context: {payload.get("context")}
-Decision-maker context: {decision_makers}
-Meeting notes: {payload.get("meetingNotes", "")}
-Feedback: {", ".join(payload.get("feedback", []))}
-Follow-on role: {payload.get("role", "")}
-Follow-on prompt: {payload.get("prompt", "")}
-
-Rules:
-- Generate both technical and executive material.
-- Keep the executive brief low-jargon.
-- Tie recommendations to AWS Well-Architected pillars.
-- Include practical AWS services only when useful.
+Content requirements:
+- technical: exactly 3 complete SA-facing sentences, each with a clear action or validation point, not headings.
+- executive: exactly 3 complete business-facing sentences with no AWS jargon, not headings.
+- stakeholders: exactly 3 complete sentences based only on supplied decision-maker context; say what to validate if context is thin.
+- gameplan: exactly 3 complete sentences for how the SA should run the meeting.
+- objections: exactly 3 complete sentences in "Concern: ... Response: ..." form.
+- projectAnswer: answer the requested follow-on role and prompt using the brief context.
+- projectArtifacts: include exactly 3 two-week plan items, exactly 3 risks, exactly 3 stakeholder map items, and one follow-up email.
+- citations: 2-4 short labels only, such as "Customer context", "Decision-maker notes", or "AWS Well-Architected pillars".
+- Tie technical content to the selected AWS Well-Architected pillars.
+- Include AWS services only when useful for the conversation.
 - Treat unknowns as assumptions to validate.
-- Treat decision-maker context as user-provided or customer-approved notes.
-- Do not claim to scrape, browse, or verify LinkedIn or any external profile.
-"""
+- Keep output compact enough for a pre-meeting brief, but never return one- or two-word labels such as "IAM roles" or "Secure migration".
+
+Request JSON:
+{json.dumps(request_context, ensure_ascii=True, indent=2)}
+""".strip()
 
 
 def _invoke_bedrock(prompt):
     client = boto3.client("bedrock-runtime", region_name=REGION)
     result = client.converse(
         modelId=MODEL_ID,
+        system=[{"text": _system_prompt()}],
         messages=[
             {
                 "role": "user",
@@ -138,28 +174,269 @@ def _invoke_bedrock(prompt):
             }
         ],
         inferenceConfig={
-            "temperature": 0.3,
-            "maxTokens": 2400,
+            "temperature": 0.2,
+            "maxTokens": 2600,
         },
     )
+    content = result.get("output", {}).get("message", {}).get("content", [])
+    text = "\n".join(
+        str(block.get("text", ""))
+        for block in content
+        if isinstance(block, dict) and block.get("text")
+    ).strip()
+
     return {
-        "text": result["output"]["message"]["content"][0]["text"],
+        "text": text,
         "usage": result.get("usage", {}),
         "metrics": result.get("metrics", {}),
     }
 
 
+def _clean_string(value):
+    if value is None:
+        return ""
+
+    return str(value).strip()
+
+
 def _as_string_list(value):
     if isinstance(value, list):
-        return [str(item) for item in value if item]
+        return [_clean_string(item) for item in value if _clean_string(item)]
 
     if value:
-        return [str(value)]
+        return [_clean_string(value)]
 
     return []
 
 
-def _parse_model_response(model_text):
+def _first_pillar(payload):
+    pillars = payload.get("pillars") if isinstance(payload.get("pillars"), list) else []
+    return _clean_string(pillars[0]) if pillars else "the top Well-Architected priority"
+
+
+def _safe_company(payload):
+    return _clean_string(payload.get("company")) or "the customer"
+
+
+def _fallback_project_artifacts(payload):
+    company = _safe_company(payload)
+    primary_pillar = _first_pillar(payload)
+    decision_makers = payload.get("decisionMakers") if isinstance(payload.get("decisionMakers"), list) else []
+    first_person = decision_makers[0] if decision_makers and isinstance(decision_makers[0], dict) else {}
+    stakeholder_name = _clean_string(first_person.get("name")) or "Primary sponsor"
+    stakeholder_title = _clean_string(first_person.get("title")) or "Role to confirm"
+
+    return {
+        "twoWeekPlan": [
+            {
+                "title": "Days 1-2: Confirm outcomes",
+                "detail": f"Validate success criteria, decision process, and the business event driving urgency for {company}.",
+                "owner": "SA / Sales",
+                "status": "Ready",
+            },
+            {
+                "title": "Days 3-7: Validate current state",
+                "detail": f"Review architecture, data boundaries, RTO/RPO, compliance needs, and {primary_pillar.lower()} assumptions.",
+                "owner": "SA / Customer technical owner",
+                "status": "Ready",
+            },
+            {
+                "title": "Days 8-10: Shape pilot",
+                "detail": "Define pilot scope, rollback criteria, owners, risks, and executive checkpoint before broader delivery.",
+                "owner": "PM / SA",
+                "status": "Queued",
+            },
+        ],
+        "riskRegister": [
+            {
+                "title": "Unvalidated assumptions",
+                "detail": "Generated recommendations must be confirmed in discovery before they become architecture decisions.",
+                "owner": "SA",
+                "status": "High",
+            },
+            {
+                "title": "Stakeholder alignment",
+                "detail": "Executive success criteria and technical acceptance criteria may not match yet.",
+                "owner": "Sales / PM",
+                "status": "Medium",
+            },
+            {
+                "title": "Implementation scope creep",
+                "detail": "Keep the first pilot bounded so cost, reliability, and security evidence can be reviewed quickly.",
+                "owner": "PM",
+                "status": "Medium",
+            },
+        ],
+        "stakeholderMap": [
+            {
+                "title": stakeholder_name,
+                "detail": f"Validate priorities for {stakeholder_title} and confirm what success looks like from that seat.",
+                "owner": stakeholder_title,
+                "status": "Validate",
+            },
+            {
+                "title": "Technical owner",
+                "detail": "Confirm current-state architecture, constraints, integration points, and operating model.",
+                "owner": "Customer architecture lead",
+                "status": "Identify",
+            },
+            {
+                "title": "Security / compliance approver",
+                "detail": "Confirm control evidence, data classification, identity boundaries, and approval path.",
+                "owner": "Customer security lead",
+                "status": "Identify",
+            },
+        ],
+        "followUpEmail": {
+            "subject": f"Follow-up from PillarPrep briefing for {company}",
+            "body": (
+                f"Thanks for the conversation. We captured the key context for {company}, with "
+                f"{primary_pillar.lower()} as an early validation area.\n\n"
+                "Recommended next step: run a focused working session to confirm stakeholders, "
+                "current-state assumptions, success criteria, risks, and pilot scope."
+            ),
+        },
+    }
+
+
+def _fallback_generated(payload, model_text=""):
+    company = _safe_company(payload)
+    primary_pillar = _first_pillar(payload)
+    industry = _clean_string(payload.get("industry")) or "the customer's industry"
+    meeting_type = _clean_string(payload.get("meetingType")) or "customer meeting"
+    context = _clean_string(payload.get("context"))
+    model_hint = " The model response was not valid JSON, so this safe fallback should be refined before sharing." if model_text else ""
+
+    decision_makers = payload.get("decisionMakers") if isinstance(payload.get("decisionMakers"), list) else []
+    stakeholder_lines = []
+    for person in decision_makers[:LIST_ITEM_COUNT]:
+        if isinstance(person, dict):
+            name = _clean_string(person.get("name")) or "Decision maker"
+            title = _clean_string(person.get("title")) or "Role to confirm"
+            person_context = _clean_string(person.get("context"))
+            signal = f" Signal to validate: {person_context}" if person_context else " Confirm priorities and decision criteria before tailoring the talk track."
+            stakeholder_lines.append(f"{name}, {title}: connect the meeting opening to {primary_pillar.lower()} and validate what outcome matters most.{signal}")
+
+    generic_stakeholder_lines = [
+        "Identify the economic buyer before the follow-up so the business outcome, funding path, and definition of success have an accountable owner.",
+        "Identify the technical owner before the follow-up so architecture assumptions, dependencies, and implementation constraints can be validated quickly.",
+        "Identify the security or compliance approver before the follow-up so control evidence, data boundaries, and review checkpoints are visible early.",
+    ]
+    for line in generic_stakeholder_lines:
+        if len(stakeholder_lines) >= LIST_ITEM_COUNT:
+            break
+        stakeholder_lines.append(line)
+
+    return {
+        "technical": [
+            f"For {company}, validate the current architecture, integration path, identity model, data boundaries, and operational ownership before recommending services.",
+            f"Use {primary_pillar} as the first deep-dive lens; confirm RTO/RPO, compliance obligations, latency targets, observability, and rollback expectations.",
+            "Relevant AWS references include Lambda/API Gateway for orchestration, S3 for artifacts, DynamoDB for project state, CloudWatch for telemetry, and Bedrock for generation.",
+        ],
+        "executive": [
+            f"{company} is preparing for a {meeting_type.lower()} where the business story should stay tied to risk reduction, speed, and measurable progress.",
+            f"Frame the work around {industry} outcomes: clearer decisions, reduced delivery friction, and a safer path from discussion to implementation.",
+            f"The next executive decision is whether to approve a bounded validation path with clear owners, success measures, and checkpoints.{model_hint}",
+        ],
+        "stakeholders": stakeholder_lines[:LIST_ITEM_COUNT],
+        "gameplan": [
+            "Open by confirming the business event driving urgency, then map each technical unknown to business impact.",
+            f"Spend the technical portion on {primary_pillar.lower()}, current-state constraints, dependencies, risks, and evidence the customer needs to proceed.",
+            "Close with confirmed goals, open questions, owners, next meeting, and whether the final brief should be promoted into Project Brain.",
+        ],
+        "objections": [
+            "Concern: We cannot risk disruption. Response: propose a bounded pilot with rollback criteria and a checkpoint before broader rollout.",
+            "Concern: This may increase cost. Response: start with unit-cost visibility, right-sizing, and a decision point tied to business value.",
+            "Concern: We do not have enough internal capacity. Response: identify the smallest validation path and assign owners only for the first two weeks.",
+        ],
+        "projectAnswer": f"Start with a two-week validation sprint for {company}: confirm stakeholders, validate {primary_pillar.lower()} assumptions, capture current-state architecture, document risks and owners, and publish a decision log before implementation expands.",
+        "projectArtifacts": _fallback_project_artifacts(payload),
+        "citations": ["Customer context", "Decision-maker notes", "AWS Well-Architected pillars" if context else "PillarPrep fallback"],
+    }
+
+
+def _is_useful_brief_line(item):
+    words = item.replace("/", " ").replace("-", " ").split()
+    return len(words) >= 6
+
+
+def _ensure_string_items(value, fallback_items, count=LIST_ITEM_COUNT):
+    items = [item for item in _as_string_list(value) if _is_useful_brief_line(item)]
+    fallback = _as_string_list(fallback_items)
+
+    for item in fallback:
+        if len(items) >= count:
+            break
+        if item not in items:
+            items.append(item)
+
+    return items[:count]
+
+
+def _artifact_item(value, fallback):
+    source = value if isinstance(value, dict) else {}
+    fallback_source = fallback if isinstance(fallback, dict) else {}
+
+    title = _clean_string(source.get("title")) or _clean_string(fallback_source.get("title")) or "Project artifact"
+    detail = _clean_string(source.get("detail")) or _clean_string(fallback_source.get("detail")) or "No detail returned."
+    owner = _clean_string(source.get("owner")) or _clean_string(fallback_source.get("owner")) or "TBD"
+    status = _clean_string(source.get("status")) or _clean_string(fallback_source.get("status")) or "Queued"
+
+    return {"title": title, "detail": detail, "owner": owner, "status": status}
+
+
+def _artifact_list(value, fallback_items):
+    source_items = value if isinstance(value, list) else []
+    result = []
+
+    for index in range(LIST_ITEM_COUNT):
+        source = source_items[index] if index < len(source_items) else {}
+        fallback = fallback_items[index] if index < len(fallback_items) else {}
+        result.append(_artifact_item(source, fallback))
+
+    return result
+
+
+def _normalize_project_artifacts(value, fallback):
+    source = value if isinstance(value, dict) else {}
+    fallback_email = fallback["followUpEmail"]
+    source_email = source.get("followUpEmail") if isinstance(source.get("followUpEmail"), dict) else {}
+
+    return {
+        "twoWeekPlan": _artifact_list(source.get("twoWeekPlan"), fallback["twoWeekPlan"]),
+        "riskRegister": _artifact_list(source.get("riskRegister"), fallback["riskRegister"]),
+        "stakeholderMap": _artifact_list(source.get("stakeholderMap"), fallback["stakeholderMap"]),
+        "followUpEmail": {
+            "subject": _clean_string(source_email.get("subject")) or fallback_email["subject"],
+            "body": _clean_string(source_email.get("body")) or fallback_email["body"],
+        },
+    }
+
+
+def _normalize_generated(parsed, payload, model_text=""):
+    fallback = _fallback_generated(payload, model_text)
+    source = parsed if isinstance(parsed, dict) else {}
+    citations = _as_string_list(source.get("citations"))
+
+    for citation in fallback["citations"]:
+        if len(citations) >= 2:
+            break
+        if citation not in citations:
+            citations.append(citation)
+
+    return {
+        "technical": _ensure_string_items(source.get("technical"), fallback["technical"]),
+        "executive": _ensure_string_items(source.get("executive"), fallback["executive"]),
+        "stakeholders": _ensure_string_items(source.get("stakeholders"), fallback["stakeholders"]),
+        "gameplan": _ensure_string_items(source.get("gameplan"), fallback["gameplan"]),
+        "objections": _ensure_string_items(source.get("objections"), fallback["objections"]),
+        "projectAnswer": _clean_string(source.get("projectAnswer")) or fallback["projectAnswer"],
+        "projectArtifacts": _normalize_project_artifacts(source.get("projectArtifacts"), fallback["projectArtifacts"]),
+        "citations": citations[:4] or fallback["citations"][:2],
+    }
+
+
+def _parse_model_response(model_text, payload):
     cleaned = model_text.strip()
 
     if cleaned.startswith("```"):
@@ -177,19 +454,7 @@ def _parse_model_response(model_text):
         cleaned = cleaned[start : end + 1]
 
     parsed = json.loads(cleaned)
-
-    return {
-        "technical": _as_string_list(parsed.get("technical")),
-        "executive": _as_string_list(parsed.get("executive")),
-        "stakeholders": _as_string_list(parsed.get("stakeholders")),
-        "gameplan": _as_string_list(parsed.get("gameplan")),
-        "objections": _as_string_list(parsed.get("objections")),
-        "projectAnswer": str(parsed.get("projectAnswer", "")),
-        "projectArtifacts": parsed.get("projectArtifacts")
-        if isinstance(parsed.get("projectArtifacts"), dict)
-        else {},
-        "citations": _as_string_list(parsed.get("citations")),
-    }
+    return _normalize_generated(parsed, payload, model_text)
 
 
 def _project_id(payload):
@@ -272,7 +537,13 @@ def handler(event, _context):
         return _response(400, {"error": "pillars must be an array"})
 
     prompt = _build_prompt(payload)
-    bedrock_result = _invoke_bedrock(prompt)
+
+    try:
+        bedrock_result = _invoke_bedrock(prompt)
+    except Exception as error:
+        _metric("BriefErrors", ErrorType="BedrockInvocation")
+        return _response(502, {"error": f"Bedrock invocation failed: {error}"})
+
     if isinstance(bedrock_result, dict):
         model_text = str(bedrock_result.get("text", ""))
         usage = bedrock_result.get("usage", {})
@@ -283,11 +554,10 @@ def handler(event, _context):
         metrics = {}
 
     try:
-        generated = _parse_model_response(model_text)
-    except (AttributeError, json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        generated = _parse_model_response(model_text, payload)
+    except (AttributeError, json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError):
         _metric("BriefErrors", ErrorType="ModelJsonFallback")
         generated = _fallback_generated(payload, model_text)
-
 
     generated["provider"] = "bedrock"
     generated["generatedAt"] = datetime.now(timezone.utc).isoformat()

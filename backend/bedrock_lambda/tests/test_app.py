@@ -69,9 +69,9 @@ VALID_PAYLOAD = {
 
 
 class LambdaHandlerTest(unittest.TestCase):
-    def invoke(self, payload):
+    def invoke(self, payload, model_response=MODEL_RESPONSE):
         event = {"body": json.dumps(payload)}
-        with patch.object(app, "_invoke_bedrock", return_value=MODEL_RESPONSE):
+        with patch.object(app, "_invoke_bedrock", return_value=model_response):
             response = app.handler(event, None)
         response["json"] = json.loads(response["body"])
         return response
@@ -82,8 +82,15 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertEqual(response["statusCode"], 200)
         body = response["json"]
         self.assertEqual(body["provider"], "bedrock")
-        self.assertIn("projectArtifacts", body)
-        self.assertEqual(body["projectArtifacts"]["followUpEmail"]["subject"].startswith("Follow-up"), True)
+        self.assertEqual(len(body["technical"]), 3)
+        self.assertEqual(len(body["executive"]), 3)
+        self.assertEqual(len(body["stakeholders"]), 3)
+        self.assertEqual(len(body["gameplan"]), 3)
+        self.assertEqual(len(body["objections"]), 3)
+        self.assertEqual(len(body["projectArtifacts"]["twoWeekPlan"]), 3)
+        self.assertEqual(len(body["projectArtifacts"]["riskRegister"]), 3)
+        self.assertEqual(len(body["projectArtifacts"]["stakeholderMap"]), 3)
+        self.assertTrue(body["projectArtifacts"]["followUpEmail"]["subject"].startswith("Follow-up"))
         self.assertEqual(body["metadata"]["projectId"], "apex-mutual")
 
     def test_accepts_base64_api_gateway_body(self):
@@ -95,7 +102,6 @@ class LambdaHandlerTest(unittest.TestCase):
 
         self.assertEqual(response["statusCode"], 200)
 
-
     def test_rejects_missing_api_key_when_configured(self):
         event = {"body": json.dumps(VALID_PAYLOAD), "headers": {}}
 
@@ -105,6 +111,7 @@ class LambdaHandlerTest(unittest.TestCase):
         response["json"] = json.loads(response["body"])
         self.assertEqual(response["statusCode"], 401)
         self.assertEqual(response["json"]["error"], "Unauthorized")
+
     def test_rejects_malformed_decision_makers(self):
         payload = dict(VALID_PAYLOAD, decisionMakers="bad")
         response = self.invoke(payload)
@@ -118,6 +125,32 @@ class LambdaHandlerTest(unittest.TestCase):
 
         self.assertEqual(response["statusCode"], 400)
         self.assertIn("pillars", response["json"]["error"])
+
+    def test_uses_safe_fallback_when_model_returns_plain_text(self):
+        response = self.invoke(VALID_PAYLOAD, "Here is a useful brief, but not JSON.")
+
+        self.assertEqual(response["statusCode"], 200)
+        body = response["json"]
+        self.assertEqual(body["provider"], "bedrock")
+        self.assertEqual(len(body["technical"]), 3)
+        self.assertEqual(len(body["projectArtifacts"]["twoWeekPlan"]), 3)
+        self.assertIn("Customer context", body["citations"])
+
+    def test_parses_markdown_fenced_json(self):
+        response = self.invoke(VALID_PAYLOAD, f"```json\n{MODEL_RESPONSE}\n```")
+
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(response["json"]["projectAnswer"], "Run a two-week sprint with Lena Ortiz aligned.")
+
+    def test_bedrock_invocation_failure_returns_502(self):
+        event = {"body": json.dumps(VALID_PAYLOAD)}
+
+        with patch.object(app, "_invoke_bedrock", side_effect=RuntimeError("model unavailable")):
+            response = app.handler(event, None)
+
+        response["json"] = json.loads(response["body"])
+        self.assertEqual(response["statusCode"], 502)
+        self.assertIn("Bedrock invocation failed", response["json"]["error"])
 
 
 if __name__ == "__main__":
