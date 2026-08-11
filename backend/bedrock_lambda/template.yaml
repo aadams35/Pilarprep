@@ -99,6 +99,8 @@ Globals:
         ARTIFACT_BUCKET: !Ref BriefArtifactsBucket
         PROJECT_TABLE: !Ref ProjectStateTable
         PILLARPREP_API_KEY: !Ref PillarPrepApiKey
+        BEDROCK_GUARDRAIL_ID: !GetAtt BriefSafetyGuardrail.GuardrailId
+        BEDROCK_GUARDRAIL_VERSION: !GetAtt BriefSafetyGuardrailVersion.Version
 
 Resources:
   BriefApi:
@@ -304,6 +306,11 @@ Resources:
                   - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/${BedrockFoundationModelId}"
                   - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/${BedrockModelId}"
                   - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:application-inference-profile/*"
+              - Sid: ApplyConfiguredBedrockGuardrail
+                Effect: Allow
+                Action:
+                  - bedrock:ApplyGuardrail
+                Resource: !GetAtt BriefSafetyGuardrail.GuardrailArn
         - PolicyName: !Sub "${ResourcePrefix}-project-artifacts"
           PolicyDocument:
             Version: "2012-10-17"
@@ -420,6 +427,169 @@ Resources:
         - Key: DataClassification
           Value: demo
 
+  BriefSafetyGuardrail:
+    Type: AWS::Bedrock::Guardrail
+    Properties:
+      Name: !Sub "${ResourcePrefix}-brief-safety"
+      Description: !Sub "${ProjectName} ${EnvironmentName} safety guardrail for generated SA briefing content"
+      BlockedInputMessaging: "PillarPrep blocked this request because it does not meet the demo safety policy. Please remove sensitive or unsafe content and try again."
+      BlockedOutputsMessaging: "PillarPrep blocked the model response because it does not meet the demo safety policy. Please refine the prompt and try again."
+      ContentPolicyConfig:
+        FiltersConfig:
+          - Type: HATE
+            InputStrength: MEDIUM
+            OutputStrength: MEDIUM
+          - Type: INSULTS
+            InputStrength: MEDIUM
+            OutputStrength: MEDIUM
+          - Type: SEXUAL
+            InputStrength: MEDIUM
+            OutputStrength: MEDIUM
+          - Type: VIOLENCE
+            InputStrength: MEDIUM
+            OutputStrength: MEDIUM
+          - Type: MISCONDUCT
+            InputStrength: MEDIUM
+            OutputStrength: MEDIUM
+          - Type: PROMPT_ATTACK
+            InputStrength: HIGH
+            OutputStrength: NONE
+      Tags:
+        - Key: Name
+          Value: !Sub "${ResourcePrefix}-brief-safety"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Application
+          Value: sa-briefing-generator
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: aadams35/Pilarprep
+        - Key: DataClassification
+          Value: demo
+
+  BriefSafetyGuardrailVersion:
+    Type: AWS::Bedrock::GuardrailVersion
+    Properties:
+      GuardrailIdentifier: !GetAtt BriefSafetyGuardrail.GuardrailId
+      Description: !Sub "${ProjectName} ${EnvironmentName} briefing safety policy version"
+
+  BriefFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ResourcePrefix}-brief-generator-errors"
+      AlarmDescription: !Sub "${ProjectName} ${EnvironmentName} Lambda has one or more failed invocations in five minutes."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BriefFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Name
+          Value: !Sub "${ResourcePrefix}-brief-generator-errors"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Application
+          Value: sa-briefing-generator
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: aadams35/Pilarprep
+        - Key: DataClassification
+          Value: demo
+
+  BriefFunctionThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ResourcePrefix}-brief-generator-throttles"
+      AlarmDescription: !Sub "${ProjectName} ${EnvironmentName} Lambda throttled one or more requests in five minutes."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BriefFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Name
+          Value: !Sub "${ResourcePrefix}-brief-generator-throttles"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Application
+          Value: sa-briefing-generator
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: aadams35/Pilarprep
+        - Key: DataClassification
+          Value: demo
+
+  BriefFunctionDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ResourcePrefix}-brief-generator-slow"
+      AlarmDescription: !Sub "${ProjectName} ${EnvironmentName} Lambda average duration is over 20 seconds in five minutes."
+      Namespace: AWS/Lambda
+      MetricName: Duration
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BriefFunction
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 20000
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Name
+          Value: !Sub "${ResourcePrefix}-brief-generator-slow"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Application
+          Value: sa-briefing-generator
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: aadams35/Pilarprep
+        - Key: DataClassification
+          Value: demo
   PillarPrepDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
@@ -565,6 +735,21 @@ Outputs:
   DemoInvokeRoleName:
     Description: IAM role assumed by unauthenticated demo identities
     Value: !Ref DemoInvokeRole
+  BedrockGuardrailId:
+    Description: Bedrock Guardrail ID applied to brief generation
+    Value: !GetAtt BriefSafetyGuardrail.GuardrailId
+  BedrockGuardrailVersion:
+    Description: Bedrock Guardrail version applied to brief generation
+    Value: !GetAtt BriefSafetyGuardrailVersion.Version
+  BriefFunctionErrorAlarmName:
+    Description: CloudWatch alarm for Lambda invocation errors
+    Value: !Ref BriefFunctionErrorAlarm
+  BriefFunctionThrottleAlarmName:
+    Description: CloudWatch alarm for Lambda throttles
+    Value: !Ref BriefFunctionThrottleAlarm
+  BriefFunctionDurationAlarmName:
+    Description: CloudWatch alarm for slow Lambda responses
+    Value: !Ref BriefFunctionDurationAlarm
   DemoDailyBudgetName:
     Description: AWS Budget guardrail for the demo
     Value: !Ref DemoDailyBudget

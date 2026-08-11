@@ -25,7 +25,7 @@ Use this before sharing the CloudFront URL or walking into the hackathon demo.
 - Start with `Apex Mutual` for the cleanest executive modernization story.
 - Use `Reduce AWS jargon` to show the refinement loop.
 - Use the Project model `PM` role to show implementation follow-through.
-- End on AWS value: managed model, no stored foundation model, IAM-secured API, S3 artifacts, DynamoDB state, and Knowledge Bases/Strands as the Phase 2 expansion.
+- End on AWS value: managed model, no stored foundation model, IAM-secured API, Bedrock Guardrails, CloudWatch alarms, S3 artifacts, DynamoDB state, and Knowledge Bases/Strands as the Phase 2 expansion.
 
 ## Fallback Plan
 

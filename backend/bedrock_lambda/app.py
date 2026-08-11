@@ -11,6 +11,8 @@ REGION = os.getenv("AWS_REGION", "us-east-1")
 ARTIFACT_BUCKET = os.getenv("ARTIFACT_BUCKET", "")
 PROJECT_TABLE = os.getenv("PROJECT_TABLE", "")
 PILLARPREP_API_KEY = os.getenv("PILLARPREP_API_KEY", "")
+GUARDRAIL_ID = os.getenv("BEDROCK_GUARDRAIL_ID", "")
+GUARDRAIL_VERSION = os.getenv("BEDROCK_GUARDRAIL_VERSION", "")
 LIST_ITEM_COUNT = 4
 
 
@@ -219,20 +221,29 @@ Request JSON:
 
 def _invoke_bedrock(prompt):
     client = boto3.client("bedrock-runtime", region_name=REGION)
-    result = client.converse(
-        modelId=MODEL_ID,
-        system=[{"text": _system_prompt()}],
-        messages=[
+    converse_args = {
+        "modelId": MODEL_ID,
+        "system": [{"text": _system_prompt()}],
+        "messages": [
             {
                 "role": "user",
                 "content": [{"text": prompt}],
             }
         ],
-        inferenceConfig={
+        "inferenceConfig": {
             "temperature": 0.2,
             "maxTokens": 5200,
         },
-    )
+    }
+
+    if GUARDRAIL_ID and GUARDRAIL_VERSION:
+        converse_args["guardrailConfig"] = {
+            "guardrailIdentifier": GUARDRAIL_ID,
+            "guardrailVersion": GUARDRAIL_VERSION,
+            "trace": "enabled",
+        }
+
+    result = client.converse(**converse_args)
     content = result.get("output", {}).get("message", {}).get("content", [])
     text = "\n".join(
         str(block.get("text", ""))
@@ -690,6 +701,10 @@ def handler(event, _context):
     generated["generatedAt"] = datetime.now(timezone.utc).isoformat()
     metadata = _store_project_artifacts(payload, generated)
     metadata["modelId"] = MODEL_ID
+    if GUARDRAIL_ID:
+        metadata["guardrailId"] = GUARDRAIL_ID
+    if GUARDRAIL_VERSION:
+        metadata["guardrailVersion"] = GUARDRAIL_VERSION
     if isinstance(usage, dict):
         for source_key, target_key in (
             ("inputTokens", "inputTokens"),

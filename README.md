@@ -17,7 +17,7 @@ Live demos:
 - Frontend: React, Next-compatible Vinext app plus a static Vite build for AWS hosting
 - Hosted demo: private S3 static assets behind CloudFront
 - AWS auth: API Gateway IAM auth with short-lived Cognito Identity demo credentials, no API key in the browser
-- Backend: API Gateway HTTP API, Lambda, Amazon Bedrock, S3 artifacts, DynamoDB project state
+- Backend: API Gateway HTTP API, Lambda, Amazon Bedrock, Bedrock Guardrails, S3 artifacts, DynamoDB project state
 - Demo provider: deterministic local generator in `lib/pillarprep/generator.ts`
 - Decision-maker context: manual/customer-approved profile notes, not automated LinkedIn scraping
 - Working Project model loop: role-based follow-on answers plus generated handoff artifacts
@@ -28,6 +28,7 @@ Live demos:
 - Demo script: `docs/demo-script.md`
 - Demo-day checklist: `docs/demo-day-readiness-checklist.md`
 - Judge walkthrough: `docs/judge-walkthrough.md`
+- Presentation talk track: `docs/presentation-talk-track.md`
 - Project model tools: `docs/project-model-tools.md`
 - Brief quality eval: `npm run eval:briefs`
 
@@ -126,7 +127,7 @@ PillarPrep does not store or host the foundation model. Amazon Bedrock manages t
 What PillarPrep stores:
 
 - Prompt contract and fallback rules: versioned in the Lambda code and GitHub repo.
-- Generated brief artifact: request, response, timestamp, provider, and project metadata in S3.
+- Generated brief artifact: request, response, timestamp, provider, guardrail metadata, and project metadata in S3.
 - Project state index: projectId, sortKey, company, meeting type, provider, and createdAt in DynamoDB.
 - Browser workspace: local draft state only, stored in the user's browser until reset.
 
@@ -166,7 +167,7 @@ Deploy the backend first so the frontend deploy script can discover the API URL 
 .\scripts\deploy-aws-backend.ps1 -Region us-east-1 -AllowedOrigin https://d2e0btay0ynyf.cloudfront.net -PillarPrepApiKey "" -DailyBudgetLimitUsd 1
 ```
 
-That script packages and deploys API Gateway, Lambda, S3, DynamoDB, IAM controls, a Cognito Identity Pool demo role, a daily AWS Budget, and a CloudWatch dashboard. Full deployment steps are in `docs/aws-lambda-demo-runbook.md`, the IAM control summary is in `docs/aws-iam-controls.md`, and the current infrastructure map is in `docs/aws-infrastructure-design.md`.
+That script packages and deploys API Gateway, Lambda, Bedrock Guardrails, S3, DynamoDB, IAM controls, a Cognito Identity Pool demo role, a daily AWS Budget, CloudWatch alarms, and a CloudWatch dashboard. Full deployment steps are in `docs/aws-lambda-demo-runbook.md`, the IAM control summary is in `docs/aws-iam-controls.md`, and the current infrastructure map is in `docs/aws-infrastructure-design.md`.
 
 The backend stack outputs `BriefApiUrl`, `DemoIdentityPoolId`, `DashboardUrl`, `ArtifactBucketName`, and `ProjectStateTableName`. Live Bedrock responses include metadata with `artifactKey`, `projectId`, and `stateKey` so the UI can show where the project artifact was saved.
 
@@ -182,7 +183,7 @@ VITE_PILLARPREP_BACKEND_REGION=us-east-1
 VITE_PILLARPREP_COGNITO_IDENTITY_POOL_ID=us-east-1:example
 ```
 
-For production, replace the public unauthenticated demo identity with real user auth, keep API Gateway IAM authorization, add Bedrock Guardrails, configure CloudWatch alarms, and tighten model quotas before broader sharing.
+For production, replace the public unauthenticated demo identity with real user auth, keep API Gateway IAM authorization, route users into authorized client workspaces, connect CloudWatch alarms to notifications, and tighten model quotas before broader sharing.
 
 Optional Strands reference:
 

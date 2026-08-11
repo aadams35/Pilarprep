@@ -202,6 +202,30 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertIn("exactly 4 SA-facing paragraphs", prompt)
         self.assertIn("Ask:", prompt)
 
+    def test_bedrock_invocation_uses_guardrail_when_configured(self):
+        captured = {}
+
+        class FakeBedrockClient:
+            def converse(self, **kwargs):
+                captured.update(kwargs)
+                return {
+                    "output": {"message": {"content": [{"text": MODEL_RESPONSE}]}},
+                    "usage": {"inputTokens": 10, "outputTokens": 20, "totalTokens": 30},
+                    "metrics": {"latencyMs": 1234},
+                }
+
+        with (
+            patch.object(app.boto3, "client", return_value=FakeBedrockClient()),
+            patch.object(app, "GUARDRAIL_ID", "guardrail-abc123"),
+            patch.object(app, "GUARDRAIL_VERSION", "1"),
+        ):
+            result = app._invoke_bedrock("Generate the demo brief")
+
+        self.assertEqual(result["text"], MODEL_RESPONSE)
+        self.assertEqual(captured["guardrailConfig"]["guardrailIdentifier"], "guardrail-abc123")
+        self.assertEqual(captured["guardrailConfig"]["guardrailVersion"], "1")
+        self.assertEqual(captured["guardrailConfig"]["trace"], "enabled")
+
     def test_uses_safe_fallback_when_model_returns_plain_text(self):
         response = self.invoke(VALID_PAYLOAD, "Here is a useful brief, but not JSON.")
 

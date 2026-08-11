@@ -38,4 +38,4 @@ Expected result: CloudFront `200`, unsigned API `403`, signed API `provider=bedr
 
 ## Close
 
-This is not just a prompt demo. It is an AWS-native workflow that turns pre-sales discovery into reusable project memory, with a clear path to Bedrock Knowledge Bases and Strands for deeper follow-on orchestration.
+This is not just a prompt demo. It is an AWS-native workflow that turns pre-sales discovery into reusable project memory, with guardrails and monitoring already in place and a clear path to Bedrock Knowledge Bases and Strands for deeper follow-on orchestration.

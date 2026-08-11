@@ -167,11 +167,17 @@ if (!body.metadata?.artifactKey || !body.metadata?.stateKey) {
   throw new Error("Live response did not include S3 artifactKey and DynamoDB stateKey metadata.");
 }
 
+if (!body.metadata?.guardrailId || !body.metadata?.guardrailVersion) {
+  throw new Error("Live response did not include Bedrock guardrail metadata.");
+}
+
 console.table({
   cloudFront: site.status,
   unsignedApi: unsigned.status,
   provider: body.provider,
   modelId: body.metadata.modelId,
+  guardrailId: body.metadata.guardrailId,
+  guardrailVersion: body.metadata.guardrailVersion,
   artifactKey: body.metadata.artifactKey,
   stateKey: body.metadata.stateKey,
   totalTokens: body.metadata.totalTokens ?? "n/a",

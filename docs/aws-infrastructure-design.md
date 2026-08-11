@@ -14,13 +14,17 @@ flowchart TD
   UI -->|SigV4 signed request| API[API Gateway HTTP API IAM Auth]
   DEMOROLE -->|execute-api:Invoke only| API
   API --> LAMBDA[AWS Lambda Python Handler]
-  LAMBDA --> BEDROCK[Amazon Bedrock Nova Micro]
+  LAMBDA -->|Converse with guardrailConfig| BEDROCK[Amazon Bedrock Nova Micro]
+  LAMBDA --> SAFETY[Bedrock Guardrails]
+  SAFETY --> BEDROCK
   BEDROCK --> LAMBDA
   LAMBDA --> ARTIFACTS[S3 Brief Artifact Bucket]
   LAMBDA --> STATE[DynamoDB Project State Table]
   LAMBDA --> API
   API --> UI
   LAMBDA --> DASH[CloudWatch Logs Metrics Dashboard]
+  ALARMS[CloudWatch Alarms]
+  LAMBDA --> ALARMS
   BUDGET[AWS Budget 1 USD Daily Guardrail] --> DASH
 ```
 
@@ -52,7 +56,7 @@ PillarPrep does not store a copy of the Bedrock foundation model. The configured
 
 Stored by PillarPrep:
 
-- Lambda code stores the prompt contract, schema instructions, and structured fallback behavior.
+- Lambda code stores the prompt contract, schema instructions, structured fallback behavior, and the Bedrock guardrail configuration reference.
 - S3 stores generated brief artifacts as JSON documents containing the request, response, timestamp, provider, and project metadata.
 - DynamoDB stores project state records keyed by `projectId` and `sortKey` so the Project model can track generated briefs and handoff state.
 - The browser stores unsaved local workspace state for demo continuity.
@@ -74,6 +78,9 @@ The backend stack deploys these resources:
 - `DemoInvokeIdentityPool`: Cognito Identity Pool for public demo credentials
 - `DemoInvokeRole`: limited IAM role that can invoke only the brief route
 - `BriefFunction`: Python 3.12 AWS Lambda handler
+- `BriefSafetyGuardrail`: Bedrock Guardrail for harmful content and prompt-attack filtering
+- `BriefSafetyGuardrailVersion`: pinned guardrail version used by Lambda at invocation time
+- `BriefFunctionErrorAlarm`, `BriefFunctionThrottleAlarm`, `BriefFunctionDurationAlarm`: CloudWatch alarms for demo operations visibility
 - `BriefArtifactsBucket`: private, encrypted, versioned S3 bucket for generated brief artifacts
 - `ProjectStateTable`: DynamoDB table keyed by `projectId` and `sortKey`
 - `BriefFunctionRole`: explicit least-privilege Lambda role for logs, X-Ray, Bedrock invocation, S3 artifacts, and DynamoDB state
@@ -88,6 +95,15 @@ The `ResourcePrefix` parameter defaults to `pillarprep-demo` and drives safe dis
 
 Full standard: `docs/aws-resource-tags-and-names.md`. IAM controls: `docs/aws-iam-controls.md`.
 
+## Client Login And Tenant Model
+
+Today the public hackathon demo uses an unauthenticated Cognito Identity Pool so anyone with the CloudFront URL can receive short-lived credentials that can invoke only `POST /brief`. That is useful for showing the demo without shipping an API key, but it is not the final client-login model.
+
+For a real customer or internal pilot, users should log in as themselves, then choose a client workspace they are authorized to access. The clean AWS path is Cognito User Pool for the hackathon/private pilot, or IAM Identity Center/SAML/OIDC for enterprise SSO. The login token should carry group or tenant claims such as `client:apex-mutual`, and Lambda should map those claims to allowed `clientId` values before reading or writing any project data.
+
+Once that is in place, every stored object and record is scoped by client. S3 keys become `clients/{clientId}/projects/{projectId}/briefs/{timestamp}.json`; DynamoDB partitioning can use `clientId#projectId` or separate tenant and project keys; the UI only shows client workspaces from the user's allowed list. The model is still Bedrock-managed, but each client can have its own prompt profile, approved artifacts, Knowledge Base, guardrail policy, and retrieval filters.
+
+Demo explanation: "You do not log into a model. You log into a client workspace. PillarPrep then loads that client's configuration, approved project memory, and safety policy before it calls Bedrock."
 ## Current Demo Boundary
 
 Working now:
@@ -111,8 +127,7 @@ Still to decide:
 
 After the first demo works:
 
-- Add Bedrock Guardrails
-- Add CloudWatch alarms tied to Lambda/API errors and cost thresholds
+- Wire CloudWatch alarms to SNS/email once the demo owner list is final
 - Replace the unauthenticated demo identity with real user auth before broader sharing
 - Add Bedrock Knowledge Bases for retrieval over approved project artifacts
 - Add Strands runtime for richer Project model tool orchestration
