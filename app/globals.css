@@ -1517,7 +1517,7 @@ textarea:focus-visible {
 
 .pillar-rank-card {
   display: grid;
-  grid-template-columns: 2rem auto minmax(0, 1fr) auto;
+  grid-template-columns: 1.35rem 2rem auto minmax(0, 1fr) auto;
   min-height: 3.75rem;
   align-items: center;
   gap: 0.62rem;
@@ -1525,7 +1525,9 @@ textarea:focus-visible {
   border-radius: 8px;
   background: #fbfcfe;
   color: #374151;
+  cursor: grab;
   padding: 0.6rem;
+  user-select: none;
   transition:
     border-color 160ms ease,
     background 160ms ease,
@@ -1534,7 +1536,13 @@ textarea:focus-visible {
 }
 
 .pillar-rank-card:hover {
+  border-color: #a9b8c8;
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
   transform: translateY(-1px);
+}
+
+.pillar-rank-card:active {
+  cursor: grabbing;
 }
 
 .pillar-rank-card-primary {
@@ -1542,6 +1550,33 @@ textarea:focus-visible {
   background: #eaf4fb;
   box-shadow: inset 0 0 0 1px rgba(37, 111, 156, 0.12);
   color: #111827;
+}
+
+.pillar-rank-card-dragging {
+  border-color: #256f9c;
+  box-shadow:
+    0 14px 28px rgba(17, 24, 39, 0.12),
+    0 0 0 4px rgba(37, 111, 156, 0.12);
+  opacity: 0.72;
+  transform: scale(0.99);
+}
+
+.pillar-rank-grip {
+  height: 2rem;
+  width: 1.35rem;
+  border: 0;
+  border-radius: 6px;
+  background-color: transparent;
+  background-image: radial-gradient(circle, #7b8794 1.45px, transparent 1.45px);
+  background-position: 0 0;
+  background-size: 6px 6px;
+  cursor: grab;
+  opacity: 0.72;
+}
+
+.pillar-rank-card:hover .pillar-rank-grip,
+.pillar-rank-card-dragging .pillar-rank-grip {
+  opacity: 1;
 }
 
 .pillar-rank-number {
@@ -1576,30 +1611,30 @@ textarea:focus-visible {
   line-height: 1.2;
 }
 
-.pillar-rank-actions {
-  display: grid;
-  grid-template-columns: repeat(2, 2.55rem);
-  gap: 0.35rem;
-}
-
-.pillar-rank-actions button {
+.pillar-rank-promote {
   min-height: 2rem;
+  min-width: 5.35rem;
   border: 1px solid #cfd8e3;
   border-radius: 6px;
   background: #ffffff;
   color: #374151;
   font-size: 0.68rem;
-  font-weight: 900;
+  font-weight: 950;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
 }
 
-.pillar-rank-actions button:not(:disabled):hover {
+.pillar-rank-promote:not(:disabled):hover {
   border-color: #256f9c;
+  background: #f5fbff;
   color: #111827;
 }
 
-.pillar-rank-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.38;
+.pillar-rank-promote:disabled {
+  cursor: default;
+  opacity: 0.64;
 }
 
 .primary-button,
@@ -3046,12 +3081,12 @@ textarea:focus-visible {
   }
 
   .pillar-rank-card {
-    grid-template-columns: 2rem auto minmax(0, 1fr);
+    grid-template-columns: 1.35rem 2rem auto minmax(0, 1fr);
   }
 
-  .pillar-rank-actions {
+  .pillar-rank-promote {
     grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-self: stretch;
   }
   .decision-context-head,
   .workspace-tools,

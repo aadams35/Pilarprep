@@ -1,5 +1,6 @@
 "use client";
 
+import type { DragEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   cognitoIdentityCredentialsProvider,
@@ -625,6 +626,7 @@ export default function Home() {
   const [selectedPillars, setSelectedPillars] = useState(() =>
     normalizePillarRanking(activeScenario.pillars)
   );
+  const [draggedPillar, setDraggedPillar] = useState<string | null>(null);
   const [context, setContext] = useState(activeScenario.context);
   const [decisionMakers, setDecisionMakers] = useState<DecisionMakerContext[]>(
     () => cloneDecisionMakers(activeScenario.decisionMakers)
@@ -1244,24 +1246,43 @@ const industryFocus = useMemo(() => {
     setGenerationError("");
   }
 
-  function movePillar(pillar: string, direction: -1 | 1) {
+  function reorderPillar(pillar: string, targetIndex: number) {
     setSelectedPillars((current) => {
       const ranked = normalizePillarRanking(current);
       const currentIndex = ranked.indexOf(pillar);
-      const nextIndex = currentIndex + direction;
+      const boundedTargetIndex = Math.min(
+        Math.max(targetIndex, 0),
+        ranked.length - 1
+      );
 
-      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= ranked.length) {
+      if (currentIndex < 0 || currentIndex === boundedTargetIndex) {
         return ranked;
       }
 
       const nextRanking = [...ranked];
-      [nextRanking[currentIndex], nextRanking[nextIndex]] = [
-        nextRanking[nextIndex],
-        nextRanking[currentIndex],
-      ];
+      const [movedPillar] = nextRanking.splice(currentIndex, 1);
+      nextRanking.splice(boundedTargetIndex, 0, movedPillar);
 
       return nextRanking;
     });
+  }
+
+  function promotePillar(pillar: string) {
+    reorderPillar(pillar, 0);
+  }
+
+  function handlePillarDragOver(
+    event: DragEvent<HTMLDivElement>,
+    targetPillar: string
+  ) {
+    event.preventDefault();
+
+    if (!draggedPillar || draggedPillar === targetPillar) {
+      return;
+    }
+
+    const targetIndex = selectedPillars.indexOf(targetPillar);
+    reorderPillar(draggedPillar, targetIndex);
   }
 
   function toggleFeedback(option: string) {
@@ -1902,36 +1923,47 @@ const industryFocus = useMemo(() => {
                 <div className="pillar-ranking-list" aria-label="AWS Well-Architected pillar ranking">
                   {selectedPillarDetails.map((pillar, index) => (
                     <div
+                      aria-label={`${pillar.id} ranked ${index + 1}`}
+                      aria-roledescription="draggable ranking item"
+                      draggable
                       key={pillar.id}
+                      onDragEnd={() => setDraggedPillar(null)}
+                      onDragOver={(event) => handlePillarDragOver(event, pillar.id)}
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", pillar.id);
+                        setDraggedPillar(pillar.id);
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        setDraggedPillar(null);
+                      }}
                       className={cx(
                         "pillar-rank-card",
-                        index === 0 && "pillar-rank-card-primary"
+                        index === 0 && "pillar-rank-card-primary",
+                        draggedPillar === pillar.id && "pillar-rank-card-dragging"
                       )}
                     >
+                      <button
+                        aria-label={`Drag ${pillar.id} priority`}
+                        className="pillar-rank-grip"
+                        tabIndex={-1}
+                        type="button"
+                      />
                       <span className="pillar-rank-number">{index + 1}</span>
                       <span className={cx("h-2.5 w-2.5 rounded-full", pillar.color)} />
                       <div className="pillar-rank-copy">
                         <strong>{pillar.short}</strong>
                         <p>{pillar.id}</p>
                       </div>
-                      <div className="pillar-rank-actions">
-                        <button
-                          aria-label={`Move ${pillar.id} up`}
-                          disabled={index === 0}
-                          onClick={() => movePillar(pillar.id, -1)}
-                          type="button"
-                        >
-                          Up
-                        </button>
-                        <button
-                          aria-label={`Move ${pillar.id} down`}
-                          disabled={index === selectedPillarDetails.length - 1}
-                          onClick={() => movePillar(pillar.id, 1)}
-                          type="button"
-                        >
-                          Down
-                        </button>
-                      </div>
+                      <button
+                        className="pillar-rank-promote"
+                        disabled={index === 0}
+                        onClick={() => promotePillar(pillar.id)}
+                        type="button"
+                      >
+                        {index === 0 ? "Top" : "Make top"}
+                      </button>
                     </div>
                   ))}
                 </div>
