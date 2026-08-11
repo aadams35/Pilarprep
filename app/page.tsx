@@ -17,7 +17,7 @@ type BriefTab =
 type AudienceRole = "Sales" | "Executive" | "PM" | "Engineer" | "New member";
 type RiskLevel = "Low" | "Medium" | "High";
 type GenerationMode = "demo" | "live";
-type ConsolePage = "setup" | "brief" | "project" | "aws";
+type ConsolePage = "guide" | "setup" | "brief" | "project" | "aws";
 
 type Scenario = {
   id: string;
@@ -277,6 +277,40 @@ const demoBeats = [
   },
 ];
 
+const judgeFeedback = [
+  "Reduce AWS jargon",
+  "Add cost angle",
+  "Improve discovery questions",
+  "Customer is migrating from on-prem",
+];
+
+const demoGuideCards = [
+  {
+    label: "Opening move",
+    title: "Show the problem in one click",
+    detail:
+      "Start with a realistic customer scenario, generate a pre-brief, and explain the time SAs normally spend preparing manually.",
+  },
+  {
+    label: "AWS center",
+    title: "Make Bedrock the engine",
+    detail:
+      "Point to API Gateway, Lambda, Bedrock, S3, DynamoDB, and CloudWatch as a low-cost production path the judges can recognize.",
+  },
+  {
+    label: "Winning twist",
+    title: "Promote the brief into memory",
+    detail:
+      "After the meeting, the approved brief becomes Project Brain for sales, execs, PMs, engineers, and new team members.",
+  },
+];
+
+const judgeModeOutcomes = [
+  "Generates the refined pre-brief with no live model cost",
+  "Approves the brief and promotes it into Project Brain",
+  "Opens the most demo-friendly tab with copy-ready outputs",
+];
+
 const architectureFlow = [
   "Context",
   "Bedrock",
@@ -402,6 +436,7 @@ const implementationBacklog = [
 ];
 
 const consolePages: Array<{ id: ConsolePage; label: string; detail: string }> = [
+  { id: "guide", label: "Guide", detail: "Demo flow" },
   { id: "setup", label: "1. Setup", detail: "Customer context" },
   { id: "brief", label: "2. Brief", detail: "Review and refine" },
   { id: "project", label: "3. Project Brain", detail: "Follow-on model" },
@@ -422,6 +457,22 @@ function riskWidth(level: RiskLevel) {
   }
 
   return "34%";
+}
+
+function briefTabLabel(tab: BriefTab) {
+  if (tab === "gameplan") {
+    return "SA game plan";
+  }
+
+  if (tab === "stakeholders") {
+    return "Stakeholder lens";
+  }
+
+  if (tab === "objections") {
+    return "Objection simulator";
+  }
+
+  return tab === "technical" ? "Technical brief" : "Executive brief";
 }
 
 function cloneDecisionMakers(decisionMakers: DecisionMakerContext[]) {
@@ -460,7 +511,8 @@ export default function Home() {
   const [generationError, setGenerationError] = useState("");
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const [generationMode, setGenerationMode] = useState<GenerationMode>("demo");
-  const [activePage, setActivePage] = useState<ConsolePage>("setup");
+  const [copiedLabel, setCopiedLabel] = useState("");
+  const [activePage, setActivePage] = useState<ConsolePage>("guide");
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- Mount-only localStorage hydration restores saved demo workspace state. */
@@ -767,6 +819,18 @@ export default function Home() {
       }
     : fallbackBriefContent;
 
+  const activeBriefText = [
+    `${company || "Customer"} - ${briefTabLabel(activeTab)}`,
+    "",
+    ...briefContent[activeTab],
+    "",
+    `Sources: ${(generatedBrief?.citations ?? evidenceSources).join(", ")}`,
+  ].join("\n");
+
+  const followUpEmailText = generatedBrief?.projectArtifacts?.followUpEmail
+    ? `Subject: ${generatedBrief.projectArtifacts.followUpEmail.subject}\n\n${generatedBrief.projectArtifacts.followUpEmail.body}`
+    : `Subject: Follow-up from PillarPrep briefing for ${company || "the customer"}\n\nThanks for the conversation. We captured ${industryFocus} as the main outcome path and ${selectedPillars[0]?.toLowerCase() || "the first priority"} as the first validation area.\n\nRecommended next step: schedule a focused working session to confirm stakeholders, success criteria, risks, pilot scope, and owners.`;
+
   const projectAnswer = useMemo(() => {
     const customerName = company || "the customer";
     const stakeholderLead = usableDecisionMakers[0];
@@ -1026,6 +1090,7 @@ export default function Home() {
   }
 
   function refineBrief() {
+    setActivePage("brief");
     void requestBrief("prebrief");
   }
 
@@ -1035,11 +1100,80 @@ export default function Home() {
   }
 
   function promoteProject() {
+    setActivePage("project");
     void requestBrief("project");
   }
 
   function askProjectBrain() {
+    setActivePage("project");
     void requestBrief("project");
+  }
+
+  async function copyText(label: string, textToCopy: string) {
+    if (!textToCopy.trim()) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopiedLabel(label);
+      window.setTimeout(() => {
+        setCopiedLabel((current) => (current === label ? "" : current));
+      }, 1800);
+    } catch {
+      setGenerationError("Copy was blocked by the browser. The text is still visible on screen.");
+    }
+  }
+
+  function copyActiveBrief() {
+    void copyText(briefTabLabel(activeTab), activeBriefText);
+  }
+
+  function copyFollowUpEmail() {
+    void copyText("Follow-up email", followUpEmailText);
+  }
+
+  function runJudgeMode() {
+    const demoFeedback = Array.from(new Set([...feedback, ...judgeFeedback]));
+    const requestRole: AudienceRole = "PM";
+    const requestPrompt = rolePrompts[requestRole][0];
+    const briefRequest = {
+      mode: "project" as const,
+      company,
+      industry,
+      meetingType,
+      companySize,
+      pillars: selectedPillars,
+      context,
+      meetingNotes,
+      feedback: demoFeedback,
+      decisionMakers: usableDecisionMakers,
+      role: requestRole,
+      prompt: requestPrompt,
+    };
+    const validationError = validateBriefRequest(briefRequest);
+
+    if (validationError) {
+      setGenerationError(validationError);
+      setActivePage("setup");
+      return;
+    }
+
+    const nextBrief = normalizeBriefResponse(generateDemoBrief(briefRequest), "demo");
+
+    setGenerationMode("demo");
+    setFeedback(demoFeedback);
+    setRole(requestRole);
+    setActivePrompt(requestPrompt);
+    setGeneratedBrief(nextBrief);
+    setProjectBrainAnswer(nextBrief.projectAnswer);
+    setProjectAnswerKey(`${requestRole}::${requestPrompt}`);
+    setBriefVersion((version) => version + 1);
+    setApproved(true);
+    setPromoted(true);
+    setActiveTab("gameplan");
+    setActivePage("brief");
+    setGenerationError("");
   }
 
   function resetWorkspace() {
@@ -1076,6 +1210,9 @@ export default function Home() {
                 onClick={() => setGenerationMode("live")}
               >
                 Live AWS
+              </button>
+              <button className="judge-command" type="button" onClick={runJudgeMode}>
+                Run Judge Mode
               </button>
               {consolePages.map((page) => (
                 <button
@@ -1334,6 +1471,60 @@ export default function Home() {
         ) : null}
 
       <section className="linear-workflow mx-auto max-w-[1500px] px-5 py-5">
+        {activePage === "guide" ? (
+          <div className="page-view">
+            <div className="workflow-heading" id="demo-guide">
+              <span>Guide</span>
+              <div>
+                <p>Hackathon guide lane</p>
+                <h2>Run the demo as a clean story, then show the AWS spine</h2>
+              </div>
+            </div>
+
+            <section className="judge-panel">
+              <div>
+                <p className="eyebrow text-[#1f7a63]">Recommended demo path</p>
+                <h2>One-click judge walkthrough</h2>
+                <p>
+                  Judge Mode uses the local demo generator, so it costs nothing,
+                  creates a polished brief, promotes it into Project Brain, and
+                  leaves the app ready for a confident live walkthrough.
+                </p>
+              </div>
+              <div className="judge-outcomes">
+                {judgeModeOutcomes.map((outcome, index) => (
+                  <div key={outcome} className="judge-outcome">
+                    <span>{index + 1}</span>
+                    <strong>{outcome}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="guide-actions">
+                <button className="judge-primary" type="button" onClick={runJudgeMode}>
+                  Run Judge Mode
+                </button>
+                <button
+                  className="secondary-link"
+                  type="button"
+                  onClick={() => setActivePage("setup")}
+                >
+                  Start manually
+                </button>
+              </div>
+            </section>
+
+            <div className="guide-grid">
+              {demoGuideCards.map((card) => (
+                <section key={card.title} className="guide-card">
+                  <span>{card.label}</span>
+                  <strong>{card.title}</strong>
+                  <p>{card.detail}</p>
+                </section>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {activePage === "setup" ? (
           <div className="page-view">
         <div className="workflow-heading" id="setup">
@@ -1554,9 +1745,13 @@ export default function Home() {
                   <span className="button-icon">+</span>
                   {isGenerating ? "Generating brief..." : "Generate / refine brief"}
                 </button>
-                <a className="secondary-link" href="#brief">
+                <button
+                  className="secondary-link"
+                  type="button"
+                  onClick={() => setActivePage("brief")}
+                >
                   Review generated brief
-                </a>
+                </button>
               </div>
               <div className="provider-note">
                 <span>{generationMode === "live" ? "Live AWS mode" : "Demo mode"}</span>
@@ -1728,9 +1923,17 @@ export default function Home() {
                                 ? "SA game plan"
                                 : "Objection simulator"}
                       </p>
-                      <span className="status-pill">
-                        {approved ? "Approved" : "Draft"}
-                      </span>
+                      <div className="copy-actions copy-actions-inline">
+                        <span className="status-pill">
+                          {approved ? "Approved" : "Draft"}
+                        </span>
+                        <button className="copy-button" type="button" onClick={copyActiveBrief}>
+                          Copy tab
+                        </button>
+                        {copiedLabel === briefTabLabel(activeTab) ? (
+                          <span className="copy-state">Copied</span>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="mt-4 space-y-3">
                       {briefContent[activeTab].map((item) => (
@@ -2028,6 +2231,16 @@ export default function Home() {
                           >
                             {promoted ? "Project live" : "Waiting for promotion"}
                           </span>
+                          <button
+                            className="copy-button copy-button-dark"
+                            type="button"
+                            onClick={copyFollowUpEmail}
+                          >
+                            Copy email
+                          </button>
+                          {copiedLabel === "Follow-up email" ? (
+                            <span className="copy-state copy-state-dark">Copied</span>
+                          ) : null}
                           <button
                             className="project-ask-button"
                             type="button"
