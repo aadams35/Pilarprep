@@ -93,7 +93,7 @@ MODEL_RESPONSE = json.dumps(
                 for index in range(4)
             ],
             "followUpEmail": {
-                "subject": "Follow-up from PillarPrep briefing for Apex Mutual",
+                "subject": "Follow-up from PilarPrep briefing for Apex Mutual",
                 "body": "Thanks for the conversation. We captured owners, risks, evidence needs, and the next validation sprint.",
             },
         },
@@ -212,7 +212,7 @@ class LambdaHandlerTest(unittest.TestCase):
             self.assertIn("word/document.xml", docx.namelist())
             document_xml = docx.read("word/document.xml").decode("utf-8")
 
-        self.assertIn("PillarPrep Brief - Apex Mutual", document_xml)
+        self.assertIn("PilarPrep Brief - Apex Mutual", document_xml)
         self.assertIn("Technical Brief", document_xml)
         self.assertIn("Executive Brief", document_xml)
         self.assertIn("Two-Week Plan", document_xml)

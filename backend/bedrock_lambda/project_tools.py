@@ -125,7 +125,7 @@ def build_follow_up_email(payload, generated):
     next_step = _first(generated.get("gameplan", []), "confirm next steps")
 
     return {
-        "subject": f"Follow-up from PillarPrep briefing for {company}",
+        "subject": f"Follow-up from PilarPrep briefing for {company}",
         "body": (
             f"Thanks for the conversation. The main theme we captured was: {executive_summary}\n\n"
             f"Stakeholder context we will validate: {stakeholder_lens}\n\n"

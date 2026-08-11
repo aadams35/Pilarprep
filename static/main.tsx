@@ -6,7 +6,7 @@ import "../app/globals.css";
 const root = document.getElementById("root");
 
 if (!root) {
-  throw new Error("PillarPrep root element was not found.");
+  throw new Error("PilarPrep root element was not found.");
 }
 
 createRoot(root).render(

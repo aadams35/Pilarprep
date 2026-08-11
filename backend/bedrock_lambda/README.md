@@ -1,4 +1,4 @@
-# PillarPrep Bedrock + Strands Backend
+# PilarPrep Bedrock + Strands Backend
 
 This folder is the AWS implementation target for the demo front end.
 
@@ -23,7 +23,7 @@ Why Strands second:
 - Use it when the Project model needs agent behavior: tool calls, role-specific workflows, implementation planning, and multi-step follow-through.
 - Keep the first brief-generation loop simple until the Bedrock prompt contract is stable.
 
-SageMaker is intentionally out of scope for v1 because PillarPrep is not training, fine-tuning, or hosting a custom model.
+SageMaker is intentionally out of scope for v1 because PilarPrep is not training, fine-tuning, or hosting a custom model.
 
 
 For the fastest hackathon path, use `docs/aws-lambda-demo-runbook.md` from the repository root.

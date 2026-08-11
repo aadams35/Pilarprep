@@ -1,4 +1,4 @@
-# PillarPrep AWS Infrastructure Design
+# PilarPrep AWS Infrastructure Design
 
 This is the current deployment target for the hackathon frontend and backend. The goal is a working AWS-native demo path first, then deeper production hardening.
 
@@ -8,7 +8,7 @@ This is the current deployment target for the hackathon frontend and backend. Th
 flowchart TD
   USER[User Browser] --> CF[Amazon CloudFront]
   CF --> S3FRONT[S3 Static Frontend Bucket]
-  S3FRONT --> UI[React PillarPrep Console]
+  S3FRONT --> UI[React PilarPrep Console]
   UI --> COGNITO[Cognito Identity Pool]
   COGNITO --> DEMOROLE[Limited Demo IAM Role]
   UI -->|SigV4 signed request| API[API Gateway HTTP API IAM Auth]
@@ -52,9 +52,9 @@ https://d2e0btay0ynyf.cloudfront.net
 
 ## Model And Storage Boundary
 
-PillarPrep does not store a copy of the Bedrock foundation model. The configured model ID, currently `us.amazon.nova-micro-v1:0`, is passed to Bedrock at invocation time and AWS manages the model weights, serving layer, and model lifecycle.
+PilarPrep does not store a copy of the Bedrock foundation model. The configured model ID, currently `us.amazon.nova-micro-v1:0`, is passed to Bedrock at invocation time and AWS manages the model weights, serving layer, and model lifecycle.
 
-Stored by PillarPrep:
+Stored by PilarPrep:
 
 - Lambda code stores the prompt contract, schema instructions, structured fallback behavior, and the Bedrock guardrail configuration reference.
 - S3 stores the current generated brief as `latest.json` for app/project memory and `latest.docx` for human handoff. The Lambda deletes prior current objects in that client brief prefix before saving the latest pair.
@@ -89,7 +89,7 @@ The backend stack deploys these resources:
 
 ## Resource Names And Tags
 
-The templates and deploy scripts use a shared tagging standard. Default tags include `Project=PillarPrep`, `Application=sa-briefing-generator`, `Environment=demo`, `Owner=austin-adams`, `CostCenter=hackathon`, `ManagedBy=cloudformation`, `Repository=aadams35/Pilarprep`, and `DataClassification=demo`.
+The templates and deploy scripts use a shared tagging standard. Default tags include `Project=PilarPrep`, `Application=sa-briefing-generator`, `Environment=demo`, `Owner=austin-adams`, `CostCenter=hackathon`, `ManagedBy=cloudformation`, `Repository=aadams35/Pilarprep`, and `DataClassification=demo`.
 
 The `ResourcePrefix` parameter defaults to `pillarprep-demo` and drives safe display names such as `pillarprep-demo-brief-api`, `pillarprep-demo-brief-generator`, `pillarprep-demo-project-state`, `pillarprep-demo-demo-identities`, `pillarprep-demo-demo-api-invoke-role`, `pillarprep-demo-daily-demo-budget`, and `pillarprep-demo-cloudfront-web`.
 
@@ -103,7 +103,7 @@ For a real customer or internal pilot, users should log in as themselves, then c
 
 Once that is in place, every stored object and record is scoped by client. S3 keys become `clients/{clientId}/brief/latest.json` and `latest.docx`; DynamoDB partitioning can use `clientId#projectId` or separate tenant and project keys; the UI only shows client workspaces from the user's allowed list. The model is still Bedrock-managed, but each client can have its own prompt profile, approved artifacts, Knowledge Base, guardrail policy, and retrieval filters.
 
-Demo explanation: "You do not log into a model. You log into a client workspace. PillarPrep then loads that client's configuration, approved project memory, and safety policy before it calls Bedrock."
+Demo explanation: "You do not log into a model. You log into a client workspace. PilarPrep then loads that client's configuration, approved project memory, and safety policy before it calls Bedrock."
 ## Current Demo Boundary
 
 Working now:

@@ -1,6 +1,6 @@
-# PillarPrep Prompt Contract
+# PilarPrep Prompt Contract
 
-PillarPrep uses one structured request and one structured response across demo mode, Bedrock Lambda, and the later Strands agent path.
+PilarPrep uses one structured request and one structured response across demo mode, Bedrock Lambda, and the later Strands agent path.
 
 ## Request
 
@@ -79,7 +79,7 @@ PillarPrep uses one structured request and one structured response across demo m
       }
     ],
     "followUpEmail": {
-      "subject": "Follow-up from PillarPrep briefing for Apex Mutual",
+      "subject": "Follow-up from PilarPrep briefing for Apex Mutual",
       "body": "..."
     }
   },
@@ -103,7 +103,7 @@ PillarPrep uses one structured request and one structured response across demo m
 - Replace sections that come back too short with safe fallback paragraphs so the demo remains useful even when the model is terse.
 - Include AWS services only when they help the conversation.
 - Use decision-maker context only when it is customer-approved or manually provided.
-- Never claim that PillarPrep scraped, browsed, or verified LinkedIn.
+- Never claim that PilarPrep scraped, browsed, or verified LinkedIn.
 - Return practical project artifacts for Phase 2: sprint plan, risks, stakeholder map, and follow-up email.
 - Return strict JSON only.
 

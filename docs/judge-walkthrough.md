@@ -4,7 +4,7 @@ Use this as the fast judging path when you have two minutes or less.
 
 ## Opening
 
-PillarPrep helps Solutions Architects turn sparse customer context into two useful outputs: a meeting-ready pre-brief and an implementation-ready Project model. The AWS value is that the workflow is serverless, low-cost, and protected by IAM instead of a browser API key.
+PilarPrep helps Solutions Architects turn sparse customer context into two useful outputs: a meeting-ready pre-brief and an implementation-ready Project model. The AWS value is that the workflow is serverless, low-cost, and protected by IAM instead of a browser API key.
 
 ## Click Path
 

@@ -9,7 +9,7 @@ param(
   [string]$DailyBudgetLimitUsd = "1",
   [string]$BudgetNotificationEmail = "",
   [string]$ResourcePrefix = "pillarprep-demo",
-  [string]$ProjectName = "PillarPrep",
+  [string]$ProjectName = "PilarPrep",
   [string]$EnvironmentName = "demo",
   [string]$Owner = "austin-adams",
   [string]$CostCenter = "hackathon"

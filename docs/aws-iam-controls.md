@@ -1,6 +1,6 @@
-# PillarPrep IAM Controls
+# PilarPrep IAM Controls
 
-PillarPrep uses explicit IAM controls for the AWS model demo instead of relying on broad generated permissions or a browser API key.
+PilarPrep uses explicit IAM controls for the AWS model demo instead of relying on broad generated permissions or a browser API key.
 
 ## Public Demo Auth Boundary
 
@@ -28,7 +28,7 @@ The backend stack creates `BriefFunctionRole` and attaches it directly to the La
 
 Allowed actions are split into small inline policies:
 
-- CloudWatch Logs: create streams and write events only for the PillarPrep Lambda log group.
+- CloudWatch Logs: create streams and write events only for the PilarPrep Lambda log group.
 - AWS X-Ray: publish trace segments and telemetry for active Lambda tracing.
 - Amazon Bedrock: invoke the configured model path using the selected foundation model and inference profile ARNs.
 - Amazon S3: read and write objects only in the brief artifact bucket.

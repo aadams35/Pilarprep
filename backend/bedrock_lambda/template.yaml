@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: PillarPrep Bedrock briefing backend
+Description: PilarPrep Bedrock briefing backend
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -43,7 +43,7 @@ Parameters:
     AllowedPattern: "^[a-z0-9][a-z0-9-]{2,40}$"
   ProjectName:
     Type: String
-    Default: PillarPrep
+    Default: PilarPrep
   EnvironmentName:
     Type: String
     Default: demo
@@ -443,8 +443,8 @@ Resources:
     Properties:
       Name: !Sub "${ResourcePrefix}-brief-safety"
       Description: !Sub "${ProjectName} ${EnvironmentName} safety guardrail for generated SA briefing content"
-      BlockedInputMessaging: "PillarPrep blocked this request because it does not meet the demo safety policy. Please remove sensitive or unsafe content and try again."
-      BlockedOutputsMessaging: "PillarPrep blocked the model response because it does not meet the demo safety policy. Please refine the prompt and try again."
+      BlockedInputMessaging: "PilarPrep blocked this request because it does not meet the demo safety policy. Please remove sensitive or unsafe content and try again."
+      BlockedOutputsMessaging: "PilarPrep blocked the model response because it does not meet the demo safety policy. Please refine the prompt and try again."
       ContentPolicyConfig:
         FiltersConfig:
           - Type: HATE
@@ -634,11 +634,11 @@ Resources:
               "width": 12,
               "height": 6,
               "properties": {
-                "title": "PillarPrep Requests and Success",
+                "title": "PilarPrep Requests and Success",
                 "region": "${AWS::Region}",
                 "view": "timeSeries",
                 "metrics": [
-                  ["PillarPrep", "BriefRequests", "Service", "BriefFunction"],
+                  ["PilarPrep", "BriefRequests", "Service", "BriefFunction"],
                   [".", "BriefSuccess", ".", "."],
                   [".", "UnauthorizedRequests", ".", "."]
                 ]
@@ -726,7 +726,7 @@ Resources:
 Outputs:
 
   BriefApiUrl:
-    Description: API Gateway endpoint for PillarPrep brief generation
+    Description: API Gateway endpoint for PilarPrep brief generation
     Value: !Sub "https://${BriefApi}.execute-api.${AWS::Region}.amazonaws.com/brief"
   ResourceNamePrefix:
     Description: Name prefix used in tags and safe display names
@@ -765,7 +765,7 @@ Outputs:
     Description: AWS Budget guardrail for the demo
     Value: !Ref DemoDailyBudget
   DashboardName:
-    Description: CloudWatch dashboard for PillarPrep backend operations
+    Description: CloudWatch dashboard for PilarPrep backend operations
     Value: !Ref PillarPrepDashboard
   DashboardUrl:
     Description: CloudWatch dashboard URL

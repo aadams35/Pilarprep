@@ -1,6 +1,6 @@
 # AWS Architecture
 
-PillarPrep is designed as a small AWS-native workload with a clear upgrade path from demo mode to production mode.
+PilarPrep is designed as a small AWS-native workload with a clear upgrade path from demo mode to production mode.
 
 ```mermaid
 flowchart TD

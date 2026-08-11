@@ -1,6 +1,6 @@
 # AWS Resource Names And Tags
 
-PillarPrep uses consistent names and tags so the hackathon AWS account is easy to search, explain, and clean up.
+PilarPrep uses consistent names and tags so the hackathon AWS account is easy to search, explain, and clean up.
 
 ## Naming Standard
 
@@ -8,7 +8,7 @@ Default deployment values:
 
 ```text
 ResourcePrefix=pillarprep-demo
-ProjectName=PillarPrep
+ProjectName=PilarPrep
 EnvironmentName=demo
 Owner=austin-adams
 CostCenter=hackathon
@@ -39,7 +39,7 @@ Every taggable CloudFormation resource should carry:
 
 ```text
 Name=<resource-specific name>
-Project=PillarPrep
+Project=PilarPrep
 Application=sa-briefing-generator
 Environment=demo
 Owner=austin-adams

@@ -28,14 +28,14 @@ async function fetchWorker(path, init) {
   );
 }
 
-test("server-renders the PillarPrep console", async () => {
+test("server-renders the PilarPrep console", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /PillarPrep/);
-  assert.match(html, /PillarPrep workspace/);
+  assert.match(html, /PilarPrep/);
+  assert.match(html, /PilarPrep workspace/);
   assert.match(html, /1\. Context/);
   assert.match(html, /2\. Brief/);
   assert.match(html, /3\. Project/);
@@ -46,7 +46,7 @@ test("server-renders the PillarPrep console", async () => {
   assert.match(html, /AWS-ready deployment path/);
   assert.match(html, /Workspace state/);
   assert.match(html, /Ranked discovery/);
-  assert.doesNotMatch(html, /Ask Project Brain|Ask Project model|Promote to Project|Lifecycle progress|Quality gate|Pillar heatmap|Run Judge Mode|Demo state|PillarPrep demo console/);
+  assert.doesNotMatch(html, /Ask Project Brain|Ask Project model|Promote to Project|Lifecycle progress|Quality gate|Pillar heatmap|Run Presenter Guide|Demo state|PilarPrep demo console/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/i);
 });
 
@@ -69,8 +69,8 @@ test("removes the starter preview shell", async () => {
   assert.match(page, /const briefContent = isGenerating/);
   assert.match(page, /setGeneratedBrief\(null\);/);
   assert.match(page, /const displayedProjectAnswer = isGenerating/);
-  assert.doesNotMatch(page, /Ask Project Brain|Ask Project model|Promote to Project|Backend-ready map|AWS-native architecture|hero-progress|quality-bar|telemetry-bar|Run Judge Mode|Demo state|PillarPrep demo console/);
-  assert.match(layout, /PillarPrep \| AWS SA Briefing Copilot/);
+  assert.doesNotMatch(page, /Ask Project Brain|Ask Project model|Promote to Project|Backend-ready map|AWS-native architecture|hero-progress|quality-bar|telemetry-bar|Run Presenter Guide|Demo state|PilarPrep demo console/);
+  assert.match(layout, /PilarPrep \| AWS SA Briefing Copilot/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);

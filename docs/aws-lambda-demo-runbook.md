@@ -1,6 +1,6 @@
 # AWS Lambda Demo Runbook
 
-Use this path when the team wants the shareable PillarPrep demo to run on AWS without putting an API key in the browser.
+Use this path when the team wants the shareable PilarPrep demo to run on AWS without putting an API key in the browser.
 
 ## Local Demo First
 
@@ -44,7 +44,7 @@ Optional parameters:
 -PermissionsBoundaryArn <boundary-arn>
 -BudgetNotificationEmail <email>
 -ResourcePrefix pillarprep-demo
--ProjectName PillarPrep
+-ProjectName PilarPrep
 -EnvironmentName demo
 -Owner austin-adams
 -CostCenter hackathon

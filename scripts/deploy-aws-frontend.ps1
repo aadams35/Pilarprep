@@ -3,7 +3,7 @@ param(
   [string]$Region = "us-east-1",
   [string]$BucketName = "",
   [string]$ResourcePrefix = "pillarprep-demo",
-  [string]$ProjectName = "PillarPrep",
+  [string]$ProjectName = "PilarPrep",
   [string]$EnvironmentName = "demo",
   [string]$Owner = "austin-adams",
   [string]$CostCenter = "hackathon",

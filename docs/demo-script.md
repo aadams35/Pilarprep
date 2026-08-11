@@ -3,7 +3,7 @@
 ## 90-Second Flow
 
 1. Pick `Apex Mutual`.
-2. Show that PillarPrep captures industry, meeting type, company size, ranked pillar priorities, known context, and approved decision-maker notes.
+2. Show that PilarPrep captures industry, meeting type, company size, ranked pillar priorities, known context, and approved decision-maker notes.
 3. Click `Generate brief + project model`.
 4. Open the generated technical brief and point out the AWS Well-Architected alignment and concrete discovery questions.
 5. Switch to the executive brief and point out the low-jargon business framing.
@@ -18,7 +18,7 @@
 
 ## One-Sentence Pitch
 
-PillarPrep turns SA meeting prep into a two-phase AWS-native workflow: first a refined customer and stakeholder pre-brief, then a living Project model for everyone responsible for follow-through.
+PilarPrep turns SA meeting prep into a two-phase AWS-native workflow: first a refined customer and stakeholder pre-brief, then a living Project model for everyone responsible for follow-through.
 
 ## Judge-Proof Points
 

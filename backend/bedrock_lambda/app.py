@@ -26,7 +26,7 @@ def _metric(name, value=1, **dimensions):
             "Timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
             "CloudWatchMetrics": [
                 {
-                    "Namespace": "PillarPrep",
+                    "Namespace": "PilarPrep",
                     "Dimensions": [list(metric_dimensions.keys())],
                     "Metrics": [{"Name": name, "Unit": "Count"}],
                 }
@@ -89,11 +89,11 @@ def _load_payload(event):
 
 def _system_prompt():
     return """
-You are PillarPrep, an AWS Solutions Architect briefing assistant.
+You are PilarPrep, an AWS Solutions Architect briefing assistant.
 Generate detailed, practical meeting preparation for AWS pre-sales teams.
 Return strict JSON only. Do not include markdown fences, comments, or prose outside JSON.
 Treat all generated content as preparation hypotheses to validate with the customer.
-Never claim that PillarPrep scraped, browsed, or verified LinkedIn or external profiles.
+Never claim that PilarPrep scraped, browsed, or verified LinkedIn or external profiles.
 """.strip()
 
 
@@ -191,7 +191,7 @@ def _build_prompt(payload):
     }
 
     return f"""
-Generate a PillarPrep response for the request below.
+Generate a PilarPrep response for the request below.
 
 Required JSON schema:
 {json.dumps(schema, ensure_ascii=True, indent=2)}
@@ -417,7 +417,7 @@ def _fallback_project_artifacts(payload):
             },
         ],
         "followUpEmail": {
-            "subject": f"Follow-up from PillarPrep briefing for {company}",
+            "subject": f"Follow-up from PilarPrep briefing for {company}",
             "body": (
                 f"Thanks for the conversation. We captured the key context for {company}, with "
                 f"{primary_pillar.lower()} as an early validation area.\n\n"
@@ -466,7 +466,7 @@ def _fallback_generated(payload, model_text=""):
         ],
         "executive": [
             f"{company} is preparing for a {meeting_type.lower()} where the business story should stay tied to risk reduction, speed, and measurable progress. Keep the executive version focused on {industry} outcomes instead of service names so the sponsor can make a decision without needing cloud jargon. Ask: \"What business outcome should be visibly better 30 days after this meeting?\"",
-            "The strongest value story is that PillarPrep reduces missed assumptions before the meeting and preserves follow-through after the meeting. That means fewer scattered notes, clearer owners, and a faster path from discovery to a bounded pilot with evidence. Ask: \"Where do initiatives like this usually stall: funding, security approval, technical uncertainty, or lack of ownership?\"",
+            "The strongest value story is that PilarPrep reduces missed assumptions before the meeting and preserves follow-through after the meeting. That means fewer scattered notes, clearer owners, and a faster path from discovery to a bounded pilot with evidence. Ask: \"Where do initiatives like this usually stall: funding, security approval, technical uncertainty, or lack of ownership?\"",
             f"The next executive decision is whether to approve a small validation sprint with clear success measures, named owners, and evidence checkpoints.{model_hint} The sponsor should leave knowing what will be validated, who owns each risk, and what would trigger expansion beyond the pilot. Ask: \"What evidence would make you comfortable saying yes to the next step?\"",
             f"Frame the ROI for {company} as decision speed and rework reduction: better prep should reduce repeated discovery, unclear handoffs, and late risk surprises. The executive sponsor does not need a service tour; they need confidence that the team can move in a controlled way and know when to stop, pivot, or expand. Ask: \"Which delay costs more right now: waiting for perfect information, or moving forward without enough evidence?\"",
         ],
@@ -484,7 +484,7 @@ def _fallback_generated(payload, model_text=""):
             "Concern: \"The generated brief may be wrong.\" Response: agree, then position the brief as a structured hypothesis map that speeds validation rather than replacing customer discovery. Ask: \"Which assumption should we mark as highest risk until your team confirms it?\"",
         ],
         "projectAnswer": f"Start with a two-week validation sprint for {company}: confirm stakeholders, validate rank 1 {primary_pillar.lower()} assumptions, capture current-state architecture, document risks and owners, and publish a decision log before implementation expands. Use the approved brief, decision-maker notes, and meeting outcomes as the shared project model so sales, SA, engineering, and the sponsor are working from the same context. The first deliverable should be a concise owner-based plan that says what will be validated, what evidence is needed, what risk could block approval, and when the next decision happens. Treat every generated statement as a hypothesis until the customer validates it.",        "projectArtifacts": _fallback_project_artifacts(payload),
-        "citations": ["Customer context", "Decision-maker notes", "AWS Well-Architected pillars" if context else "PillarPrep fallback"],
+        "citations": ["Customer context", "Decision-maker notes", "AWS Well-Architected pillars" if context else "PilarPrep fallback"],
     }
 
 
@@ -640,7 +640,7 @@ def _brief_docx_bytes(payload, generated, metadata):
     company = _clean_string(payload.get("company")) or "Customer"
     generated_at = _clean_string(generated.get("generatedAt")) or datetime.now(timezone.utc).isoformat()
     sections = [
-        _docx_paragraph(f"PillarPrep Brief - {company}", "Title"),
+        _docx_paragraph(f"PilarPrep Brief - {company}", "Title"),
         _docx_paragraph(f"Generated: {generated_at}"),
         _docx_paragraph(f"Client ID: {metadata.get('clientId', metadata.get('projectId', 'customer'))}"),
         _docx_paragraph("Customer Context", "Heading1"),

@@ -170,7 +170,7 @@ function buildProjectArtifacts(
           },
         ],
     followUpEmail: {
-      subject: `Follow-up from PillarPrep briefing for ${company}`,
+      subject: `Follow-up from PilarPrep briefing for ${company}`,
       body: `Thanks for the conversation. We captured ${focus} as the main business context and ${primaryPillar.toLowerCase()} as the first technical validation area.\n\nRecommended next step: run a focused working session to confirm stakeholders, current-state assumptions, success criteria, risks, and pilot scope.\n\nWe will use the approved brief, decision-maker notes, meeting outcomes, and owner list as the shared project context.`,
     },
   };
@@ -229,7 +229,7 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
       `Use the ranked pillar order to shape the proof plan for ${company}: rank 1 gets the deepest evidence review, ranks 2 and 3 become tradeoff checks, and lower-ranked pillars stay visible so they are not ignored. Capture which artifacts are missing, who owns each artifact, and how a pilot would prove the riskiest assumption. Ask: "What proof would let us move from discussion to a small approved pilot?"`,
     ],
     executive: [
-      `${company} is balancing speed with risk control, so the executive conversation should start with ${focus} rather than architecture diagrams. The strongest framing is that PillarPrep improves decision quality before the meeting and preserves follow-through after the meeting, reducing the chance that good discovery turns into scattered notes. Ask: "What business outcome would make this meeting a success 30 days from now?"`,
+      `${company} is balancing speed with risk control, so the executive conversation should start with ${focus} rather than architecture diagrams. The strongest framing is that PilarPrep improves decision quality before the meeting and preserves follow-through after the meeting, reducing the chance that good discovery turns into scattered notes. Ask: "What business outcome would make this meeting a success 30 days from now?"`,
       `The business case should emphasize fewer missed risks, faster alignment across sales/SA/project teams, and a clearer path from discussion to pilot. Avoid AWS jargon unless an executive asks how it works; describe the result as a repeatable way to prepare, validate assumptions, and turn meeting outcomes into owners, risks, and next actions. Ask: "Where do projects like this usually slow down: funding, security approval, technical uncertainty, or lack of ownership?"`,
       `For the sponsor, the important decision is whether to approve a bounded validation sprint with clear success measures, decision owners, and evidence checkpoints. ${stakeholderText} ${feedback} Ask: "What would make you comfortable saying yes to the next step, and what evidence would you need before scaling beyond a pilot?"`,
       `Frame the ROI for ${company} as decision speed and rework reduction: better prep should reduce repeated discovery, unclear handoffs, and late risk surprises. The executive sponsor does not need a service tour; they need confidence that the team can move in a controlled way and know when to stop, pivot, or expand. Ask: "Which delay costs more right now: waiting for perfect information, or moving forward without enough evidence?"`,

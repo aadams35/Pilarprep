@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: PillarPrep static frontend hosted on S3 and CloudFront
+Description: PilarPrep static frontend hosted on S3 and CloudFront
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -40,7 +40,7 @@ Parameters:
     AllowedPattern: "^[a-z0-9][a-z0-9-]{2,40}$"
   ProjectName:
     Type: String
-    Default: PillarPrep
+    Default: PilarPrep
   EnvironmentName:
     Type: String
     Default: demo
@@ -102,7 +102,7 @@ Resources:
     Properties:
       OriginAccessControlConfig:
         Name: !Sub "${ResourcePrefix}-frontend-oac"
-        Description: PillarPrep frontend S3 origin access control
+        Description: PilarPrep frontend S3 origin access control
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
@@ -193,5 +193,5 @@ Outputs:
     Description: CloudFront distribution domain name.
     Value: !GetAtt FrontendDistribution.DomainName
   FrontendUrl:
-    Description: HTTPS URL for the AWS-hosted PillarPrep frontend.
+    Description: HTTPS URL for the AWS-hosted PilarPrep frontend.
     Value: !Sub "https://${FrontendDistribution.DomainName}"

@@ -432,7 +432,7 @@ const modelStoragePath = [
     layer: "Bedrock model",
     service: "AWS managed",
     detail:
-      "PillarPrep invokes Amazon Nova Micro through Bedrock. The foundation model weights are not copied into our account or stored in the app.",
+      "PilarPrep invokes Amazon Nova Micro through Bedrock. The foundation model weights are not copied into our account or stored in the app.",
   },
   {
     layer: "Prompt contract",
@@ -995,7 +995,7 @@ const industryFocus = useMemo(() => {
 
   const followUpEmailText = generatedBrief?.projectArtifacts?.followUpEmail
     ? `Subject: ${generatedBrief.projectArtifacts.followUpEmail.subject}\n\n${generatedBrief.projectArtifacts.followUpEmail.body}`
-    : `Subject: Follow-up from PillarPrep briefing for ${company || "the customer"}\n\nThanks for the conversation. We captured ${industryFocus} as the main outcome path and ${selectedPillars[0]?.toLowerCase() || "the first priority"} as the first validation area.\n\nRecommended next step: schedule a focused working session to confirm stakeholders, success criteria, risks, pilot scope, and owners.`;
+    : `Subject: Follow-up from PilarPrep briefing for ${company || "the customer"}\n\nThanks for the conversation. We captured ${industryFocus} as the main outcome path and ${selectedPillars[0]?.toLowerCase() || "the first priority"} as the first validation area.\n\nRecommended next step: schedule a focused working session to confirm stakeholders, success criteria, risks, pilot scope, and owners.`;
 
   const projectAnswer = useMemo(() => {
     const customerName = company || "the customer";
@@ -1048,7 +1048,7 @@ const industryFocus = useMemo(() => {
     ].join("\n");
 
     return [
-      `PillarPrep handoff packet - ${company || "Customer"}`,
+      `PilarPrep handoff packet - ${company || "Customer"}`,
       `Meeting: ${meetingType} | Industry: ${industry} | Size: ${companySize}`,
       `Generation path: ${generatedBrief ? providerLabel(generatedBrief.provider) : "Not generated yet"}`,
       metadata?.artifactKey ? `S3 JSON: ${metadata.artifactKey}` : "S3 JSON: Not saved yet",
@@ -1506,13 +1506,13 @@ const industryFocus = useMemo(() => {
   }
 
   return (
-    <main className={cx("app-shell min-h-screen text-[#111827]", judgeMode && "judge-mode-on")}>
+    <main className={cx("app-shell min-h-screen text-[#111827]", judgeMode && "presenter-guide-on")}>
       <section className="hero-shell">
         <div className="mx-auto max-w-[1500px] px-5 pt-4">
           <div className="top-command">
             <div className="top-command-title">
               <span className="status-dot" />
-              PillarPrep workspace
+              PilarPrep workspace
             </div>
             <div className="top-command-actions">
               {consolePages.map((page) => (
@@ -1531,13 +1531,13 @@ const industryFocus = useMemo(() => {
                 type="button"
                 onClick={toggleJudgeMode}
               >
-                <span>{judgeMode ? "Judge mode on" : "Judge mode"}</span>
-                <small>{handoffReady ? "Packet ready" : "Demo guide"}</small>
+                <span>{judgeMode ? "Guide on" : "Presenter guide"}</span>
+                <small>{handoffReady ? "Packet ready" : "15-min story"}</small>
               </button>
             </div>
           </div>
           {judgeMode ? (
-            <div className="presenter-strip" aria-label="Judge presentation guide">
+            <div className="presenter-strip" aria-label="Presenter walkthrough guide">
               {presenterSteps.map((step, index) => (
                 <div key={step.label} className={cx("presenter-step", index === presenterSteps.length - 1 && handoffReady && "presenter-step-ready")}>
                   <span>{String(index + 1).padStart(2, "0")}</span>
@@ -1557,7 +1557,7 @@ const industryFocus = useMemo(() => {
               <div>
                 <p className="eyebrow">AWS Product Console</p>
                 <h1 className="mt-1 text-3xl font-black text-white sm:text-5xl">
-                  PillarPrep
+                  PilarPrep
                 </h1>
               </div>
             </div>

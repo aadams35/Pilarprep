@@ -1,6 +1,6 @@
-# PillarPrep
+# PilarPrep
 
-PillarPrep is an AWS-focused SA briefing generator for hackathon demos.
+PilarPrep is an AWS-focused SA briefing generator for hackathon demos.
 
 The app has two loops:
 
@@ -24,7 +24,7 @@ Live demos:
 - Local workspace persistence: browser saves the current demo workspace until reset
 - Prompt contract: `docs/prompt-contract.md`
 - Architecture notes: `docs/aws-infrastructure-design.md`
-- Demo architecture slide: `docs/pillarprep-architecture-slide.pptx`
+- Demo architecture slide: `docs/pilarprep-architecture-slide.pptx`
 - AWS Lambda demo runbook: `docs/aws-lambda-demo-runbook.md`
 - Demo script: `docs/demo-script.md`
 - Demo-day checklist: `docs/demo-day-readiness-checklist.md`
@@ -35,7 +35,7 @@ Live demos:
 
 ## Why Bedrock First
 
-Amazon Bedrock is the core v1 choice because PillarPrep needs managed generation, role-aware refinement, guardrails, and a Knowledge Bases path for the Project model. It avoids custom model hosting while keeping the architecture AWS-native. The demo default is Amazon Nova Micro through Bedrock so there is no always-on model server cost.
+Amazon Bedrock is the core v1 choice because PilarPrep needs managed generation, role-aware refinement, guardrails, and a Knowledge Bases path for the Project model. It avoids custom model hosting while keeping the architecture AWS-native. The demo default is Amazon Nova Micro through Bedrock so there is no always-on model server cost.
 
 Recommended production path:
 
@@ -126,9 +126,9 @@ Response:
 
 ## Model And Memory Storage
 
-PillarPrep does not store or host the foundation model. Amazon Bedrock manages the Amazon Nova Micro model and PillarPrep invokes it on demand through Lambda.
+PilarPrep does not store or host the foundation model. Amazon Bedrock manages the Amazon Nova Micro model and PilarPrep invokes it on demand through Lambda.
 
-What PillarPrep stores:
+What PilarPrep stores:
 
 - Prompt contract and fallback rules: versioned in the Lambda code and GitHub repo.
 - Generated brief artifacts: one latest JSON packet and one latest DOCX packet per project in S3.

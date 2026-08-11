@@ -90,13 +90,13 @@ function asArtifactList(value: unknown) {
 function asFollowUpEmail(value: unknown): FollowUpEmailArtifact {
   if (!isRecord(value)) {
     return {
-      subject: "PillarPrep follow-up",
+      subject: "PilarPrep follow-up",
       body: "Promote the approved brief and meeting notes to draft a follow-up email.",
     };
   }
 
   return {
-    subject: asString(value.subject, "PillarPrep follow-up"),
+    subject: asString(value.subject, "PilarPrep follow-up"),
     body: asString(
       value.body,
       "Promote the approved brief and meeting notes to draft a follow-up email."
@@ -156,7 +156,7 @@ export function normalizeBriefResponse(
     citations: asStringList(source.citations, [
       fallbackProvider === "bedrock"
         ? "Amazon Bedrock response"
-        : "PillarPrep demo generator",
+        : "PilarPrep demo generator",
     ]),
   };
 }
