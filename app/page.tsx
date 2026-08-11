@@ -2191,40 +2191,6 @@ const industryFocus = useMemo(() => {
               <section className="rounded-lg border border-[#d8ded2] bg-white shadow-sm">
                 <div className="border-b border-[#e2e7de] p-5">
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#527064]">
-                    AWS-native architecture
-                  </p>
-                  <h2 className="mt-1 text-xl font-black">Backend-ready map</h2>
-                </div>
-                <div className="p-5">
-                  <div className="architecture-map">
-                    {[
-                      "S3 + CloudFront",
-                      "API Gateway",
-                      "Lambda",
-                      "Bedrock",
-                      "Knowledge Base",
-                      "DynamoDB",
-                      "S3 artifacts",
-                      "Guardrails",
-                      "CloudWatch",
-                    ].map((service, index) => (
-                      <div key={service} className="architecture-node">
-                        <span>{index + 1}</span>
-                        <strong>{service}</strong>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-4 text-sm leading-6 text-[#536158]">
-                    Bedrock generates the brief and project model output, Knowledge Bases ground the
-                    Project model, S3 stores artifacts, and DynamoDB tracks
-                    project state.
-                  </p>
-                </div>
-              </section>
-
-              <section className="rounded-lg border border-[#d8ded2] bg-white shadow-sm">
-                <div className="border-b border-[#e2e7de] p-5">
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#527064]">
                     Ranked pillar narrative
                   </p>
                   <h2 className="mt-1 text-xl font-black">Why this matters</h2>

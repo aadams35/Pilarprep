@@ -69,7 +69,7 @@ test("removes the starter preview shell", async () => {
   assert.match(page, /const briefContent = isGenerating/);
   assert.match(page, /setGeneratedBrief\(null\);/);
   assert.match(page, /const displayedProjectAnswer = isGenerating/);
-  assert.doesNotMatch(page, /Ask Project Brain|Ask Project model|Promote to Project|hero-progress|quality-bar|telemetry-bar|Run Judge Mode|Demo state|PillarPrep demo console/);
+  assert.doesNotMatch(page, /Ask Project Brain|Ask Project model|Promote to Project|Backend-ready map|AWS-native architecture|hero-progress|quality-bar|telemetry-bar|Run Judge Mode|Demo state|PillarPrep demo console/);
   assert.match(layout, /PillarPrep \| AWS SA Briefing Copilot/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview/);

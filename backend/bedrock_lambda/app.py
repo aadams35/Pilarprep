@@ -192,6 +192,10 @@ Required JSON schema:
 {json.dumps(schema, ensure_ascii=True, indent=2)}
 
 Content requirements:
+- Before writing, identify the company name, industry, meeting type, ranked pillar order, decision-maker notes, feedback, and meeting notes from the Request JSON. Use those as hard anchors, not optional flavor.
+- Every technical and executive paragraph must name the company or a supplied stakeholder, refer to the rank 1 pillar, and connect to at least one supplied context detail. Do not write a paragraph that could be reused unchanged for another customer.
+- If decision-maker context is supplied, at least two stakeholder or executive paragraphs must use the supplied names, roles, or approved notes. Treat those notes as hypotheses to validate, not as facts.
+- If feedback or meetingNotes are supplied, reflect them directly in the refinement, game plan, projectAnswer, and projectArtifacts.
 - technical: exactly 4 SA-facing paragraphs, not headings. Each paragraph must be 75-120 words, 4-6 complete sentences, connect to the company context, ranked pillars, industry signals, current-state assumptions, and include one explicit discovery question starting with "Ask:".
 - executive: exactly 4 business-facing paragraphs with no AWS jargon. Each paragraph must be 75-110 words, 4-6 complete sentences, name a business risk, outcome, metric, or decision, include ROI or success framing where useful, and include one executive-level question starting with "Ask:".
 - stakeholders: exactly 4 role-aware paragraphs of 55-95 words based only on supplied decision-maker context; if context is thin, say what to validate and include a practical stakeholder question starting with "Ask:".
@@ -204,7 +208,7 @@ Content requirements:
 - Tie technical content to the ranked AWS Well-Architected pillars.
 - Include AWS services only when useful for the conversation, and never list services without explaining the customer decision they support.
 - Treat unknowns as assumptions to validate; do not present guesses as facts.
-- Avoid generic textbook cloud advice; tailor wording to the supplied customer context, industry signals, meeting type, ranked pillars, feedback, decision-maker context, and meeting notes.
+- Avoid generic textbook cloud advice; tailor wording to the supplied customer context, industry signals, meeting type, ranked pillars, feedback, decision-maker context, and meeting notes. If a section sounds generic, rewrite it with the customer name, a ranked pillar tradeoff, a stakeholder signal, and a concrete validation question.
 - Make the answer feel like a strong SA wrote it for a real upcoming meeting: specific, practical, question-led, and useful without follow-up clarification.
 - Do not return short bullets. Every array item should stand alone as a useful mini-brief paragraph.
 

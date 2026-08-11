@@ -197,6 +197,8 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertIn('"pillarRanking"', prompt)
         self.assertIn('"rank": 1', prompt)
         self.assertIn("rank 1 is the primary discovery lens", prompt)
+        self.assertIn("hard anchors, not optional flavor", prompt)
+        self.assertIn("Do not write a paragraph that could be reused unchanged", prompt)
         self.assertIn("exactly 4 SA-facing paragraphs", prompt)
         self.assertIn("Ask:", prompt)
 
