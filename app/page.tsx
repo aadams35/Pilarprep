@@ -14,6 +14,7 @@ import type {
   BriefRequest,
   BriefResponse,
   DecisionMakerContext,
+  ProjectArtifactItem,
 } from "@/lib/pillarprep/types";
 
 type BriefTab =
@@ -912,6 +913,62 @@ const industryFocus = useMemo(() => {
     projectBrainAnswer && projectAnswerKey === currentProjectAnswerKey
       ? projectBrainAnswer
       : projectAnswer;
+  const handoffPacketText = (() => {
+    const metadata = generatedBrief?.metadata;
+    const sources = generatedBrief?.citations ?? evidenceSources;
+    const artifactList = (title: string, items: ProjectArtifactItem[] | undefined) => [
+      title,
+      ...(items?.length
+        ? items.map((item, index) => {
+            const owner = item.owner ? ` | Owner: ${item.owner}` : "";
+            const status = item.status ? ` | Status: ${item.status}` : "";
+            return `${index + 1}. ${item.title}${owner}${status}\n   ${item.detail}`;
+          })
+        : ["Not generated yet."]),
+    ].join("\n");
+    const briefSection = (title: string, items: string[]) => [
+      title,
+      ...items.map((item, index) => `${index + 1}. ${item}`),
+    ].join("\n");
+
+    return [
+      `PillarPrep handoff packet - ${company || "Customer"}`,
+      `Meeting: ${meetingType} | Industry: ${industry} | Size: ${companySize}`,
+      `Generation path: ${generatedBrief ? providerLabel(generatedBrief.provider) : "Not generated yet"}`,
+      metadata?.artifactKey ? `S3 artifact: ${metadata.artifactKey}` : "S3 artifact: Not saved yet",
+      metadata?.stateKey ? `Project state: ${metadata.stateKey}` : "Project state: Not saved yet",
+      "",
+      "Ranked AWS priorities",
+      ...selectedPillars.map((pillar, index) => `${index + 1}. ${pillar}`),
+      "",
+      "Customer context",
+      context || "No customer context captured yet.",
+      "",
+      briefSection("Technical brief", briefContent.technical),
+      "",
+      briefSection("Executive brief", briefContent.executive),
+      "",
+      briefSection("Stakeholder lens", briefContent.stakeholders),
+      "",
+      briefSection("SA game plan", briefContent.gameplan),
+      "",
+      briefSection("Objection handling", briefContent.objections),
+      "",
+      "Project model answer",
+      displayedProjectAnswer,
+      "",
+      artifactList("Two-week implementation plan", generatedBrief?.projectArtifacts?.twoWeekPlan),
+      "",
+      artifactList("Risk register", generatedBrief?.projectArtifacts?.riskRegister),
+      "",
+      artifactList("Stakeholder map", generatedBrief?.projectArtifacts?.stakeholderMap),
+      "",
+      "Follow-up email",
+      followUpEmailText,
+      "",
+      `Sources: ${sources.join(", ")}`,
+    ].join("\n");
+  })();
 
   const handoffItems = [
     {
@@ -1233,6 +1290,9 @@ const industryFocus = useMemo(() => {
 
   function copyFollowUpEmail() {
     void copyText("Follow-up email", followUpEmailText);
+  }
+  function copyHandoffPacket() {
+    void copyText("Handoff packet", handoffPacketText);
   }
 
   function resetWorkspace() {
@@ -1934,6 +1994,17 @@ const industryFocus = useMemo(() => {
                         <button className="copy-button" type="button" onClick={copyActiveBrief}>
                           Copy tab
                         </button>
+                        <button
+                          className="copy-button"
+                          type="button"
+                          disabled={!generatedBrief}
+                          onClick={copyHandoffPacket}
+                        >
+                          Copy packet
+                        </button>
+                        {copiedLabel === "Handoff packet" ? (
+                          <span className="copy-state">Packet copied</span>
+                        ) : null}
                         {copiedLabel === briefTabLabel(activeTab) ? (
                           <span className="copy-state">Copied</span>
                         ) : null}
@@ -2224,6 +2295,17 @@ const industryFocus = useMemo(() => {
                           >
                             Copy email
                           </button>
+                          <button
+                            className="copy-button copy-button-dark"
+                            type="button"
+                            disabled={!generatedBrief}
+                            onClick={copyHandoffPacket}
+                          >
+                            Copy packet
+                          </button>
+                          {copiedLabel === "Handoff packet" ? (
+                            <span className="copy-state copy-state-dark">Packet copied</span>
+                          ) : null}
                           {copiedLabel === "Follow-up email" ? (
                             <span className="copy-state copy-state-dark">Copied</span>
                           ) : null}
