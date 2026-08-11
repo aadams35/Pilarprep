@@ -3,7 +3,9 @@ param(
   [string]$Region = "us-east-1",
   [string]$AllowedOrigin = "http://127.0.0.1:3002",
   [string]$BedrockModelId = "us.amazon.nova-micro-v1:0",
+  [string]$BedrockFoundationModelId = "amazon.nova-micro-v1:0",
   [string]$PillarPrepApiKey = "",
+  [string]$PermissionsBoundaryArn = "",
   [string]$ResourcePrefix = "pillarprep-demo",
   [string]$ProjectName = "PillarPrep",
   [string]$EnvironmentName = "demo",
@@ -100,8 +102,10 @@ $parameterOverrides = @(
   "Owner=$Owner",
   "CostCenter=$CostCenter",
   "BedrockModelId=$BedrockModelId",
+  "BedrockFoundationModelId=$BedrockFoundationModelId",
   "AllowedOrigin=$AllowedOrigin",
-  "PillarPrepApiKey=$PillarPrepApiKey"
+  "PillarPrepApiKey=$PillarPrepApiKey",
+  "PermissionsBoundaryArn=$PermissionsBoundaryArn"
 )
 
 $stackTags = @(
@@ -125,6 +129,7 @@ $deployArgs = @(
   $StackName,
   "--capabilities",
   "CAPABILITY_IAM",
+  "CAPABILITY_NAMED_IAM",
   "--parameter-overrides"
 ) + $parameterOverrides + @(
   "--tags"

@@ -32,7 +32,7 @@ If `aws sts get-caller-identity` says credentials are missing, run your normal A
 
 1. Confirm the AWS account has Amazon Bedrock model access enabled for the selected model.
 2. Confirm local AWS credentials are active.
-3. Deploy the backend with the AWS CLI script. This packages and deploys API Gateway, Lambda, S3, DynamoDB, API-key enforcement, and a CloudWatch dashboard through CloudFormation.
+3. Deploy the backend with the AWS CLI script. This packages and deploys API Gateway, Lambda, S3, DynamoDB, API-key enforcement, explicit IAM controls, and a CloudWatch dashboard through CloudFormation.
 
 ```bash
 .\scripts\deploy-aws-backend.ps1 -Region us-east-1 -AllowedOrigin http://127.0.0.1:3002
@@ -53,7 +53,7 @@ Optional parameters:
 -CostCenter hackathon
 ```
 
-The deploy script applies the shared tag standard to the CloudFormation stack and to the packaging bucket. The application resources receive matching tags from the SAM template. See `docs/aws-resource-tags-and-names.md` for the full naming and tagging standard.
+The deploy script applies the shared tag standard to the CloudFormation stack and to the packaging bucket. The application resources receive matching tags from the SAM template. The Lambda execution role is explicit and least-privilege, with optional permissions-boundary support. See `docs/aws-resource-tags-and-names.md` and `docs/aws-iam-controls.md`.
 
 The low-cost demo path uses `us.amazon.nova-micro-v1:0`. Anthropic Sonnet profiles were visible in the account, but Lambda calls required the Anthropic use-case details form before they could be used reliably.
 

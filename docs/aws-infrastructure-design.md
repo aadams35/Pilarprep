@@ -67,7 +67,7 @@ The backend stack deploys these resources:
 - `BriefFunction`: Python 3.12 AWS Lambda handler
 - `BriefArtifactsBucket`: private, encrypted, versioned S3 bucket for generated brief artifacts
 - `ProjectStateTable`: DynamoDB table keyed by `projectId` and `sortKey`
-- IAM permissions for Lambda basic logs, Bedrock invocation, S3 artifact writes, and DynamoDB state writes
+- `BriefFunctionRole`: explicit least-privilege Lambda role for logs, X-Ray, Bedrock invocation, S3 artifacts, and DynamoDB state
 - Optional `x-api-key` enforcement in Lambda
 - `PillarPrepDashboard`: CloudWatch dashboard for requests, success, unauthorized requests, Lambda health, API Gateway, and recent logs
 
@@ -78,7 +78,7 @@ The templates and deploy scripts now use a shared tagging standard. Default tags
 
 The `ResourcePrefix` parameter defaults to `pillarprep-demo` and drives safe display names such as `pillarprep-demo-brief-api`, `pillarprep-demo-brief-generator`, `pillarprep-demo-project-state`, and `pillarprep-demo-cloudfront-web`. Stateful resources use `Name` tags instead of forced physical renames to avoid replacing buckets, tables, or functions during the demo.
 
-Full standard: `docs/aws-resource-tags-and-names.md`.
+Full standard: `docs/aws-resource-tags-and-names.md`. IAM controls: `docs/aws-iam-controls.md`.
 ## Current Demo Boundary
 
 Working now:

@@ -151,7 +151,7 @@ The fastest deployment path for this machine is the AWS CLI script:
 .\scripts\deploy-aws-backend.ps1 -Region us-east-1 -AllowedOrigin http://127.0.0.1:3002
 ```
 
-That script packages and deploys API Gateway, Lambda, S3, DynamoDB, optional API-key enforcement, and a CloudWatch dashboard. Full deployment steps are in `docs/aws-lambda-demo-runbook.md`, and the current infrastructure map is in `docs/aws-infrastructure-design.md`.
+That script packages and deploys API Gateway, Lambda, S3, DynamoDB, optional API-key enforcement, explicit least-privilege IAM controls, and a CloudWatch dashboard. Full deployment steps are in `docs/aws-lambda-demo-runbook.md`, the IAM control summary is in `docs/aws-iam-controls.md`, and the current infrastructure map is in `docs/aws-infrastructure-design.md`.
 
 After deployment, set the frontend environment variable to the stack output URL:
 
@@ -176,7 +176,7 @@ ARTIFACT_BUCKET=...
 PROJECT_TABLE=...
 ```
 
-For production, scope Bedrock IAM permissions to the selected model ARN and add alarms, guardrails, and stronger auth before public sharing.
+For production, keep the scoped Bedrock IAM policy, add Bedrock Guardrails, configure alarms, and replace the demo API key with stronger auth before public sharing.
 
 Optional Strands reference:
 

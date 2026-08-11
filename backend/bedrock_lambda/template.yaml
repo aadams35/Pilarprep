@@ -17,8 +17,10 @@ Metadata:
           default: Bedrock and API settings
         Parameters:
           - BedrockModelId
+          - BedrockFoundationModelId
           - AllowedOrigin
           - PillarPrepApiKey
+          - PermissionsBoundaryArn
     ParameterLabels:
       ResourcePrefix:
         default: Resource name prefix
@@ -52,6 +54,10 @@ Parameters:
   BedrockModelId:
     Type: String
     Default: us.amazon.nova-micro-v1:0
+  BedrockFoundationModelId:
+    Type: String
+    Default: amazon.nova-micro-v1:0
+    Description: Underlying Bedrock foundation model ARN segment allowed by the Lambda IAM role.
   AllowedOrigin:
     Type: String
     Default: "*"
@@ -60,6 +66,13 @@ Parameters:
     Default: ""
     NoEcho: true
     Description: Optional shared secret required in the x-api-key header.
+  PermissionsBoundaryArn:
+    Type: String
+    Default: ""
+    Description: Optional IAM permissions boundary ARN attached to the Lambda execution role.
+
+Conditions:
+  HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
 
 Globals:
   Function:
@@ -102,12 +115,126 @@ Resources:
           - POST
           - OPTIONS
 
+  BriefFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ResourcePrefix}-brief-generator"
+      RetentionInDays: 14
+      Tags:
+        - Key: Name
+          Value: !Sub "${ResourcePrefix}-brief-generator-logs"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Application
+          Value: sa-briefing-generator
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: aadams35/Pilarprep
+        - Key: DataClassification
+          Value: demo
+
+  BriefFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ResourcePrefix}-brief-generator-role"
+      Description: !Sub "Least-privilege Lambda role for ${ProjectName} ${EnvironmentName} brief generation"
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Tags:
+        - Key: Name
+          Value: !Sub "${ResourcePrefix}-brief-generator-role"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Application
+          Value: sa-briefing-generator
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: aadams35/Pilarprep
+        - Key: DataClassification
+          Value: demo
+      Policies:
+        - PolicyName: !Sub "${ResourcePrefix}-lambda-logs"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: WriteOwnLambdaLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-brief-generator:*"
+        - PolicyName: !Sub "${ResourcePrefix}-xray-tracing"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: PublishXRayTraceSegments
+                Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: "*"
+        - PolicyName: !Sub "${ResourcePrefix}-bedrock-invoke"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: InvokeConfiguredBedrockModel
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/${BedrockFoundationModelId}"
+                  - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/${BedrockModelId}"
+                  - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:application-inference-profile/*"
+        - PolicyName: !Sub "${ResourcePrefix}-project-artifacts"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: WriteBriefArtifacts
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub "${BriefArtifactsBucket.Arn}/*"
+              - Sid: UpdateProjectState
+                Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt ProjectStateTable.Arn
+
   BriefFunction:
     Type: AWS::Serverless::Function
+    DependsOn:
+      - BriefFunctionLogGroup
     Properties:
+      FunctionName: !Sub "${ResourcePrefix}-brief-generator"
       Description: !Sub "${ProjectName} ${EnvironmentName} Bedrock brief generator and Project Brain handler"
       CodeUri: .
       Handler: app.handler
+      Role: !GetAtt BriefFunctionRole.Arn
       PropagateTags: true
       Tags:
         Name: !Sub "${ResourcePrefix}-brief-generator"
@@ -126,28 +253,6 @@ Resources:
             ApiId: !Ref BriefApi
             Path: /brief
             Method: POST
-      Policies:
-        - AWSLambdaBasicExecutionRole
-        - Statement:
-            Effect: Allow
-            Action:
-              - bedrock:InvokeModel
-              - bedrock:InvokeModelWithResponseStream
-            Resource: "*"
-        - Statement:
-            Effect: Allow
-            Action:
-              - s3:GetObject
-              - s3:PutObject
-            Resource: !Sub "${BriefArtifactsBucket.Arn}/*"
-        - Statement:
-            Effect: Allow
-            Action:
-              - dynamodb:GetItem
-              - dynamodb:PutItem
-              - dynamodb:Query
-              - dynamodb:UpdateItem
-            Resource: !GetAtt ProjectStateTable.Arn
 
   BriefArtifactsBucket:
     Type: AWS::S3::Bucket
@@ -323,6 +428,9 @@ Outputs:
   ProjectStateTableName:
     Description: DynamoDB table for project state
     Value: !Ref ProjectStateTable
+  BriefFunctionRoleName:
+    Description: IAM role used by the Lambda brief generator
+    Value: !Ref BriefFunctionRole
   DashboardName:
     Description: CloudWatch dashboard for PillarPrep backend operations
     Value: !Ref PillarPrepDashboard
