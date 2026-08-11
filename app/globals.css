@@ -197,6 +197,114 @@ body {
   color: rgba(23, 32, 28, 0.62);
 }
 
+
+.judge-mode-toggle {
+  display: grid;
+  min-height: 2.7rem;
+  align-content: center;
+  gap: 0.1rem;
+  border: 1px solid rgba(240, 185, 90, 0.55);
+  border-radius: 8px;
+  background: rgba(240, 185, 90, 0.12);
+  color: #f6d79b;
+  padding: 0 0.8rem;
+  text-align: left;
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.judge-mode-toggle:hover {
+  transform: translateY(-1px);
+  background: rgba(240, 185, 90, 0.2);
+}
+
+.judge-mode-toggle span {
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.judge-mode-toggle small {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.65rem;
+  font-weight: 850;
+}
+
+.judge-mode-toggle-active {
+  border-color: #f0b95a;
+  background: #f0b95a;
+  color: #17201c;
+  box-shadow: 0 14px 30px rgba(240, 185, 90, 0.22);
+}
+
+.judge-mode-toggle-active small {
+  color: rgba(23, 32, 28, 0.66);
+}
+
+.presenter-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.presenter-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.7rem;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  padding: 0.76rem;
+}
+
+.presenter-step > span {
+  display: grid;
+  height: 2rem;
+  width: 2rem;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(159, 215, 192, 0.14);
+  color: #b7f0d8;
+  font-size: 0.72rem;
+  font-weight: 1000;
+}
+
+.presenter-step strong,
+.presenter-step p {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.presenter-step strong {
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 1000;
+}
+
+.presenter-step p {
+  margin-top: 0.18rem;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.presenter-step-ready {
+  border-color: rgba(240, 185, 90, 0.58);
+  background: rgba(240, 185, 90, 0.14);
+}
+
+.presenter-step-ready > span {
+  background: #f0b95a;
+  color: #17201c;
+}
+
 .page-view {
   display: grid;
   gap: 1rem;
@@ -2407,6 +2515,97 @@ textarea:focus-visible {
   line-height: 1.45;
 }
 
+
+.handoff-ready-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  border: 1px solid #d8ded2;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(240, 185, 90, 0.1), transparent 54%),
+    #ffffff;
+  padding: 1rem;
+  box-shadow: 0 16px 40px rgba(23, 32, 28, 0.08);
+}
+
+.handoff-ready-card span {
+  display: inline-flex;
+  min-height: 1.7rem;
+  align-items: center;
+  border-radius: 999px;
+  background: #eef2ea;
+  color: #536158;
+  padding: 0 0.62rem;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.handoff-ready-card h3 {
+  margin-top: 0.55rem;
+  color: #17201c;
+  font-size: 1.18rem;
+  font-weight: 1000;
+  line-height: 1.2;
+}
+
+.handoff-ready-card p {
+  margin-top: 0.42rem;
+  max-width: 52rem;
+  color: #536158;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.handoff-ready-card-done {
+  border-color: rgba(240, 185, 90, 0.65);
+  background:
+    linear-gradient(135deg, rgba(240, 185, 90, 0.24), transparent 54%),
+    #fffdf7;
+}
+
+.handoff-ready-card-done span {
+  background: #f0b95a;
+  color: #17201c;
+}
+
+.handoff-ready-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.handoff-ready-action {
+  display: inline-flex;
+  min-height: 2.4rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfd8cb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #17201c;
+  padding: 0 0.82rem;
+  font-size: 0.74rem;
+  font-weight: 950;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.handoff-ready-action-primary {
+  border-color: #214c3a;
+  background: #214c3a;
+  color: #ffffff;
+}
+
+.handoff-ready-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .meeting-panel {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -2790,6 +2989,15 @@ textarea:focus-visible {
   }
 
   .top-command-actions {
+    justify-content: flex-start;
+  }
+
+  .presenter-strip,
+  .handoff-ready-card {
+    grid-template-columns: 1fr;
+  }
+
+  .handoff-ready-actions {
     justify-content: flex-start;
   }
 

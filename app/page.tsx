@@ -667,6 +667,7 @@ export default function Home() {
   );
   const [copiedLabel, setCopiedLabel] = useState("");
   const [activePage, setActivePage] = useState<ConsolePage>("setup");
+  const [judgeMode, setJudgeMode] = useState(false);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- Mount-only localStorage hydration restores the saved workspace state. */
@@ -761,6 +762,7 @@ export default function Home() {
       setProjectAnswerKey(
         typeof saved.projectAnswerKey === "string" ? saved.projectAnswerKey : ""
       );
+      setJudgeMode(Boolean(saved.judgeMode));
     } catch {
       window.localStorage.removeItem(workspaceStorageKey);
     } finally {
@@ -846,6 +848,7 @@ export default function Home() {
         generatedBrief,
         projectBrainAnswer,
         projectAnswerKey,
+        judgeMode,
       })
     );
   }, [
@@ -860,6 +863,7 @@ export default function Home() {
     feedback,
     generatedBrief,
     industry,
+    judgeMode,
     meetingNotes,
     meetingType,
     projectAnswerKey,
@@ -1192,6 +1196,34 @@ const industryFocus = useMemo(() => {
     ];
   }, [generatedBrief, generationMode, hostedIamMode]);
 
+  const handoffReady = Boolean(
+    generatedBrief &&
+      promoted &&
+      generatedBrief.metadata?.docxArtifactKey &&
+      generatedBrief.metadata?.stateKey &&
+      generatedBrief.projectArtifacts?.twoWeekPlan?.length &&
+      generatedBrief.projectArtifacts?.riskRegister?.length &&
+      generatedBrief.projectArtifacts?.stakeholderMap?.length
+  );
+  const presenterSteps = [
+    {
+      label: "Problem",
+      value: "SA prep and handoff are manual",
+    },
+    {
+      label: "AWS proof",
+      value: generatedBrief?.provider === "bedrock" ? "Bedrock run captured" : "Ready to generate",
+    },
+    {
+      label: "Artifacts",
+      value: generatedBrief?.metadata?.docxArtifactKey ? "S3 DOCX + JSON saved" : "Awaiting first run",
+    },
+    {
+      label: "Finish",
+      value: handoffReady ? "Handoff packet ready" : promoted ? "Review packet" : "Build project model",
+    },
+  ];
+
   function loadScenario(nextScenario: Scenario) {
     setScenarioId(nextScenario.id);
     setCompany(nextScenario.company);
@@ -1453,6 +1485,15 @@ const industryFocus = useMemo(() => {
     void copyText("DOCX path", generatedBrief?.metadata?.docxArtifactKey ?? "");
   }
 
+  function toggleJudgeMode() {
+    const nextJudgeMode = !judgeMode;
+    setJudgeMode(nextJudgeMode);
+
+    if (nextJudgeMode) {
+      setActivePage(handoffReady || promoted ? "project" : generatedBrief ? "brief" : "setup");
+    }
+  }
+
   function resetWorkspace() {
     const firstScenario = scenarios[0];
 
@@ -1460,11 +1501,12 @@ const industryFocus = useMemo(() => {
     setFeedback(defaultFeedback);
     setRole(defaultRole);
     setActivePrompt(rolePrompts[defaultRole][0]);
+    setJudgeMode(false);
     loadScenario(firstScenario);
   }
 
   return (
-    <main className="app-shell min-h-screen text-[#17201c]">
+    <main className={cx("app-shell min-h-screen text-[#17201c]", judgeMode && "judge-mode-on")}>
       <section className="hero-shell">
         <div className="mx-auto max-w-[1500px] px-5 pt-4">
           <div className="top-command">
@@ -1484,8 +1526,29 @@ const industryFocus = useMemo(() => {
                   <small>{page.detail}</small>
                 </button>
               ))}
+              <button
+                className={cx("judge-mode-toggle", judgeMode && "judge-mode-toggle-active")}
+                type="button"
+                onClick={toggleJudgeMode}
+              >
+                <span>{judgeMode ? "Judge mode on" : "Judge mode"}</span>
+                <small>{handoffReady ? "Packet ready" : "Demo guide"}</small>
+              </button>
             </div>
           </div>
+          {judgeMode ? (
+            <div className="presenter-strip" aria-label="Judge presentation guide">
+              {presenterSteps.map((step, index) => (
+                <div key={step.label} className={cx("presenter-step", index === presenterSteps.length - 1 && handoffReady && "presenter-step-ready")}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <div>
+                    <strong>{step.label}</strong>
+                    <p>{step.value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="mx-auto grid max-w-[1500px] gap-5 px-5 py-6 xl:grid-cols-[1fr_400px] xl:items-stretch">
           <div className="hero-copy">
@@ -2424,6 +2487,47 @@ const industryFocus = useMemo(() => {
             <div>
               <p>Auto-build after generation</p>
               <h2>Turn the final brief into the follow-on project model</h2>
+            </div>
+          </div>
+
+
+          <div className={cx("handoff-ready-card", handoffReady && "handoff-ready-card-done")}>
+            <div>
+              <span>{handoffReady ? "Handoff packet ready" : "Handoff packet building"}</span>
+              <h3>{handoffReady ? `${company || "Customer"} is ready for project handoff` : "Generate and review the project model to finish the demo"}</h3>
+              <p>
+                {handoffReady
+                  ? "The latest DOCX, JSON packet, project state, implementation plan, risks, stakeholders, and follow-up email are ready for the delivery team."
+                  : "The finish state appears once the brief is generated, promoted into the Project model, and saved as the latest client packet."}
+              </p>
+            </div>
+            <div className="handoff-ready-actions">
+              {generatedBrief?.metadata?.docxDownloadUrl ? (
+                <a
+                  className="handoff-ready-action handoff-ready-action-primary"
+                  href={generatedBrief.metadata.docxDownloadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Download DOCX
+                </a>
+              ) : null}
+              <button
+                className="handoff-ready-action"
+                type="button"
+                disabled={!generatedBrief?.metadata?.docxArtifactKey}
+                onClick={copyDocxPath}
+              >
+                Copy S3 path
+              </button>
+              <button
+                className="handoff-ready-action"
+                type="button"
+                disabled={!generatedBrief}
+                onClick={copyHandoffPacket}
+              >
+                Copy packet
+              </button>
             </div>
           </div>
 
