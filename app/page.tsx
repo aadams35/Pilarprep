@@ -416,6 +416,28 @@ const productionChecks = [
   "S3 artifact retention",
   "DynamoDB project state",
 ];
+const costGuardrails = [
+  {
+    label: "Daily cap",
+    value: "under 1 USD/day",
+    detail: "AWS Budget is deployed with a low daily threshold for the demo account.",
+  },
+  {
+    label: "Model choice",
+    value: "Nova Micro",
+    detail: "Default Bedrock model keeps brief generation inexpensive while the prompt stays portable.",
+  },
+  {
+    label: "Token control",
+    value: "Bounded output",
+    detail: "Lambda sets max tokens and validates short or malformed responses before returning them.",
+  },
+  {
+    label: "Usage trail",
+    value: "CloudWatch",
+    detail: "Each response records model ID, token count, latency, S3 artifact, and project state metadata.",
+  },
+];
 
 const demoSignals = [
   {
@@ -1534,6 +1556,21 @@ const industryFocus = useMemo(() => {
             {productionChecks.map((check) => (
               <span key={check}>{check}</span>
             ))}
+          </div>
+          <div className="cost-guardrail-panel">
+            <div>
+              <p>Cost guardrails</p>
+              <strong>Demo target: under 1 USD per day</strong>
+            </div>
+            <div className="cost-guardrail-grid">
+              {costGuardrails.map((item) => (
+                <div key={item.label} className="cost-guardrail-card">
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                  <p>{item.detail}</p>
+                </div>
+              ))}
+            </div>
           </div>
           <div className="implementation-queue">
             <div>
