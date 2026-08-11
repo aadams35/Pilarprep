@@ -1,7 +1,12 @@
 param(
   [string]$StackName = "pillarprep-frontend",
   [string]$Region = "us-east-1",
-  [string]$BucketName = ""
+  [string]$BucketName = "",
+  [string]$ResourcePrefix = "pillarprep-demo",
+  [string]$ProjectName = "PillarPrep",
+  [string]$EnvironmentName = "demo",
+  [string]$Owner = "austin-adams",
+  [string]$CostCenter = "hackathon"
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,10 +56,32 @@ try {
   Pop-Location
 }
 
+$parameterOverrides = @(
+  "ResourcePrefix=$ResourcePrefix",
+  "ProjectName=$ProjectName",
+  "EnvironmentName=$EnvironmentName",
+  "Owner=$Owner",
+  "CostCenter=$CostCenter",
+  "FrontendBucketName=$BucketName"
+)
+
+$stackTags = @(
+  "Name=$StackName",
+  "Project=$ProjectName",
+  "Application=sa-briefing-generator",
+  "Environment=$EnvironmentName",
+  "Owner=$Owner",
+  "CostCenter=$CostCenter",
+  "ManagedBy=cloudformation",
+  "Repository=aadams35/Pilarprep",
+  "DataClassification=demo"
+)
+
 Invoke-Aws cloudformation deploy `
   --template-file $templatePath `
   --stack-name $StackName `
-  --parameter-overrides FrontendBucketName=$BucketName `
+  --parameter-overrides $parameterOverrides `
+  --tags $stackTags `
   --region $Region
 
 $outputs = Invoke-Aws cloudformation describe-stacks `

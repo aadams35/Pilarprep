@@ -3,7 +3,12 @@ param(
   [string]$Region = "us-east-1",
   [string]$AllowedOrigin = "http://127.0.0.1:3002",
   [string]$BedrockModelId = "us.amazon.nova-micro-v1:0",
-  [string]$PillarPrepApiKey = ""
+  [string]$PillarPrepApiKey = "",
+  [string]$ResourcePrefix = "pillarprep-demo",
+  [string]$ProjectName = "PillarPrep",
+  [string]$EnvironmentName = "demo",
+  [string]$Owner = "austin-adams",
+  [string]$CostCenter = "hackathon"
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +24,22 @@ function Invoke-Aws {
   if ($LASTEXITCODE -ne 0) {
     throw "AWS CLI command failed. Re-run with AWS CLI debug output only if needed."
   }
+}
+
+function New-TagSetJson($Name) {
+  @{
+    TagSet = @(
+      @{ Key = "Name"; Value = $Name },
+      @{ Key = "Project"; Value = $ProjectName },
+      @{ Key = "Application"; Value = "sa-briefing-generator" },
+      @{ Key = "Environment"; Value = $EnvironmentName },
+      @{ Key = "Owner"; Value = $Owner },
+      @{ Key = "CostCenter"; Value = $CostCenter },
+      @{ Key = "ManagedBy"; Value = "cloudformation" },
+      @{ Key = "Repository"; Value = "aadams35/Pilarprep" },
+      @{ Key = "DataClassification"; Value = "demo" }
+    )
+  } | ConvertTo-Json -Depth 5 -Compress
 }
 
 Require-Command aws
@@ -59,17 +80,47 @@ if (-not $bucketExists) {
     --region $Region | Out-Null
 }
 
+$packagingBucketTags = New-TagSetJson "$ResourcePrefix-cfn-package"
+Invoke-Aws s3api put-bucket-tagging `
+  --bucket $bucketName `
+  --tagging $packagingBucketTags `
+  --region $Region | Out-Null
+
 Invoke-Aws cloudformation package `
   --template-file $templatePath `
   --s3-bucket $bucketName `
   --output-template-file $packagedPath `
   --region $Region | Out-Null
 
+$parameterOverrides = @(
+  "ResourcePrefix=$ResourcePrefix",
+  "ProjectName=$ProjectName",
+  "EnvironmentName=$EnvironmentName",
+  "Owner=$Owner",
+  "CostCenter=$CostCenter",
+  "BedrockModelId=$BedrockModelId",
+  "AllowedOrigin=$AllowedOrigin",
+  "PillarPrepApiKey=$PillarPrepApiKey"
+)
+
+$stackTags = @(
+  "Name=$StackName",
+  "Project=$ProjectName",
+  "Application=sa-briefing-generator",
+  "Environment=$EnvironmentName",
+  "Owner=$Owner",
+  "CostCenter=$CostCenter",
+  "ManagedBy=cloudformation",
+  "Repository=aadams35/Pilarprep",
+  "DataClassification=demo"
+)
+
 Invoke-Aws cloudformation deploy `
   --template-file $packagedPath `
   --stack-name $StackName `
   --capabilities CAPABILITY_IAM `
-  --parameter-overrides BedrockModelId=$BedrockModelId AllowedOrigin=$AllowedOrigin PillarPrepApiKey=$PillarPrepApiKey `
+  --parameter-overrides $parameterOverrides `
+  --tags $stackTags `
   --region $Region
 
 Write-Host ""

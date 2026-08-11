@@ -71,6 +71,14 @@ The backend stack deploys these resources:
 - Optional `x-api-key` enforcement in Lambda
 - `PillarPrepDashboard`: CloudWatch dashboard for requests, success, unauthorized requests, Lambda health, API Gateway, and recent logs
 
+
+## Resource Names And Tags
+
+The templates and deploy scripts now use a shared tagging standard. Default tags include `Project=PillarPrep`, `Application=sa-briefing-generator`, `Environment=demo`, `Owner=austin-adams`, `CostCenter=hackathon`, `ManagedBy=cloudformation`, `Repository=aadams35/Pilarprep`, and `DataClassification=demo`.
+
+The `ResourcePrefix` parameter defaults to `pillarprep-demo` and drives safe display names such as `pillarprep-demo-brief-api`, `pillarprep-demo-brief-generator`, `pillarprep-demo-project-state`, and `pillarprep-demo-cloudfront-web`. Stateful resources use `Name` tags instead of forced physical renames to avoid replacing buckets, tables, or functions during the demo.
+
+Full standard: `docs/aws-resource-tags-and-names.md`.
 ## Current Demo Boundary
 
 Working now:

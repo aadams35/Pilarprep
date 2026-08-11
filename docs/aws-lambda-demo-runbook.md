@@ -46,7 +46,14 @@ Optional parameters:
 -AllowedOrigin http://127.0.0.1:3002
 -BedrockModelId us.amazon.nova-micro-v1:0
 -PillarPrepApiKey <private-demo-key>
+-ResourcePrefix pillarprep-demo
+-ProjectName PillarPrep
+-EnvironmentName demo
+-Owner austin-adams
+-CostCenter hackathon
 ```
+
+The deploy script applies the shared tag standard to the CloudFormation stack and to the packaging bucket. The application resources receive matching tags from the SAM template. See `docs/aws-resource-tags-and-names.md` for the full naming and tagging standard.
 
 The low-cost demo path uses `us.amazon.nova-micro-v1:0`. Anthropic Sonnet profiles were visible in the account, but Lambda calls required the Anthropic use-case details form before they could be used reliably.
 

@@ -138,7 +138,7 @@ Current AWS frontend URL:
 https://d2e0btay0ynyf.cloudfront.net
 ```
 
-Static frontend infrastructure lives in `backend/frontend_static/template.yaml`.
+Static frontend infrastructure lives in `backend/frontend_static/template.yaml`. Resource naming and tagging standard: `docs/aws-resource-tags-and-names.md`.
 ## AWS Backend
 
 The Lambda reference lives in `backend/bedrock_lambda/app.py`.
