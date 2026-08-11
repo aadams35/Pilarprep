@@ -111,7 +111,7 @@ Response:
 
 ## AWS Frontend
 
-The AWS-hosted frontend uses a static Vite build of the existing React UI. It is deployed to a private S3 bucket behind CloudFront and runs in browser-only demo mode, so it does not call Bedrock or `/api/brief` while models are paused.
+The AWS-hosted frontend uses a static Vite build of the existing React UI. It is deployed to a private S3 bucket behind CloudFront and runs in browser-only demo mode, so it does not call Bedrock or `/api/brief` from the public bundle. Live AWS mode is kept behind the server-backed local/Vinext route so the API key stays private.
 
 ```bash
 .\scripts\deploy-aws-frontend.ps1 -Region us-east-1
@@ -136,7 +136,7 @@ The fastest deployment path for this machine is the AWS CLI script:
 .\scripts\deploy-aws-backend.ps1 -Region us-east-1 -AllowedOrigin http://127.0.0.1:3002
 ```
 
-That script packages and deploys API Gateway, Lambda, S3, and DynamoDB. Full deployment steps are in `docs/aws-lambda-demo-runbook.md`, and the current infrastructure map is in `docs/aws-infrastructure-design.md`.
+That script packages and deploys API Gateway, Lambda, S3, DynamoDB, optional API-key enforcement, and a CloudWatch dashboard. Full deployment steps are in `docs/aws-lambda-demo-runbook.md`, and the current infrastructure map is in `docs/aws-infrastructure-design.md`.
 
 After deployment, set the frontend environment variable to the stack output URL:
 
@@ -144,13 +144,15 @@ After deployment, set the frontend environment variable to the stack output URL:
 PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
 ```
 
-If API Gateway is protected with an API key, also set:
+For Live AWS mode, set the protected API key on the server only:
 
 ```bash
 PILLARPREP_BACKEND_API_KEY=...
 ```
 
-When `PILLARPREP_BACKEND_URL` is absent, the app uses the local demo generator.
+When `PILLARPREP_BACKEND_URL` is absent, or when the UI is in Demo mode, the app uses the local demo generator. Live AWS mode forwards through the server route with the private API key.
+
+The backend stack outputs `DashboardUrl` for the CloudWatch operations view. Live Bedrock responses also include metadata with `artifactKey`, `projectId`, and `stateKey` so the UI can show where the project artifact was saved.
 
 The Lambda reference writes generated output to S3 and DynamoDB when these environment variables are present:
 
@@ -159,7 +161,7 @@ ARTIFACT_BUCKET=...
 PROJECT_TABLE=...
 ```
 
-For production, scope Bedrock IAM permissions to the selected model ARN and add CloudWatch dashboards, alarms, guardrails, and lightweight auth before public sharing.
+For production, scope Bedrock IAM permissions to the selected model ARN and add alarms, guardrails, and stronger auth before public sharing.
 
 Optional Strands reference:
 
@@ -179,4 +181,3 @@ npm run eval:briefs
 The local app works without AWS credentials because `/api/brief` currently uses the demo provider. Swap the API implementation to the Bedrock Lambda once the AWS sandbox is ready.
 
 The browser also stores the current workspace locally so the demo can survive refreshes. Use `Reset workspace` in the UI when you want to return to the default scenario.
-

@@ -10,6 +10,46 @@ MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-pro-v1:0")
 REGION = os.getenv("AWS_REGION", "us-east-1")
 ARTIFACT_BUCKET = os.getenv("ARTIFACT_BUCKET", "")
 PROJECT_TABLE = os.getenv("PROJECT_TABLE", "")
+PILLARPREP_API_KEY = os.getenv("PILLARPREP_API_KEY", "")
+
+
+def _metric(name, value=1, **dimensions):
+    metric_dimensions = dimensions or {"Service": "BriefFunction"}
+    metric = {
+        "_aws": {
+            "Timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+            "CloudWatchMetrics": [
+                {
+                    "Namespace": "PillarPrep",
+                    "Dimensions": [list(metric_dimensions.keys())],
+                    "Metrics": [{"Name": name, "Unit": "Count"}],
+                }
+            ],
+        },
+        name: value,
+        **metric_dimensions,
+    }
+    print(json.dumps(metric))
+
+
+def _request_header(event, name):
+    headers = event.get("headers") if isinstance(event, dict) else None
+    if not isinstance(headers, dict):
+        return ""
+
+    target = name.lower()
+    for key, value in headers.items():
+        if key.lower() == target:
+            return str(value or "")
+
+    return ""
+
+
+def _is_authorized(event):
+    if not PILLARPREP_API_KEY:
+        return True
+
+    return _request_header(event, "x-api-key") == PILLARPREP_API_KEY
 
 
 def _response(status_code, body):
@@ -185,26 +225,37 @@ def _store_project_artifacts(payload, generated):
             metadata["stateKey"] = state_key
     except Exception as error:  # Keep generation useful even if storage is misconfigured.
         metadata["storageWarning"] = str(error)
+        _metric("BriefErrors", ErrorType="Storage")
 
     return metadata
 
 
 def handler(event, _context):
+    if not _is_authorized(event):
+        _metric("UnauthorizedRequests")
+        return _response(401, {"error": "Unauthorized"})
+
+    _metric("BriefRequests")
+
     try:
         payload = _load_payload(event)
     except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        _metric("BriefErrors", ErrorType="InvalidJson")
         return _response(400, {"error": "Invalid JSON payload"})
 
     required = ["company", "industry", "meetingType", "companySize", "pillars", "context"]
     missing = [field for field in required if not payload.get(field)]
 
     if missing:
+        _metric("BriefErrors", ErrorType="MissingFields")
         return _response(400, {"error": f"Missing required fields: {', '.join(missing)}"})
 
     if "decisionMakers" in payload and not isinstance(payload["decisionMakers"], list):
+        _metric("BriefErrors", ErrorType="InvalidDecisionMakers")
         return _response(400, {"error": "decisionMakers must be an array"})
 
     if not isinstance(payload.get("pillars"), list):
+        _metric("BriefErrors", ErrorType="InvalidPillars")
         return _response(400, {"error": "pillars must be an array"})
 
     prompt = _build_prompt(payload)
@@ -213,6 +264,7 @@ def handler(event, _context):
     try:
         generated = _parse_model_response(model_text)
     except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        _metric("BriefErrors", ErrorType="ModelJsonFallback")
         generated = {
             "technical": [model_text],
             "executive": [],
@@ -227,5 +279,6 @@ def handler(event, _context):
     generated["provider"] = "bedrock"
     generated["generatedAt"] = datetime.now(timezone.utc).isoformat()
     generated["metadata"] = _store_project_artifacts(payload, generated)
+    _metric("BriefSuccess")
 
     return _response(200, generated)

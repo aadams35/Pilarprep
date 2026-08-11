@@ -16,6 +16,7 @@ type BriefTab =
   | "objections";
 type AudienceRole = "Sales" | "Executive" | "PM" | "Engineer" | "New member";
 type RiskLevel = "Low" | "Medium" | "High";
+type GenerationMode = "demo" | "live";
 
 type Scenario = {
   id: string;
@@ -205,9 +206,8 @@ const feedbackOptions = [
 const defaultFeedback = ["Make it more executive", "Focus on security"];
 const defaultRole: AudienceRole = "PM";
 const workspaceStorageKey = "pillarprep.workspace.v1";
-const staticDemoMode =
-  ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
-    ?.VITE_PILLARPREP_STATIC_DEMO ?? "") === "true";
+const staticDemoMode = import.meta.env.VITE_PILLARPREP_STATIC_DEMO === "true";
+const liveModeAvailable = !staticDemoMode;
 
 const rolePrompts: Record<AudienceRole, string[]> = {
   Sales: [
@@ -419,6 +419,7 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState("");
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
+  const [generationMode, setGenerationMode] = useState<GenerationMode>("demo");
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- Mount-only localStorage hydration restores saved demo workspace state. */
@@ -923,8 +924,9 @@ export default function Home() {
         prompt: requestPrompt,
       };
       let nextBrief: BriefResponse;
+      const useLiveAws = generationMode === "live";
 
-      if (staticDemoMode) {
+      if (!useLiveAws) {
         const validationError = validateBriefRequest(briefRequest);
 
         if (validationError) {
@@ -933,10 +935,15 @@ export default function Home() {
 
         nextBrief = normalizeBriefResponse(generateDemoBrief(briefRequest), "demo");
       } else {
+        if (!liveModeAvailable) {
+          throw new Error("Live AWS mode needs the server-backed app so the API key stays private.");
+        }
+
         const response = await fetch("/api/brief", {
           method: "POST",
           headers: {
             "content-type": "application/json",
+            "x-pillarprep-mode": "live",
           },
           body: JSON.stringify(briefRequest),
         });
@@ -1014,6 +1021,21 @@ export default function Home() {
               PillarPrep demo console
             </div>
             <div className="top-command-actions">
+              <button
+                className={cx("text-action", generationMode === "demo" && "tab-active")}
+                type="button"
+                onClick={() => setGenerationMode("demo")}
+              >
+                Demo mode
+              </button>
+              <button
+                className={cx("text-action", generationMode === "live" && "tab-active")}
+                type="button"
+                disabled={!liveModeAvailable}
+                onClick={() => setGenerationMode("live")}
+              >
+                Live AWS
+              </button>
               <a href="#setup">1. Setup</a>
               <a href="#brief">2. Brief</a>
               <a href="#project-brain">3. Project Brain</a>
@@ -1464,13 +1486,26 @@ export default function Home() {
                 </a>
               </div>
               <div className="provider-note">
-                <span>{generatedBrief?.provider ?? "demo"} provider</span>
+                <span>{generationMode === "live" ? "Live AWS mode" : "Demo mode"}</span>
                 <strong>
                   {generatedBrief
-                    ? `Last generated ${new Date(generatedBrief.generatedAt).toLocaleTimeString()}`
-                    : "Ready for Bedrock"}
+                    ? `${generatedBrief.provider} provider - ${new Date(generatedBrief.generatedAt).toLocaleTimeString()}`
+                    : generationMode === "live"
+                      ? "Ready for API Gateway + Lambda"
+                      : "No model calls"}
                 </strong>
               </div>
+              <div className="provider-note">
+                <span>Saved artifact</span>
+                <strong>{generatedBrief?.metadata?.artifactKey ?? "Not saved yet"}</strong>
+              </div>
+              {generatedBrief?.metadata?.projectId || generatedBrief?.metadata?.stateKey ? (
+                <div className="evidence-tray">
+                  {generatedBrief.metadata.projectId ? <span>Project {generatedBrief.metadata.projectId}</span> : null}
+                  {generatedBrief.metadata.stateKey ? <span>DynamoDB {generatedBrief.metadata.stateKey}</span> : null}
+                  {generatedBrief.metadata.storageWarning ? <span>{generatedBrief.metadata.storageWarning}</span> : null}
+                </div>
+              ) : null}
               <div className="workspace-tools">
                 <span>Workspace saves locally in this browser</span>
                 <button className="text-action" type="button" onClick={resetWorkspace}>

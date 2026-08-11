@@ -9,6 +9,11 @@ Parameters:
   AllowedOrigin:
     Type: String
     Default: "*"
+  PillarPrepApiKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Optional shared secret required in the x-api-key header.
 
 Globals:
   Function:
@@ -22,6 +27,7 @@ Globals:
         ALLOWED_ORIGIN: !Ref AllowedOrigin
         ARTIFACT_BUCKET: !Ref BriefArtifactsBucket
         PROJECT_TABLE: !Ref ProjectStateTable
+        PILLARPREP_API_KEY: !Ref PillarPrepApiKey
 
 Resources:
   BriefApi:
@@ -102,6 +108,80 @@ Resources:
         - AttributeName: sortKey
           KeyType: RANGE
 
+  PillarPrepDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${AWS::StackName}-dashboard"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "PillarPrep Requests and Success",
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "metrics": [
+                  ["PillarPrep", "BriefRequests", "Service", "BriefFunction"],
+                  [".", "BriefSuccess", ".", "."],
+                  [".", "UnauthorizedRequests", ".", "."]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Lambda Duration and Errors",
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "metrics": [
+                  ["AWS/Lambda", "Duration", "FunctionName", "${BriefFunction}"],
+                  [".", "Errors", ".", "."],
+                  [".", "Invocations", ".", "."]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "API Gateway Requests",
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "metrics": [
+                  ["AWS/ApiGateway", "Count", "ApiId", "${BriefApi}"],
+                  [".", "4xx", ".", "."],
+                  [".", "5xx", ".", "."]
+                ]
+              }
+            },
+            {
+              "type": "log",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Recent Lambda Logs",
+                "region": "${AWS::Region}",
+                "query": "SOURCE '/aws/lambda/${BriefFunction}' | fields @timestamp, @message | sort @timestamp desc | limit 20",
+                "view": "table"
+              }
+            }
+          ]
+        }
+
 Outputs:
   BriefApiUrl:
     Description: API Gateway endpoint for PillarPrep brief generation
@@ -112,3 +192,9 @@ Outputs:
   ProjectStateTableName:
     Description: DynamoDB table for project state
     Value: !Ref ProjectStateTable
+  DashboardName:
+    Description: CloudWatch dashboard for PillarPrep backend operations
+    Value: !Ref PillarPrepDashboard
+  DashboardUrl:
+    Description: CloudWatch dashboard URL
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${PillarPrepDashboard}"

@@ -2,7 +2,8 @@ param(
   [string]$StackName = "pillarprep-bedrock",
   [string]$Region = "us-east-1",
   [string]$AllowedOrigin = "http://127.0.0.1:3002",
-  [string]$BedrockModelId = "us.amazon.nova-pro-v1:0"
+  [string]$BedrockModelId = "us.amazon.nova-pro-v1:0",
+  [string]$PillarPrepApiKey = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -68,7 +69,7 @@ Invoke-Aws cloudformation deploy `
   --template-file $packagedPath `
   --stack-name $StackName `
   --capabilities CAPABILITY_IAM `
-  --parameter-overrides BedrockModelId=$BedrockModelId AllowedOrigin=$AllowedOrigin `
+  --parameter-overrides BedrockModelId=$BedrockModelId AllowedOrigin=$AllowedOrigin PillarPrepApiKey=$PillarPrepApiKey `
   --region $Region
 
 Write-Host ""

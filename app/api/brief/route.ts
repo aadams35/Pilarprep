@@ -8,8 +8,11 @@ import type { BriefRequest } from "@/lib/pillarprep/types";
 const backendUrl = process.env.PILLARPREP_BACKEND_URL?.trim();
 const backendApiKey = process.env.PILLARPREP_BACKEND_API_KEY?.trim();
 
-async function forwardToAwsBackend(payload: BriefRequest) {
+async function forwardToAwsBackend(payload: BriefRequest, requireLive: boolean) {
   if (!backendUrl) {
+    if (requireLive) {
+      return Response.json({ error: "Live AWS mode is not configured on this server" }, { status: 503 });
+    }
     return null;
   }
 
@@ -55,6 +58,9 @@ async function forwardToAwsBackend(payload: BriefRequest) {
 }
 
 export async function POST(request: Request) {
+  const requestedMode = request.headers.get("x-pillarprep-mode");
+  const requireLive = requestedMode === "live";
+  const forceDemo = requestedMode === "demo";
   let payload: Partial<BriefRequest>;
 
   try {
@@ -73,7 +79,7 @@ export async function POST(request: Request) {
   let awsResponse: Response | null;
 
   try {
-    awsResponse = await forwardToAwsBackend(briefRequest);
+    awsResponse = forceDemo ? null : await forwardToAwsBackend(briefRequest, requireLive);
   } catch (error) {
     return Response.json(
       {

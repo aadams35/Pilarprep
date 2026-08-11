@@ -1,6 +1,6 @@
 # AWS Lambda Demo Runbook
 
-Use this path when the team is ready to run PillarPrep on AWS Lambda. The public site does not need to be redeployed until you decide.
+Use this path when the team is ready to run PillarPrep on AWS Lambda. The public CloudFront frontend can stay demo-only while live Bedrock mode runs through the local/server-backed route.
 
 ## Local Demo First
 
@@ -32,7 +32,7 @@ If `aws sts get-caller-identity` says credentials are missing, run your normal A
 
 1. Confirm the AWS account has Amazon Bedrock model access enabled for the selected model.
 2. Confirm local AWS credentials are active.
-3. Deploy the backend with the AWS CLI script. This packages and deploys API Gateway, Lambda, S3, and DynamoDB through CloudFormation.
+3. Deploy the backend with the AWS CLI script. This packages and deploys API Gateway, Lambda, S3, DynamoDB, API-key enforcement, and a CloudWatch dashboard through CloudFormation.
 
 ```bash
 .\scripts\deploy-aws-backend.ps1 -Region us-east-1 -AllowedOrigin http://127.0.0.1:3002
@@ -45,6 +45,7 @@ Optional parameters:
 -Region us-east-1
 -AllowedOrigin http://127.0.0.1:3002
 -BedrockModelId us.amazon.nova-pro-v1:0
+-PillarPrepApiKey <private-demo-key>
 ```
 
 The first successful AWS smoke test used `us.amazon.nova-pro-v1:0`. Anthropic Sonnet profiles were visible in the account, but Lambda calls required the Anthropic use-case details form before they could be used reliably.
@@ -55,12 +56,15 @@ After the script deploys, copy the `BriefApiUrl` output into local env:
 
 ```text
 PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
-PILLARPREP_BACKEND_API_KEY=
+PILLARPREP_BACKEND_API_KEY=<private-demo-key>
 ```
 
-Restart the local app, generate a brief, and confirm the provider badge says `bedrock provider`.
+Restart the local app, select `Live AWS`, generate a brief, and confirm the provider badge says `bedrock provider`. The UI should also show the S3 artifact key and DynamoDB state key after a live generation.
 
 ## Demo Fallback Plan
 
 If Bedrock access or AWS credentials are not ready, leave `PILLARPREP_BACKEND_URL` blank. The local demo provider still exercises the full workflow: pre-brief refinement, stakeholder lens, Project Brain ask loop, two-week plan, risk register, stakeholder map, and follow-up email artifact.
 
+## CloudWatch Dashboard
+
+The backend stack outputs a `DashboardUrl`. Use it during the demo to show real AWS operations: request count, success count, unauthorized requests, Lambda duration/errors, API Gateway counts, and recent Lambda logs.

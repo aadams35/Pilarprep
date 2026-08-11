@@ -20,7 +20,7 @@ flowchart TD
 
 ## Current Frontend Mode
 
-The AWS-hosted frontend is deployed to S3 + CloudFront and currently runs in browser-only demo mode. It does not call `/api/brief`, API Gateway, Lambda, or Bedrock while models are paused.
+The AWS-hosted frontend is deployed to S3 + CloudFront and currently runs in browser-only demo mode. It does not call `/api/brief`, API Gateway, Lambda, or Bedrock from the public bundle. Live AWS mode is available through the server-backed local/Vinext route so the API key stays private.
 
 Current frontend URL:
 
@@ -56,6 +56,8 @@ The backend stack deploys these resources:
 - `BriefArtifactsBucket`: private, encrypted, versioned S3 bucket for generated brief artifacts
 - `ProjectStateTable`: DynamoDB table keyed by `projectId` and `sortKey`
 - IAM permissions for Lambda basic logs, Bedrock invocation, S3 artifact writes, and DynamoDB state writes
+- Optional `x-api-key` enforcement in Lambda
+- `PillarPrepDashboard`: CloudWatch dashboard for requests, success, unauthorized requests, Lambda health, API Gateway, and recent logs
 
 ## Current Demo Boundary
 
@@ -82,7 +84,7 @@ After the first demo works:
 
 - Add Bedrock Guardrails
 - Scope Bedrock IAM permissions to the selected model ARN
-- Add CloudWatch dashboard and alarms
-- Add API key or lightweight auth before public sharing
+- Add CloudWatch alarms
+- Replace the demo API key with stronger auth before public sharing
 - Add Bedrock Knowledge Bases for retrieval over approved project artifacts
 - Add Strands runtime for richer Project Brain tool orchestration

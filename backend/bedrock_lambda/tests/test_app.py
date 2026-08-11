@@ -95,6 +95,16 @@ class LambdaHandlerTest(unittest.TestCase):
 
         self.assertEqual(response["statusCode"], 200)
 
+
+    def test_rejects_missing_api_key_when_configured(self):
+        event = {"body": json.dumps(VALID_PAYLOAD), "headers": {}}
+
+        with patch.object(app, "PILLARPREP_API_KEY", "test-secret"):
+            response = app.handler(event, None)
+
+        response["json"] = json.loads(response["body"])
+        self.assertEqual(response["statusCode"], 401)
+        self.assertEqual(response["json"]["error"], "Unauthorized")
     def test_rejects_malformed_decision_makers(self):
         payload = dict(VALID_PAYLOAD, decisionMakers="bad")
         response = self.invoke(payload)
