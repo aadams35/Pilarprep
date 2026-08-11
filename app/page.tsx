@@ -202,6 +202,31 @@ const pillars = [
   },
 ];
 
+function normalizePillarRanking(items: string[] | undefined) {
+  const knownPillars = new Set(pillars.map((pillar) => pillar.id));
+  const ranked: string[] = [];
+
+  for (const item of items ?? []) {
+    if (knownPillars.has(item) && !ranked.includes(item)) {
+      ranked.push(item);
+    }
+  }
+
+  for (const pillar of pillars) {
+    if (!ranked.includes(pillar.id)) {
+      ranked.push(pillar.id);
+    }
+  }
+
+  return ranked;
+}
+
+function buildPillarRanking(items: string[]) {
+  return items.map((pillar, index) => ({
+    rank: index + 1,
+    pillar,
+  }));
+}
 const feedbackOptions = [
   "Make it more executive",
   "Add stronger technical depth",
@@ -425,16 +450,39 @@ const productionChecks = [
   "DynamoDB project state",
 ];
 
-const signalMetrics = [
-  { label: "Context fit", value: 92 },
-  { label: "Pillar match", value: 88 },
-  { label: "Handoff depth", value: 81 },
-  { label: "AWS readiness", value: 94 },
+const demoSignals = [
+  {
+    label: "Ranked discovery",
+    detail: "Well-Architected priorities steer the model in order, not as loose tags.",
+  },
+  {
+    label: "Question-led briefs",
+    detail: "Each section gives the SA language they can use live in the meeting.",
+  },
+  {
+    label: "Project handoff",
+    detail: "The approved brief auto-builds Project Brain context for follow-through.",
+  },
+];
+
+const briefQualityTargets = [
+  {
+    label: "Long-form answers",
+    detail: "Paragraphs include context, reasoning, and next-step guidance.",
+  },
+  {
+    label: "Actual questions",
+    detail: "Technical, executive, stakeholder, and objection sections include prompts to ask live.",
+  },
+  {
+    label: "Model handoff",
+    detail: "The same response creates Project Brain output and implementation artifacts.",
+  },
 ];
 
 const heroProofPoints = [
   "Bedrock generation loop",
-  "Well-Architected pillar scoring",
+  "Well-Architected pillar ranking",
   "Project Brain handoff",
   "AWS-ready deployment path",
 ];
@@ -458,18 +506,6 @@ const consolePages: Array<{ id: ConsolePage; label: string; detail: string }> = 
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
-}
-
-function riskWidth(level: RiskLevel) {
-  if (level === "High") {
-    return "88%";
-  }
-
-  if (level === "Medium") {
-    return "62%";
-  }
-
-  return "34%";
 }
 
 function briefTabLabel(tab: BriefTab) {
@@ -500,8 +536,8 @@ export default function Home() {
   const [industry, setIndustry] = useState(activeScenario.industry);
   const [meetingType, setMeetingType] = useState(activeScenario.meetingType);
   const [companySize, setCompanySize] = useState(activeScenario.companySize);
-  const [selectedPillars, setSelectedPillars] = useState(
-    activeScenario.pillars
+  const [selectedPillars, setSelectedPillars] = useState(() =>
+    normalizePillarRanking(activeScenario.pillars)
   );
   const [context, setContext] = useState(activeScenario.context);
   const [decisionMakers, setDecisionMakers] = useState<DecisionMakerContext[]>(
@@ -576,10 +612,12 @@ export default function Home() {
       );
       setSelectedPillars(
         Array.isArray(saved.selectedPillars)
-          ? saved.selectedPillars.filter(
-              (pillar): pillar is string => typeof pillar === "string"
+          ? normalizePillarRanking(
+              saved.selectedPillars.filter(
+                (pillar): pillar is string => typeof pillar === "string"
+              )
             )
-          : selectedPillars
+          : normalizePillarRanking(selectedPillars)
       );
       setContext(typeof saved.context === "string" ? saved.context : context);
       setDecisionMakers(
@@ -752,8 +790,21 @@ export default function Home() {
     workspaceLoaded,
   ]);
 
-  const selectedPillarDetails = pillars.filter((pillar) =>
-    selectedPillars.includes(pillar.id)
+  const selectedPillarDetails = useMemo(
+    () =>
+      selectedPillars.flatMap((pillarId) => {
+        const pillar = pillars.find((candidate) => candidate.id === pillarId);
+        return pillar ? [pillar] : [];
+      }),
+    [selectedPillars]
+  );
+  const topRankedPillars = useMemo(
+    () => selectedPillars.slice(0, 3),
+    [selectedPillars]
+  );
+  const pillarRanking = useMemo(
+    () => buildPillarRanking(selectedPillars),
+    [selectedPillars]
   );
   const usableDecisionMakers = useMemo(
     () =>
@@ -767,15 +818,8 @@ export default function Home() {
         .filter((person) => person.name || person.title || person.context),
     [decisionMakers]
   );
-  const decisionMakerSignalLength = usableDecisionMakers.reduce(
-    (total, person) => total + person.context.length,
-    0
-  );
-  const primaryConcern = selectedPillarDetails[0]?.id ?? "Discovery";
-  const readinessScore = promoted ? 96 : approved ? 84 : briefVersion > 1 ? 71 : 58;
-  const lifecycleProgress = promoted ? 100 : approved ? 72 : briefVersion > 1 ? 48 : 22;
-
-  const industryFocus = useMemo(() => {
+const primaryConcern = selectedPillarDetails[0]?.id ?? "Discovery";
+const industryFocus = useMemo(() => {
     if (industry === "Financial Services") {
       return "compliance, auditability, customer trust, and modernization risk";
     }
@@ -802,58 +846,6 @@ export default function Home() {
 
     return "modernization, reliability, security, and measurable business outcomes";
   }, [industry]);
-
-  const qualityChecks = useMemo(
-    () => [
-      {
-        label: "Pillar coverage",
-        value: Math.min(96, 58 + selectedPillars.length * 11),
-        detail: `${selectedPillars.length} AWS Well-Architected priorities selected`,
-      },
-      {
-        label: "Executive clarity",
-        value: feedback.includes("Reduce AWS jargon") ? 92 : 78,
-        detail: feedback.includes("Reduce AWS jargon")
-          ? "Jargon filter applied"
-          : "Needs low-jargon refinement",
-      },
-      {
-        label: "Stakeholder signal",
-        value: Math.min(
-          96,
-          42 +
-            usableDecisionMakers.length * 18 +
-            Math.min(18, Math.floor(decisionMakerSignalLength / 45))
-        ),
-        detail: usableDecisionMakers.length
-          ? `${usableDecisionMakers.length} decision-maker profiles captured`
-          : "Add approved decision-maker notes",
-      },
-      {
-        label: "Handoff readiness",
-        value: promoted ? 96 : approved ? 84 : 62,
-        detail: promoted
-          ? "Project model auto-built from latest brief"
-          : approved
-            ? "Ready for project handoff"
-            : "Generate the first brief",
-      },
-      {
-        label: "Grounding path",
-        value: 88,
-        detail: "Designed for Bedrock Knowledge Bases and citations",
-      },
-    ],
-    [
-      approved,
-      decisionMakerSignalLength,
-      feedback,
-      promoted,
-      selectedPillars.length,
-      usableDecisionMakers.length,
-    ]
-  );
-
   const fallbackBriefContent = {
       technical: [
         `${company || "The customer"} likely needs a secure landing zone, governed identity model, observable application path, and migration pattern that reduces production risk.`,
@@ -877,7 +869,7 @@ export default function Home() {
           ],
       gameplan: [
         "Open by confirming the business event driving urgency, then map technical unknowns to business impact.",
-        `Spend the first half on ${selectedPillars.join(", ").toLowerCase()} and use the final ten minutes to agree on success measures and next steps.`,
+        `Spend the first half on the ranked priorities (${topRankedPillars.join(", ").toLowerCase()}) and use the final ten minutes to agree on success measures and next steps.`,
         "Close with a crisp handoff: confirmed goals, known risks, unanswered questions, owners, timeline, and how the project workspace should be used.",
       ],
       objections: [
@@ -1023,7 +1015,7 @@ export default function Home() {
     setIndustry(nextScenario.industry);
     setMeetingType(nextScenario.meetingType);
     setCompanySize(nextScenario.companySize);
-    setSelectedPillars(nextScenario.pillars);
+    setSelectedPillars(normalizePillarRanking(nextScenario.pillars));
     setContext(nextScenario.context);
     setDecisionMakers(cloneDecisionMakers(nextScenario.decisionMakers));
     setMeetingNotes(nextScenario.meetingNotes);
@@ -1037,12 +1029,24 @@ export default function Home() {
     setGenerationError("");
   }
 
-  function togglePillar(pillar: string) {
-    setSelectedPillars((current) =>
-      current.includes(pillar)
-        ? current.filter((item) => item !== pillar)
-        : [...current, pillar]
-    );
+  function movePillar(pillar: string, direction: -1 | 1) {
+    setSelectedPillars((current) => {
+      const ranked = normalizePillarRanking(current);
+      const currentIndex = ranked.indexOf(pillar);
+      const nextIndex = currentIndex + direction;
+
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= ranked.length) {
+        return ranked;
+      }
+
+      const nextRanking = [...ranked];
+      [nextRanking[currentIndex], nextRanking[nextIndex]] = [
+        nextRanking[nextIndex],
+        nextRanking[currentIndex],
+      ];
+
+      return nextRanking;
+    });
   }
 
   function toggleFeedback(option: string) {
@@ -1147,6 +1151,7 @@ export default function Home() {
         meetingType,
         companySize,
         pillars: selectedPillars,
+        pillarRanking,
         context,
         meetingNotes,
         feedback,
@@ -1255,6 +1260,7 @@ export default function Home() {
       meetingType,
       companySize,
       pillars: selectedPillars,
+      pillarRanking,
       context,
       meetingNotes,
       feedback: demoFeedback,
@@ -1380,28 +1386,19 @@ export default function Home() {
           <div className="hero-panel">
             <div className="panel-status">
               <span>AI-backed AWS workload</span>
-              <strong>Hackathon ready</strong>
+              <strong>{generationMode === "live" ? "Bedrock ready" : "Demo mode"}</strong>
             </div>
-            <div className="flex items-start justify-between gap-4">
+            <div className="hero-demo-state">
               <div>
-                <p className="eyebrow text-[#9fd7c0]">Demo readiness</p>
-                <strong className="mt-2 block text-5xl font-black text-white">
-                  {readinessScore}
-                  <span className="text-2xl text-white/50">%</span>
-                </strong>
+                <p className="eyebrow text-[#9fd7c0]">Demo state</p>
+                <h2>{promoted ? "Project Brain built" : generatedBrief ? "Brief generated" : "Ready to generate"}</h2>
+                <p>
+                  Ranked priorities, richer questions, and follow-on artifacts are generated in one clean pass.
+                </p>
               </div>
               <span className="hero-pill">
-                {promoted ? "Project model ready" : approved ? "Brief approved" : "In refinement"}
+                {promoted ? "Follow-on ready" : approved ? "Brief approved" : "Pre-brief loop"}
               </span>
-            </div>
-            <div className="mt-6">
-              <div className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-[0.14em] text-white/58">
-                <span>Lifecycle progress</span>
-                <span>{lifecycleProgress}%</span>
-              </div>
-              <div className="hero-progress">
-                <span style={{ width: `${lifecycleProgress}%` }} />
-              </div>
             </div>
             <div className="mt-5 grid grid-cols-3 gap-2 text-center">
               <div className="mini-stat">
@@ -1409,32 +1406,21 @@ export default function Home() {
                 <strong>v{briefVersion}</strong>
               </div>
               <div className="mini-stat">
-                <span>Pillars</span>
-                <strong>{selectedPillars.length}</strong>
+                <span>Rank 1</span>
+                <strong>{primaryConcern}</strong>
               </div>
               <div className="mini-stat">
                 <span>Runtime</span>
-                <strong>AWS</strong>
+                <strong>{generationMode === "live" ? "AWS" : "Demo"}</strong>
               </div>
             </div>
-            <div className="telemetry-screen">
-              <div className="telemetry-header">
-                <span>Live signal profile</span>
-                <strong>{company || "Customer"}</strong>
-              </div>
-              <div className="telemetry-bars">
-                {signalMetrics.map((metric) => (
-                  <div key={metric.label} className="telemetry-row">
-                    <div>
-                      <span>{metric.label}</span>
-                      <strong>{metric.value}%</strong>
-                    </div>
-                    <div className="telemetry-bar">
-                      <span style={{ width: `${metric.value}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div className="demo-signal-list">
+              {demoSignals.map((signal) => (
+                <div key={signal.label} className="demo-signal-card">
+                  <strong>{signal.label}</strong>
+                  <p>{signal.detail}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -1474,7 +1460,7 @@ export default function Home() {
           <div className="spotlight-card spotlight-card-strong">
             <span>AWS value path</span>
             <strong>{primaryConcern}</strong>
-            <p>Briefs are mapped to Well-Architected priorities and converted into delivery context.</p>
+            <p>Briefs use ranked Well-Architected priorities to shape model output and delivery context.</p>
           </div>
           <div className="spotlight-card">
             <span>Next best action</span>
@@ -1738,26 +1724,44 @@ export default function Home() {
               </div>
 
               <div>
-                <span className="field-label">AWS pillar priorities</span>
-                <div className="grid grid-cols-2 gap-2">
-                  {pillars.map((pillar) => (
-                    <button
+                <span className="field-label">AWS pillar ranking</span>
+                <div className="pillar-ranking-list" aria-label="AWS Well-Architected pillar ranking">
+                  {selectedPillarDetails.map((pillar, index) => (
+                    <div
                       key={pillar.id}
                       className={cx(
-                        "pillar-toggle",
-                        selectedPillars.includes(pillar.id) &&
-                          "pillar-toggle-active"
+                        "pillar-rank-card",
+                        index === 0 && "pillar-rank-card-primary"
                       )}
-                      onClick={() => togglePillar(pillar.id)}
-                      type="button"
                     >
+                      <span className="pillar-rank-number">{index + 1}</span>
                       <span className={cx("h-2.5 w-2.5 rounded-full", pillar.color)} />
-                      {pillar.short}
-                    </button>
+                      <div className="pillar-rank-copy">
+                        <strong>{pillar.short}</strong>
+                        <p>{pillar.id}</p>
+                      </div>
+                      <div className="pillar-rank-actions">
+                        <button
+                          aria-label={`Move ${pillar.id} up`}
+                          disabled={index === 0}
+                          onClick={() => movePillar(pillar.id, -1)}
+                          type="button"
+                        >
+                          Up
+                        </button>
+                        <button
+                          aria-label={`Move ${pillar.id} down`}
+                          disabled={index === selectedPillarDetails.length - 1}
+                          onClick={() => movePillar(pillar.id, 1)}
+                          type="button"
+                        >
+                          Down
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
-
               <label className="block">
                 <span className="field-label">Known context</span>
                 <textarea
@@ -2129,25 +2133,15 @@ export default function Home() {
 
                   <div className="summary-panel">
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#527064]">
-                      Pillar heatmap
+                      Ranked pillars
                     </p>
-                    <div className="mt-4 space-y-3">
-                      {pillars.map((pillar) => (
-                        <div key={pillar.id}>
-                          <div className="mb-1 flex items-center justify-between gap-3 text-xs font-bold">
-                            <span>{pillar.short}</span>
-                            <span>{pillar.risk}</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-[#e6ebe1]">
-                            <div
-                              className={cx(
-                                "h-2 rounded-full",
-                                selectedPillars.includes(pillar.id)
-                                  ? pillar.color
-                                  : "bg-[#b8c2b7]"
-                              )}
-                              style={{ width: riskWidth(pillar.risk) }}
-                            />
+                    <div className="mt-4 space-y-2">
+                      {selectedPillarDetails.slice(0, 4).map((pillar, index) => (
+                        <div key={pillar.id} className="rank-summary-item">
+                          <span>{index + 1}</span>
+                          <div>
+                            <strong>{pillar.id}</strong>
+                            <p>{index === 0 ? "Primary discovery lens" : pillar.tone}</p>
                           </div>
                         </div>
                       ))}
@@ -2156,26 +2150,17 @@ export default function Home() {
 
                   <div className="summary-panel">
                     <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#527064]">
-                      Quality gate
+                      Brief quality target
                     </p>
-                    <div className="mt-4 space-y-4">
-                      {qualityChecks.map((check) => (
-                        <div key={check.label}>
-                          <div className="mb-1 flex items-center justify-between gap-3 text-xs font-black">
-                            <span>{check.label}</span>
-                            <span>{check.value}%</span>
-                          </div>
-                          <div className="quality-bar">
-                            <span style={{ width: `${check.value}%` }} />
-                          </div>
-                          <p className="mt-1 text-xs leading-5 text-[#657269]">
-                            {check.detail}
-                          </p>
+                    <div className="mt-4 space-y-3">
+                      {briefQualityTargets.map((target) => (
+                        <div key={target.label} className="quality-target-item">
+                          <strong>{target.label}</strong>
+                          <p>{target.detail}</p>
                         </div>
                       ))}
                     </div>
                   </div>
-
                   <button
                     className={cx(
                       "approval-button",
@@ -2228,13 +2213,14 @@ export default function Home() {
               <section className="rounded-lg border border-[#d8ded2] bg-white shadow-sm">
                 <div className="border-b border-[#e2e7de] p-5">
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#527064]">
-                    Selected pillar narrative
+                    Ranked pillar narrative
                   </p>
                   <h2 className="mt-1 text-xl font-black">Why this matters</h2>
                 </div>
                 <div className="grid gap-3 p-5">
-                  {selectedPillarDetails.map((pillar) => (
+                  {selectedPillarDetails.map((pillar, index) => (
                     <div key={pillar.id} className="pillar-note">
+                      <span className="pillar-note-rank">{index + 1}</span>
                       <span className={cx("h-2.5 w-2.5 rounded-full", pillar.color)} />
                       <div>
                         <strong>{pillar.id}</strong>

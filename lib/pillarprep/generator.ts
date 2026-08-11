@@ -9,6 +9,25 @@ function compactList(items: string[]) {
   return items.filter(Boolean).join(", ");
 }
 
+function rankedPillarsFromInput(input: BriefRequest) {
+  const rankedPillars = input.pillarRanking
+    ?.slice()
+    .sort((a, b) => a.rank - b.rank)
+    .map((item) => item.pillar.trim())
+    .filter(Boolean);
+
+  return rankedPillars?.length
+    ? rankedPillars
+    : input.pillars.map((pillar) => pillar.trim()).filter(Boolean);
+}
+
+function compactPillarRanking(items: string[], limit = 3) {
+  return items
+    .slice(0, limit)
+    .map((pillar, index) => `${index + 1}. ${pillar}`)
+    .join("; ");
+}
+
 function industryFocus(industry: string) {
   if (industry === "Financial Services") {
     return "auditability, identity controls, regulatory evidence, and migration risk";
@@ -58,18 +77,6 @@ function normalizeDecisionMakers(
     }))
     .filter((person) => person.name || person.title || person.context);
 }
-
-function describeDecisionMaker(person: DecisionMakerContext, focus: string) {
-  const name = person.name || "Decision maker";
-  const title = person.title ? `, ${person.title}` : "";
-  const source = person.source ? ` Source: ${person.source}.` : "";
-  const context = person.context
-    ? ` Signal: ${person.context}`
-    : ` Signal: likely focused on ${focus}.`;
-
-  return `${name}${title}: map questions to their priorities and confirm what success, risk, and blockers look like from their seat.${context}${source}`;
-}
-
 function buildProjectArtifacts(
   input: BriefRequest,
   company: string,
@@ -164,8 +171,11 @@ function buildProjectArtifacts(
 
 export function generateDemoBrief(input: BriefRequest): BriefResponse {
   const company = input.company.trim() || "the customer";
-  const pillars = input.pillars.length ? input.pillars : ["Security", "Reliability"];
-  const primaryPillar = pillars[0] ?? "Security";
+  const pillars = rankedPillarsFromInput(input);
+  const rankedPillars = pillars.length ? pillars : ["Security", "Reliability"];
+  const topPillars = rankedPillars.slice(0, 3);
+  const primaryPillar = rankedPillars[0] ?? "Security";
+  const rankingSummary = compactPillarRanking(topPillars.length ? topPillars : rankedPillars);
   const decisionMakers = normalizeDecisionMakers(input.decisionMakers);
   const stakeholderLead = decisionMakers[0];
   const feedback = input.feedback?.length
@@ -178,10 +188,23 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
   const projectArtifacts = buildProjectArtifacts(
     input,
     company,
-    pillars,
+    rankedPillars,
     decisionMakers,
     focus
   );
+  const stakeholderBriefing = [
+    ...decisionMakers.slice(0, 3).map((person) => {
+      const title = person.title ? ` (${person.title})` : "";
+      const signal = person.context
+        ? `Use the approved signal as a hypothesis: ${person.context}`
+        : `Use the ranked pillar list as the hypothesis, starting with ${primaryPillar}.`;
+
+      return `${person.name || "Decision maker"}${title}: tailor the opening to their role, then validate what they personally need to approve next. ${signal} Ask: "What outcome would make this initiative worth funding, what risk would stop it, and who else must agree before the team moves forward?"`;
+    }),
+    `Economic buyer to confirm: identify who owns budget, value, and final prioritization for ${company}. Ask: "What business metric will prove this was worth doing, and what date or event is creating urgency?"`,
+    `Technical owner to confirm: identify who owns current-state architecture, implementation feasibility, and operating model decisions. Ask: "Where are the highest-risk dependencies, what evidence do you need before approving the target pattern, and what rollback expectation is non-negotiable?"`,
+    `Security or compliance approver to confirm: identify who owns control evidence, data boundaries, identity policy, and audit readiness. Ask: "Which controls must be proven before launch, and what documentation would make approval easier?"`,
+  ].slice(0, 3);
 
   return {
     provider: "demo",
@@ -190,39 +213,31 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
       projectId: toProjectId(company),
     },
     technical: [
-      `${company} should be framed around ${compactList(pillars)} with current-state validation before architecture commitment.`,
-      `Validate identity boundaries, data classification, integration dependencies, RTO/RPO, observability, and operational ownership across ${input.companySize.toLowerCase()} teams.`,
-      `AWS path: API Gateway and Lambda for orchestration, Amazon Bedrock for generation, S3 for brief artifacts, DynamoDB for project state, CloudWatch for telemetry, and Knowledge Bases for project memory.`,
+      `${company} should be framed around the ranked Well-Architected priorities (${rankingSummary}), with rank 1 treated as the first discovery lens instead of a generic checkbox. Current-state validation should focus on how ${primaryPillar.toLowerCase()} shows up in the architecture today: identity boundaries, data movement, failure modes, operating ownership, and evidence the customer already has. Ask: "Which current-state assumption would be most dangerous if we got it wrong, and what artifact can we review to validate it before proposing a target design?"`,
+      `For a ${input.companySize.toLowerCase()} ${input.industry.toLowerCase()} customer, the SA should convert the meeting into measurable acceptance criteria instead of broad cloud recommendations. Confirm RTO/RPO, compliance scope, latency or throughput targets, incident response ownership, release/change process, and dependency constraints that could shape the first pilot. Ask: "What has to be true for your technical leads, security team, and business sponsor to all call this safe enough to proceed?"`,
+      `The AWS path should be discussed as an implementation option only after the customer's risks are clear: API Gateway and Lambda for controlled orchestration, Bedrock for generation, S3 for artifacts, DynamoDB for project state, CloudWatch for observability, and Knowledge Bases for approved project memory. Tie every service mention to a customer decision, not a feature tour. Ask: "Which decision do you need AWS to make easier: reducing risk, speeding delivery, proving compliance, improving reliability, or controlling cost?"`,
     ],
     executive: [
-      `${company} is balancing speed with risk control. Keep the business discussion centered on ${focus}.`,
-      `Outcome framing: reduce prep time, improve meeting quality, preserve institutional context, and make follow-through measurable.`,
-      `Keep AWS details in the background unless the sponsor asks how it works. ${stakeholderText} ${feedback}`,
+      `${company} is balancing speed with risk control, so the executive conversation should start with ${focus} rather than architecture diagrams. The strongest framing is that PillarPrep improves decision quality before the meeting and preserves follow-through after the meeting, reducing the chance that good discovery turns into scattered notes. Ask: "What business outcome would make this meeting a success 30 days from now?"`,
+      `The business case should emphasize fewer missed risks, faster alignment across sales/SA/project teams, and a clearer path from discussion to pilot. Avoid AWS jargon unless an executive asks how it works; describe the result as a repeatable way to prepare, validate assumptions, and turn meeting outcomes into owners, risks, and next actions. Ask: "Where do projects like this usually slow down: funding, security approval, technical uncertainty, or lack of ownership?"`,
+      `For the sponsor, the important decision is whether to approve a bounded validation sprint with clear success measures, decision owners, and evidence checkpoints. ${stakeholderText} ${feedback} Ask: "What would make you comfortable saying yes to the next step, and what evidence would you need before scaling beyond a pilot?"`,
     ],
-    stakeholders: decisionMakers.length
-      ? decisionMakers.map((person) => describeDecisionMaker(person, focus))
-      : [
-          "No decision-maker notes were provided. Ask who owns business approval, technical approval, security approval, and budget approval before proposing next steps.",
-          `For ${company}, prepare one executive sponsor question, one technical owner question, and one blocker question around ${focus}.`,
-          "Use only customer-approved or manually provided stakeholder context; do not infer facts from unverified profile data.",
-        ],
+    stakeholders: stakeholderBriefing,
     gameplan: [
-      `Open by confirming the business event driving urgency for ${company}.`,
+      `Open with a tight purpose statement: "We are here to validate the assumptions behind ${company}'s ${input.meetingType.toLowerCase()} and agree on the evidence needed for a safe next step." Then confirm the business event driving urgency, the decision owner, and the ranked pillar order before going deep. Ask: "Is ${primaryPillar} really the first priority, or should we reorder the conversation based on what is most likely to block approval?"`,
       stakeholderLead
-        ? `Ask ${stakeholderLead.name || "the primary stakeholder"} what would make this meeting successful and what concern would slow approval.`
-        : "Identify the economic buyer, technical owner, security approver, and project driver before going deep.",
-      `Spend the middle of the meeting on ${primaryPillar.toLowerCase()} tradeoffs and unknowns.`,
-      "Close with an agreed success measure, owner list, risks, timeline, and how the Project Brain handoff should be used.",
+        ? `Use ${stakeholderLead.name || "the primary stakeholder"} as the first anchor, but do not overfit to one person. Ask them what success looks like, what risk would slow approval, who else needs to be in the decision, and what proof would change their confidence level. Then map the answers back to the ranked pillars so the technical discussion stays connected to sponsor value.`
+        : `Identify the economic buyer, technical owner, security approver, and project driver before going deep. Ask each role a different question: the buyer gets value and timing, the technical owner gets constraints and evidence, security gets control requirements, and the project driver gets owners and next steps. Use the answers to decide whether the meeting should stay at discovery level or move into architecture detail.` ,
+      `Spend the middle of the meeting on rank 1 ${primaryPillar.toLowerCase()} tradeoffs, then use ranks 2 and 3 to shape secondary discovery. Close by reading back the agreed success measure, owner list, risks, unresolved questions, timeline, and how the Project Brain handoff will be used after the call. Ask: "What should we capture now so the implementation team does not have to rediscover it later?"`,
     ],
     objections: [
-      "Concern: We do not have enough reliable context. Response: treat generated content as hypotheses, then validate assumptions in discovery.",
-      `Concern: This may be too AWS-heavy. Response: tune the executive version around outcomes and keep service names in the technical brief.`,
+      `Concern: "We do not have enough reliable context." Response: agree and make that the operating model: every generated recommendation is a hypothesis until the customer validates it with artifacts, owner confirmation, or meeting notes. Ask: "Which assumption should we validate first because it would change the plan the most?"`,
+      `Concern: "This feels too AWS-heavy." Response: separate the executive story from the technical implementation path; lead with outcomes, risks, decision speed, and ownership, then use AWS services only where they make a specific decision easier. Ask: "Would it be more useful to compare business outcomes first and leave service mapping for the technical deep dive?"`,
       stakeholderLead
-        ? `Concern: ${stakeholderLead.name || "The sponsor"} may challenge relevance. Response: connect the recommendation to the priorities captured in the approved stakeholder notes, then ask what changed.`
-        : "Concern: We may not know what the decision makers care about. Response: capture approved stakeholder context before the follow-up and refresh Project Brain.",
-      `Concern: Follow-through gets lost after the meeting. Response: use the generated brief plus notes to auto-build a role-aware Project Brain.`,
+        ? `Concern: "${stakeholderLead.name || "The sponsor"} may not see why this is relevant." Response: connect the recommendation to the approved stakeholder signal, then ask what has changed since those notes were captured. Ask: "Which priority should we retire, update, or elevate based on today's business reality?"`
+        : `Concern: "We do not know what the decision makers care about." Response: capture approved stakeholder context before the follow-up and use Project Brain to refresh the plan from known notes, not guessed profile data. Ask: "Who must approve the business case, technical plan, security posture, and funding path?"`,
     ],
-    projectAnswer: `For ${input.role ?? "the project team"}, start from the latest brief, meeting outcomes, stakeholder notes, open risks, and owners. For the prompt "${input.prompt ?? "What should we do next?"}", recommend a two-week sprint to validate ${primaryPillar.toLowerCase()}, publish a decision log, and align the sponsor on success criteria${stakeholderLead ? ` with ${stakeholderLead.name || "the primary stakeholder"}` : ""}.`,
+    projectAnswer: `For ${input.role ?? "the project team"}, use the generated brief as the starting project model, not as final truth. The next useful move is a two-week validation sprint for ${company}: confirm stakeholders, validate rank 1 ${primaryPillar.toLowerCase()} assumptions, review current-state evidence, turn meeting notes into owners and risks, and publish a decision log that sales, SA, engineering, and the sponsor can all reuse. For the prompt "${input.prompt ?? "What should we do next?"}", answer with concrete owner-based actions, the evidence needed to proceed, and the blocker that should be escalated first${stakeholderLead ? ` with ${stakeholderLead.name || "the primary stakeholder"}` : ""}.`,
     projectArtifacts,
     citations: [
       "Customer-provided context",
@@ -230,7 +245,7 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
         ? ["Decision-maker context (user-provided)"]
         : []),
       "SA refinement feedback",
-      "AWS Well-Architected pillars",
+      "Ranked AWS Well-Architected pillars",
       "Bedrock-ready prompt contract",
     ],
   };
@@ -255,6 +270,13 @@ export function validateBriefRequest(input: Partial<BriefRequest>) {
 
   if (!Array.isArray(input.pillars)) {
     return "pillars must be an array";
+  }
+
+  if (
+    input.pillarRanking !== undefined &&
+    !Array.isArray(input.pillarRanking)
+  ) {
+    return "pillarRanking must be an array";
   }
 
   if (

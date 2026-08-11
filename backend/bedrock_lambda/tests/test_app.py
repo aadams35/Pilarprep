@@ -52,7 +52,12 @@ VALID_PAYLOAD = {
     "industry": "Financial Services",
     "meetingType": "Executive Briefing",
     "companySize": "Enterprise",
-    "pillars": ["Security", "Reliability"],
+    "pillars": ["Security", "Reliability", "Cost Optimization"],
+    "pillarRanking": [
+        {"rank": 1, "pillar": "Security"},
+        {"rank": 2, "pillar": "Reliability"},
+        {"rank": 3, "pillar": "Cost Optimization"},
+    ],
     "context": "Modernizing a customer portal with audit and migration risk.",
     "decisionMakers": [
         {
@@ -125,6 +130,21 @@ class LambdaHandlerTest(unittest.TestCase):
 
         self.assertEqual(response["statusCode"], 400)
         self.assertIn("pillars", response["json"]["error"])
+
+    def test_rejects_malformed_pillar_ranking(self):
+        payload = dict(VALID_PAYLOAD, pillarRanking="Security")
+        response = self.invoke(payload)
+
+        self.assertEqual(response["statusCode"], 400)
+        self.assertIn("pillarRanking", response["json"]["error"])
+
+    def test_prompt_includes_ranked_pillar_contract(self):
+        prompt = app._build_prompt(VALID_PAYLOAD)
+
+        self.assertIn('"pillarRanking"', prompt)
+        self.assertIn('"rank": 1', prompt)
+        self.assertIn("rank 1 is the primary discovery lens", prompt)
+        self.assertIn("Ask:", prompt)
 
     def test_uses_safe_fallback_when_model_returns_plain_text(self):
         response = self.invoke(VALID_PAYLOAD, "Here is a useful brief, but not JSON.")

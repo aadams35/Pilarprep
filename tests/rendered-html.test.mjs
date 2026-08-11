@@ -44,8 +44,9 @@ test("server-renders the PillarPrep console", async () => {
   assert.match(html, /Project Brain/);
   assert.match(html, /Auto-build the project model/);
   assert.match(html, /AWS-ready deployment path/);
-  assert.match(html, /Live signal profile/);
-  assert.doesNotMatch(html, /Ask Project Brain|Promote to Project|`r`n/);
+  assert.match(html, /Demo state/);
+  assert.match(html, /Ranked discovery/);
+  assert.doesNotMatch(html, /Ask Project Brain|Promote to Project|Lifecycle progress|Quality gate|Pillar heatmap/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/i);
 });
 
@@ -59,7 +60,7 @@ test("removes the starter preview shell", async () => {
   assert.match(page, /Project Brain/);
   assert.match(page, /Build Project Brain/);
   assert.match(page, /Generate brief \+ project model/);
-  assert.doesNotMatch(page, /Ask Project Brain|Promote to Project|`r`n/);
+  assert.doesNotMatch(page, /Ask Project Brain|Promote to Project|hero-progress|quality-bar|telemetry-bar/);
   assert.match(layout, /PillarPrep \| AWS SA Briefing Copilot/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview/);
@@ -78,7 +79,12 @@ test("generates a demo brief through the API contract", async () => {
       industry: "Financial Services",
       meetingType: "Executive Briefing",
       companySize: "Enterprise",
-      pillars: ["Security", "Reliability"],
+      pillars: ["Security", "Reliability", "Cost Optimization"],
+      pillarRanking: [
+        { rank: 1, pillar: "Security" },
+        { rank: 2, pillar: "Reliability" },
+        { rank: 3, pillar: "Cost Optimization" },
+      ],
       context: "Modernizing a customer portal with audit and migration risk.",
       decisionMakers: [
         {
@@ -95,6 +101,7 @@ test("generates a demo brief through the API contract", async () => {
   const payload = await response.json();
   assert.equal(payload.provider, "demo");
   assert.match(payload.technical.join("\n"), /Apex Mutual/);
+  assert.match(payload.technical.join("\n"), /ranked Well-Architected priorities/i);
   assert.match(payload.executive.join("\n"), /auditability/);
   assert.match(payload.stakeholders.join("\n"), /Lena Ortiz/);
   assert.ok(payload.projectArtifacts.twoWeekPlan.length >= 3);
@@ -115,7 +122,12 @@ test("generates a role-aware Project Brain answer", async () => {
       industry: "Financial Services",
       meetingType: "Executive Briefing",
       companySize: "Enterprise",
-      pillars: ["Security", "Reliability"],
+      pillars: ["Security", "Reliability", "Cost Optimization"],
+      pillarRanking: [
+        { rank: 1, pillar: "Security" },
+        { rank: 2, pillar: "Reliability" },
+        { rank: 3, pillar: "Cost Optimization" },
+      ],
       context: "Modernizing a customer portal with audit and migration risk.",
       meetingNotes: "CIO approved a pilot if security evidence is clear.",
       decisionMakers: [
@@ -167,7 +179,12 @@ test("rejects malformed decision maker context", async () => {
       industry: "Financial Services",
       meetingType: "Executive Briefing",
       companySize: "Enterprise",
-      pillars: ["Security", "Reliability"],
+      pillars: ["Security", "Reliability", "Cost Optimization"],
+      pillarRanking: [
+        { rank: 1, pillar: "Security" },
+        { rank: 2, pillar: "Reliability" },
+        { rank: 3, pillar: "Cost Optimization" },
+      ],
       context: "Modernizing a customer portal with audit and migration risk.",
       decisionMakers: "not an array",
     }),

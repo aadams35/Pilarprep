@@ -11,7 +11,12 @@ PillarPrep uses one structured request and one structured response across demo m
   "industry": "Financial Services",
   "meetingType": "Executive Briefing",
   "companySize": "Enterprise",
-  "pillars": ["Security", "Reliability"],
+  "pillars": ["Security", "Reliability", "Cost Optimization"],
+  "pillarRanking": [
+    { "rank": 1, "pillar": "Security" },
+    { "rank": 2, "pillar": "Reliability" },
+    { "rank": 3, "pillar": "Cost Optimization" }
+  ],
   "context": "Modernizing a customer portal with audit and migration risk.",
   "decisionMakers": [
     {
@@ -78,7 +83,7 @@ PillarPrep uses one structured request and one structured response across demo m
   "citations": [
     "Customer context",
     "Decision-maker context (user-provided)",
-    "AWS Well-Architected pillars"
+    "Ranked AWS Well-Architected pillars"
   ]
 }
 ```
@@ -88,7 +93,11 @@ PillarPrep uses one structured request and one structured response across demo m
 - Treat generated content as preparation hypotheses, not verified facts.
 - Produce both technical and executive-ready content.
 - Keep executive content low-jargon.
-- Tie technical recommendations to AWS Well-Architected pillars.
+- Treat `pillarRanking` as highest-to-lowest priority, with rank 1 as the primary discovery lens.
+- Tie technical recommendations to the ranked AWS Well-Architected pillars.
+- Produce longer, question-led paragraphs instead of short labels or one-line bullets.
+- Target 45-95 words per generated brief item and include `Ask:` questions in technical, executive, stakeholder, gameplan, and objection sections.
+- Replace sections that come back too short with safe fallback paragraphs so the demo remains useful even when the model is terse.
 - Include AWS services only when they help the conversation.
 - Use decision-maker context only when it is customer-approved or manually provided.
 - Never claim that PillarPrep scraped, browsed, or verified LinkedIn.

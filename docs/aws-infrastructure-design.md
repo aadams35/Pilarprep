@@ -36,7 +36,7 @@ https://d2e0btay0ynyf.cloudfront.net
 
 ## Request Flow With Models Enabled
 
-1. The user enters customer context, Well-Architected pillar priorities, decision-maker notes, and meeting notes.
+1. The user enters customer context, ranked Well-Architected pillar priorities, decision-maker notes, and meeting notes.
 2. The frontend gets short-lived demo credentials from Cognito Identity.
 3. The frontend signs `POST /brief` with SigV4.
 4. API Gateway checks IAM authorization and rejects unsigned requests.

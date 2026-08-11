@@ -20,7 +20,7 @@ flowchart TD
 
 ## Runtime Flow
 
-1. The user enters company, industry, meeting type, size, pillars, context, and approved decision-maker notes.
+1. The user enters company, industry, meeting type, size, ranked Well-Architected pillars, context, and approved decision-maker notes.
 2. The app can generate a deterministic local demo or call the AWS model path.
 3. In AWS mode, the browser gets short-lived Cognito Identity credentials for the limited demo role.
 4. The browser SigV4-signs the API Gateway request.

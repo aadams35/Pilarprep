@@ -94,7 +94,7 @@ Never claim that PillarPrep scraped, browsed, or verified LinkedIn or external p
 
 def _briefing_guidance(payload):
     industry = _clean_string(payload.get("industry"))
-    pillars = payload.get("pillars") if isinstance(payload.get("pillars"), list) else []
+    ranked_pillars = _pillar_ranking(payload)
     industry_hints = {
         "Financial Services": ["audit evidence", "identity boundaries", "regulatory reporting", "customer trust"],
         "Healthcare": ["patient access", "protected health data", "clinical continuity", "interoperability"],
@@ -113,11 +113,12 @@ def _briefing_guidance(payload):
     }
 
     selected_hints = []
-    for pillar in pillars:
-        selected_hints.extend(pillar_hints.get(_clean_string(pillar), []))
+    for ranked_pillar in ranked_pillars:
+        selected_hints.extend(pillar_hints.get(ranked_pillar["pillar"], []))
 
     return {
         "industrySignals": industry_hints.get(industry, ["modernization", "operational risk", "security", "measurable outcomes"]),
+        "pillarRanking": ranked_pillars,
         "pillarSignals": selected_hints[:10],
         "qualityBar": [
             "Mention the company or its stated context in each technical and executive item.",
@@ -130,12 +131,14 @@ def _briefing_guidance(payload):
 
 def _build_prompt(payload):
     guidance = _briefing_guidance(payload)
+    ranked_pillars = guidance.get("pillarRanking", [])
     request_context = {
         "company": payload.get("company", ""),
         "industry": payload.get("industry", ""),
         "meetingType": payload.get("meetingType", ""),
         "companySize": payload.get("companySize", ""),
-        "pillars": payload.get("pillars", []),
+        "pillars": [item.get("pillar", "") for item in ranked_pillars],
+        "pillarRanking": ranked_pillars,
         "context": payload.get("context", ""),
         "decisionMakers": payload.get("decisionMakers", []),
         "meetingNotes": payload.get("meetingNotes", ""),
@@ -185,20 +188,21 @@ Required JSON schema:
 {json.dumps(schema, ensure_ascii=True, indent=2)}
 
 Content requirements:
-- technical: exactly 3 complete SA-facing sentences, each with a clear action or validation point, not headings; every sentence must connect to the company context, selected pillars, or industry signals.
-- executive: exactly 3 complete business-facing sentences with no AWS jargon, not headings; every sentence must name a business risk, outcome, metric, or decision.
-- stakeholders: exactly 3 complete sentences based only on supplied decision-maker context; say what to validate if context is thin.
-- gameplan: exactly 3 complete sentences for how the SA should run the meeting.
-- objections: exactly 3 complete sentences in "Concern: ... Response: ..." form.
-- projectAnswer: always answer the requested follow-on role and prompt using the generated brief context so Project Brain can auto-build from the same response.
-- projectArtifacts: always include exactly 3 two-week plan items, exactly 3 risks, exactly 3 stakeholder map items, and one follow-up email in the same response.
+- technical: exactly 3 SA-facing paragraphs, not headings. Each paragraph must be 55-95 words, 3-5 complete sentences, connect to the company context, ranked pillars, or industry signals, and include one explicit discovery question starting with "Ask:".
+- executive: exactly 3 business-facing paragraphs with no AWS jargon. Each paragraph must be 55-90 words, 3-5 complete sentences, name a business risk, outcome, metric, or decision, and include one executive-level question starting with "Ask:".
+- stakeholders: exactly 3 role-aware paragraphs of 45-80 words based only on supplied decision-maker context; if context is thin, say what to validate and include a practical stakeholder question starting with "Ask:".
+- gameplan: exactly 3 meeting-plan paragraphs of 45-85 words. Each paragraph must explain what the SA should do in that part of the meeting and include one question the SA can ask live.
+- objections: exactly 3 paragraphs of 45-85 words in "Concern: ... Response: ... Ask: ..." form. Make each response specific enough to use in front of a customer.
+- projectAnswer: answer the requested follow-on role and prompt with one substantial paragraph of 4-6 sentences using the generated brief context so Project Brain can auto-build from the same response.
+- projectArtifacts: always include exactly 3 two-week plan items, exactly 3 risks, exactly 3 stakeholder map items, and one follow-up email in the same response. Details should be concrete, owner-oriented, and implementation-ready.
 - citations: 2-4 short labels only, such as "Customer context", "Decision-maker notes", or "AWS Well-Architected pillars".
-- Tie technical content to the selected AWS Well-Architected pillars.
-- Include AWS services only when useful for the conversation.
-- Treat unknowns as assumptions to validate.
-- Keep output compact enough for a pre-meeting brief, but never return one- or two-word labels such as "IAM roles" or "Secure migration".
-- Avoid generic textbook cloud advice; tailor wording to the supplied customer context, industry signals, meeting type, and selected pillars.
-- If a service is named, include why it matters for this customer decision.
+- Treat pillarRanking as highest-to-lowest priority; rank 1 is the primary discovery lens and lower ranks should shape secondary tradeoffs.
+- Tie technical content to the ranked AWS Well-Architected pillars.
+- Include AWS services only when useful for the conversation, and never list services without explaining the customer decision they support.
+- Treat unknowns as assumptions to validate; do not present guesses as facts.
+- Avoid generic textbook cloud advice; tailor wording to the supplied customer context, industry signals, meeting type, ranked pillars, feedback, decision-maker context, and meeting notes.
+- Make the answer feel like a strong SA wrote it for a real upcoming meeting: specific, practical, question-led, and useful without follow-up clarification.
+- Do not return short bullets. Every array item should stand alone as a useful mini-brief paragraph.
 
 Request JSON:
 {json.dumps(request_context, ensure_ascii=True, indent=2)}
@@ -218,7 +222,7 @@ def _invoke_bedrock(prompt):
         ],
         inferenceConfig={
             "temperature": 0.2,
-            "maxTokens": 2600,
+            "maxTokens": 5200,
         },
     )
     content = result.get("output", {}).get("message", {}).get("content", [])
@@ -242,6 +246,48 @@ def _clean_string(value):
     return str(value).strip()
 
 
+def _rank_value(value, fallback):
+    try:
+        rank = int(value)
+    except (TypeError, ValueError):
+        rank = fallback
+
+    return rank if rank > 0 else fallback
+
+
+def _pillar_ranking(payload):
+    explicit_ranking = payload.get("pillarRanking")
+    ranked = []
+    seen = set()
+
+    if isinstance(explicit_ranking, list):
+        for index, item in enumerate(explicit_ranking):
+            if isinstance(item, dict):
+                pillar = _clean_string(item.get("pillar"))
+                rank = _rank_value(item.get("rank"), index + 1)
+            else:
+                pillar = _clean_string(item)
+                rank = index + 1
+
+            if pillar and pillar not in seen:
+                seen.add(pillar)
+                ranked.append({"rank": rank, "pillar": pillar})
+
+    if not ranked:
+        pillars = payload.get("pillars") if isinstance(payload.get("pillars"), list) else []
+        for index, pillar in enumerate(pillars):
+            clean_pillar = _clean_string(pillar)
+            if clean_pillar and clean_pillar not in seen:
+                seen.add(clean_pillar)
+                ranked.append({"rank": index + 1, "pillar": clean_pillar})
+
+    ranked.sort(key=lambda item: item["rank"])
+    return [
+        {"rank": index + 1, "pillar": item["pillar"]}
+        for index, item in enumerate(ranked)
+    ]
+
+
 def _as_string_list(value):
     if isinstance(value, list):
         return [_clean_string(item) for item in value if _clean_string(item)]
@@ -253,8 +299,8 @@ def _as_string_list(value):
 
 
 def _first_pillar(payload):
-    pillars = payload.get("pillars") if isinstance(payload.get("pillars"), list) else []
-    return _clean_string(pillars[0]) if pillars else "the top Well-Architected priority"
+    ranked_pillars = _pillar_ranking(payload)
+    return ranked_pillars[0]["pillar"] if ranked_pillars else "the top Well-Architected priority"
 
 
 def _safe_company(payload):
@@ -358,12 +404,12 @@ def _fallback_generated(payload, model_text=""):
             title = _clean_string(person.get("title")) or "Role to confirm"
             person_context = _clean_string(person.get("context"))
             signal = f" Signal to validate: {person_context}" if person_context else " Confirm priorities and decision criteria before tailoring the talk track."
-            stakeholder_lines.append(f"{name}, {title}: connect the meeting opening to {primary_pillar.lower()} and validate what outcome matters most.{signal}")
+            stakeholder_lines.append(f"{name}, {title}: connect the meeting opening to {primary_pillar.lower()} and validate what outcome matters most from that seat.{signal} Ask: \"What outcome would make this initiative worth supporting, what risk would stop approval, and who else needs to agree before the team moves forward?\"")
 
     generic_stakeholder_lines = [
-        "Identify the economic buyer before the follow-up so the business outcome, funding path, and definition of success have an accountable owner.",
-        "Identify the technical owner before the follow-up so architecture assumptions, dependencies, and implementation constraints can be validated quickly.",
-        "Identify the security or compliance approver before the follow-up so control evidence, data boundaries, and review checkpoints are visible early.",
+        "Economic buyer to confirm: identify who owns budget, value, and final prioritization before the follow-up. Ask: \"What business metric will prove this was worth doing, and what date or event is creating urgency?\"",
+        "Technical owner to confirm: identify who owns architecture assumptions, dependencies, implementation constraints, and rollback expectations. Ask: \"What evidence do you need before approving the target pattern?\"",
+        "Security or compliance approver to confirm: identify who owns control evidence, data boundaries, identity policy, and review checkpoints. Ask: \"Which controls must be proven before launch, and what documentation would make approval easier?\"",
     ]
     for line in generic_stakeholder_lines:
         if len(stakeholder_lines) >= LIST_ITEM_COUNT:
@@ -372,35 +418,34 @@ def _fallback_generated(payload, model_text=""):
 
     return {
         "technical": [
-            f"For {company}, validate the current architecture, integration path, identity model, data boundaries, and operational ownership before recommending services.",
-            f"Use {primary_pillar} as the first deep-dive lens; confirm RTO/RPO, compliance obligations, latency targets, observability, and rollback expectations.",
-            "Relevant AWS references include Lambda/API Gateway for orchestration, S3 for artifacts, DynamoDB for project state, CloudWatch for telemetry, and Bedrock for generation.",
+            f"For {company}, validate the current architecture before proposing services: identity model, data boundaries, integration path, failure modes, and operational ownership should all be treated as assumptions until the customer confirms them. Use the first ranked pillar, {primary_pillar}, as the primary discovery lens and connect every technical recommendation to evidence the customer can provide. Ask: \"Which current-state assumption would change the plan the most if it were wrong?\"",
+            f"For a {meeting_type.lower()}, turn the conversation into acceptance criteria rather than a feature tour. Confirm RTO/RPO, compliance obligations, latency targets, deployment rollback, observability ownership, and the decision process for moving from discovery to pilot. Ask: \"What evidence would your technical, security, and business owners all need before approving the next step?\"",
+            "Relevant AWS references include Lambda/API Gateway for controlled orchestration, S3 for artifacts, DynamoDB for project state, CloudWatch for telemetry, and Bedrock for generation, but only after the customer risk is clear. Tie each service to a decision: reduce operational risk, prove control evidence, speed follow-through, or preserve meeting context. Ask: \"Which decision should the architecture make easier for the customer this month?\"",
         ],
         "executive": [
-            f"{company} is preparing for a {meeting_type.lower()} where the business story should stay tied to risk reduction, speed, and measurable progress.",
-            f"Frame the work around {industry} outcomes: clearer decisions, reduced delivery friction, and a safer path from discussion to implementation.",
-            f"The next executive decision is whether to approve a bounded validation path with clear owners, success measures, and checkpoints.{model_hint}",
+            f"{company} is preparing for a {meeting_type.lower()} where the business story should stay tied to risk reduction, speed, and measurable progress. Keep the executive version focused on {industry} outcomes instead of service names so the sponsor can make a decision without needing cloud jargon. Ask: \"What business outcome should be visibly better 30 days after this meeting?\"",
+            "The strongest value story is that PillarPrep reduces missed assumptions before the meeting and preserves follow-through after the meeting. That means fewer scattered notes, clearer owners, and a faster path from discovery to a bounded pilot. Ask: \"Where do initiatives like this usually stall: funding, security approval, technical uncertainty, or lack of ownership?\"",
+            f"The next executive decision is whether to approve a small validation sprint with clear success measures, named owners, and evidence checkpoints.{model_hint} The sponsor should leave knowing what will be validated, who owns each risk, and what would trigger expansion beyond the pilot. Ask: \"What evidence would make you comfortable saying yes to the next step?\"",
         ],
         "stakeholders": stakeholder_lines[:LIST_ITEM_COUNT],
         "gameplan": [
-            "Open by confirming the business event driving urgency, then map each technical unknown to business impact.",
-            f"Spend the technical portion on {primary_pillar.lower()}, current-state constraints, dependencies, risks, and evidence the customer needs to proceed.",
-            "Close with confirmed goals, open questions, owners, next meeting, and how the generated Project Brain handoff should be used.",
+            "Open by confirming the business event driving urgency, then repeat the ranked pillar order back to the customer so the meeting starts with shared priorities. Keep the first five minutes focused on success criteria, decision owner, and what would make the conversation useful. Ask: \"Is this priority order right, or should we move a different risk to the top?\"",
+            f"Spend the technical portion on {primary_pillar.lower()}, current-state constraints, dependencies, risks, and evidence the customer needs to proceed. Move from broad context to proof points: architecture artifacts, control evidence, operational metrics, and owner confirmation. Ask: \"What artifact can we review next to validate this before we design around it?\"",
+            "Close with confirmed goals, open questions, owners, next meeting, and how the generated Project Brain handoff should be used. Read the action list back live so sales, SA, and the implementation team do not leave with different interpretations. Ask: \"What should we capture now so the delivery team does not have to rediscover it later?\"",
         ],
         "objections": [
-            "Concern: We cannot risk disruption. Response: propose a bounded pilot with rollback criteria and a checkpoint before broader rollout.",
-            "Concern: This may increase cost. Response: start with unit-cost visibility, right-sizing, and a decision point tied to business value.",
-            "Concern: We do not have enough internal capacity. Response: identify the smallest validation path and assign owners only for the first two weeks.",
+            "Concern: \"We cannot risk disruption.\" Response: propose a bounded pilot with rollback criteria, explicit success measures, and a checkpoint before broader rollout. Ask: \"Which workload, workflow, or decision point is small enough to validate safely but important enough to prove value?\"",
+            "Concern: \"This may increase cost.\" Response: start with unit-cost visibility, right-sizing assumptions, and a decision checkpoint tied to business value before scaling the implementation. Ask: \"What cost signal would help you distinguish healthy investment from waste?\"",
+            "Concern: \"We do not have enough internal capacity.\" Response: identify the smallest validation path, name only the first two weeks of owners, and keep the project model updated from approved notes. Ask: \"Who can own validation, who can approve risk, and who needs to be informed but not pulled into every detail?\"",
         ],
-        "projectAnswer": f"Start with a two-week validation sprint for {company}: confirm stakeholders, validate {primary_pillar.lower()} assumptions, capture current-state architecture, document risks and owners, and publish a decision log before implementation expands.",
-        "projectArtifacts": _fallback_project_artifacts(payload),
+        "projectAnswer": f"Start with a two-week validation sprint for {company}: confirm stakeholders, validate rank 1 {primary_pillar.lower()} assumptions, capture current-state architecture, document risks and owners, and publish a decision log before implementation expands. Use the approved brief, decision-maker notes, and meeting outcomes as the shared project model so sales, SA, engineering, and the sponsor are working from the same context. The first deliverable should be a concise owner-based plan that says what will be validated, what evidence is needed, what risk could block approval, and when the next decision happens. Treat every generated statement as a hypothesis until the customer validates it.",        "projectArtifacts": _fallback_project_artifacts(payload),
         "citations": ["Customer context", "Decision-maker notes", "AWS Well-Architected pillars" if context else "PillarPrep fallback"],
     }
 
 
 def _is_useful_brief_line(item):
     words = item.replace("/", " ").replace("-", " ").split()
-    return len(words) >= 8
+    return len(words) >= 42 and "Ask:" in item
 
 
 def _ensure_string_items(value, fallback_items, count=LIST_ITEM_COUNT):
@@ -578,6 +623,10 @@ def handler(event, _context):
     if not isinstance(payload.get("pillars"), list):
         _metric("BriefErrors", ErrorType="InvalidPillars")
         return _response(400, {"error": "pillars must be an array"})
+
+    if "pillarRanking" in payload and not isinstance(payload.get("pillarRanking"), list):
+        _metric("BriefErrors", ErrorType="InvalidPillarRanking")
+        return _response(400, {"error": "pillarRanking must be an array"})
 
     prompt = _build_prompt(payload)
 

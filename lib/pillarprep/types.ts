@@ -7,6 +7,11 @@ export type DecisionMakerContext = {
   context: string;
 };
 
+export type PillarRankingItem = {
+  rank: number;
+  pillar: string;
+};
+
 export type BriefRequest = {
   mode?: BriefMode;
   company: string;
@@ -14,6 +19,7 @@ export type BriefRequest = {
   meetingType: string;
   companySize: string;
   pillars: string[];
+  pillarRanking?: PillarRankingItem[];
   context: string;
   decisionMakers?: DecisionMakerContext[];
   meetingNotes?: string;
