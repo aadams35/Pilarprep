@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  cognitoIdentityCredentialsProvider,
+  signedJsonFetch,
+} from "@/lib/pillarprep/aws-sigv4";
 import { generateDemoBrief, validateBriefRequest } from "@/lib/pillarprep/generator";
-import { normalizeBriefResponse } from "@/lib/pillarprep/response";
+import {
+  extractBackendError,
+  normalizeBriefResponse,
+} from "@/lib/pillarprep/response";
 import type {
+  BriefRequest,
   BriefResponse,
   DecisionMakerContext,
 } from "@/lib/pillarprep/types";
@@ -17,7 +25,7 @@ type BriefTab =
 type AudienceRole = "Sales" | "Executive" | "PM" | "Engineer" | "New member";
 type RiskLevel = "Low" | "Medium" | "High";
 type GenerationMode = "demo" | "live";
-type ModelStatus = { checked: boolean; liveConfigured: boolean; apiKeyConfigured: boolean };
+type ModelStatus = { checked: boolean; liveConfigured: boolean; apiKeyConfigured: boolean; authMode?: string };
 type ConsolePage = "guide" | "setup" | "brief" | "project" | "aws";
 
 type Scenario = {
@@ -208,8 +216,12 @@ const feedbackOptions = [
 const defaultFeedback = ["Make it more executive", "Focus on security"];
 const defaultRole: AudienceRole = "PM";
 const workspaceStorageKey = "pillarprep.workspace.v1";
+const hostedBackendUrl = (import.meta.env.VITE_PILLARPREP_BACKEND_URL ?? "").trim();
+const hostedBackendRegion = (import.meta.env.VITE_PILLARPREP_BACKEND_REGION ?? "us-east-1").trim();
+const hostedIdentityPoolId = (import.meta.env.VITE_PILLARPREP_COGNITO_IDENTITY_POOL_ID ?? "").trim();
 const staticDemoMode = import.meta.env.VITE_PILLARPREP_STATIC_DEMO === "true";
-const liveModeAvailable = !staticDemoMode;
+const hostedIamMode = Boolean(hostedBackendUrl && hostedIdentityPoolId);
+const liveModeAvailable = !staticDemoMode || hostedIamMode;
 
 const rolePrompts: Record<AudienceRole, string[]> = {
   Sales: [
@@ -516,9 +528,20 @@ export default function Home() {
   );
   const [modelStatus, setModelStatus] = useState<ModelStatus>({
     checked: staticDemoMode,
-    liveConfigured: !staticDemoMode,
+    liveConfigured: liveModeAvailable,
     apiKeyConfigured: false,
+    authMode: hostedIamMode ? "iam" : undefined,
   });
+  const hostedCredentials = useMemo(
+    () =>
+      hostedIamMode
+        ? cognitoIdentityCredentialsProvider({
+            region: hostedBackendRegion,
+            identityPoolId: hostedIdentityPoolId,
+          })
+        : null,
+    []
+  );
   const [copiedLabel, setCopiedLabel] = useState("");
   const [activePage, setActivePage] = useState<ConsolePage>("guide");
 
@@ -629,6 +652,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (hostedIamMode) {
+      return;
+    }
+
     if (!liveModeAvailable) {
       return;
     }
@@ -652,6 +679,7 @@ export default function Home() {
           checked: true,
           liveConfigured,
           apiKeyConfigured: Boolean(status.apiKeyConfigured),
+          authMode: typeof status.authMode === "string" ? status.authMode : undefined,
         });
         setGenerationMode(liveConfigured ? "live" : "demo");
       } catch {
@@ -1057,6 +1085,52 @@ export default function Home() {
     );
   }
 
+  async function requestLiveBrief(briefRequest: BriefRequest) {
+    if (hostedIamMode) {
+      if (!hostedCredentials) {
+        throw new Error("Hosted IAM demo is missing Cognito credentials configuration.");
+      }
+
+      const response = await signedJsonFetch(
+        hostedBackendUrl,
+        briefRequest,
+        hostedCredentials,
+        hostedBackendRegion
+      );
+      const body = await response.text();
+
+      if (!response.ok) {
+        throw new Error(extractBackendError(body));
+      }
+
+      try {
+        return normalizeBriefResponse(JSON.parse(body), "bedrock");
+      } catch {
+        throw new Error("AI backend returned invalid JSON.");
+      }
+    }
+
+    const response = await fetch("/api/brief", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pillarprep-mode": "live",
+      },
+      body: JSON.stringify(briefRequest),
+    });
+    const body = await response.text();
+
+    if (!response.ok) {
+      throw new Error(extractBackendError(body));
+    }
+
+    try {
+      return normalizeBriefResponse(JSON.parse(body), "bedrock");
+    } catch {
+      throw new Error("AI backend returned invalid JSON.");
+    }
+  }
+
   async function requestBrief(mode: "prebrief" | "project" = "prebrief") {
     const requestRole = role;
     const requestPrompt = activePrompt;
@@ -1080,46 +1154,27 @@ export default function Home() {
         role: requestRole,
         prompt: requestPrompt,
       };
+      const validationError = validateBriefRequest(briefRequest);
+
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
       let nextBrief: BriefResponse;
       const useLiveAws = generationMode === "live";
 
       if (!useLiveAws) {
-        const validationError = validateBriefRequest(briefRequest);
-
-        if (validationError) {
-          throw new Error(validationError);
-        }
-
         nextBrief = normalizeBriefResponse(generateDemoBrief(briefRequest), "demo");
       } else {
         if (!liveModeAvailable) {
-          throw new Error("AI model mode needs the server-backed app so the API key stays private.");
+          throw new Error("AI model mode is not configured for this build.");
         }
 
-        if (modelStatus.checked && !modelStatus.liveConfigured) {
+        if (!hostedIamMode && modelStatus.checked && !modelStatus.liveConfigured) {
           throw new Error("AI model mode is not configured on this server. Add PILLARPREP_BACKEND_URL and restart the app.");
         }
 
-        const response = await fetch("/api/brief", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-pillarprep-mode": "live",
-          },
-          body: JSON.stringify(briefRequest),
-        });
-
-        const payload = (await response.json()) as BriefResponse | { error?: string };
-
-        if (!response.ok) {
-          throw new Error(
-            "error" in payload
-              ? payload.error ?? "Brief generation failed"
-              : "Brief generation failed"
-          );
-        }
-
-        nextBrief = payload as BriefResponse;
+        nextBrief = await requestLiveBrief(briefRequest);
       }
 
       setGeneratedBrief(nextBrief);
@@ -1262,7 +1317,7 @@ export default function Home() {
               <button
                 className={cx("text-action", generationMode === "live" && "tab-active")}
                 type="button"
-                disabled={!liveModeAvailable || (modelStatus.checked && !modelStatus.liveConfigured)}
+                disabled={!liveModeAvailable || (!hostedIamMode && modelStatus.checked && !modelStatus.liveConfigured)}
                 onClick={() => setGenerationMode("live")}
               >
                 AI model
@@ -1805,7 +1860,8 @@ export default function Home() {
                       : "Generating brief..."
                     : generationMode === "live"
                       ? "Generate with AI model"
-                      : "Generate / refine brief"}`r`n                </button>
+                      : "Generate / refine brief"}
+                </button>
                 <button
                   className="secondary-link"
                   type="button"
@@ -1820,13 +1876,18 @@ export default function Home() {
                   {generatedBrief
                     ? `${generatedBrief.provider} provider - ${new Date(generatedBrief.generatedAt).toLocaleTimeString()}`
                     : generationMode === "live"
-                      ? modelStatus.checked
+                      ? hostedIamMode
+                        ? "Cognito demo role ready"
+                        : modelStatus.checked
                         ? modelStatus.liveConfigured
-                          ? "Bedrock backend ready"
+                          ? modelStatus.authMode === "iam"
+                            ? "IAM-signed Bedrock backend ready"
+                            : "Bedrock backend ready"
                           : "Backend not configured"
                         : "Checking Bedrock backend"
                       : "No model calls"}
-                </strong>`r`n              </div>
+                </strong>
+              </div>
               <div className="provider-note">
                 <span>Saved artifact</span>
                 <strong>{generatedBrief?.metadata?.artifactKey ?? "Not saved yet"}</strong>

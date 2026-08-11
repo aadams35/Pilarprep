@@ -1,3 +1,8 @@
+import {
+  cognitoIdentityCredentialsProvider,
+  parseApiGatewayRegion,
+  signedJsonFetch,
+} from "@/lib/pillarprep/aws-sigv4";
 import { generateDemoBrief, validateBriefRequest } from "@/lib/pillarprep/generator";
 import {
   extractBackendError,
@@ -7,6 +12,24 @@ import type { BriefRequest } from "@/lib/pillarprep/types";
 
 const backendUrl = process.env.PILLARPREP_BACKEND_URL?.trim();
 const backendApiKey = process.env.PILLARPREP_BACKEND_API_KEY?.trim();
+const backendAuthMode = (process.env.PILLARPREP_BACKEND_AUTH_MODE ?? "iam").trim().toLowerCase();
+const backendRegion =
+  process.env.PILLARPREP_BACKEND_REGION?.trim() ||
+  parseApiGatewayRegion(backendUrl ?? "", process.env.AWS_REGION ?? "us-east-1");
+const backendIdentityPoolId =
+  process.env.PILLARPREP_COGNITO_IDENTITY_POOL_ID?.trim() ||
+  process.env.VITE_PILLARPREP_COGNITO_IDENTITY_POOL_ID?.trim();
+const useIamBackendAuth = backendAuthMode !== "api-key";
+async function getNodeCredentials() {
+  const { fromNodeProviderChain } = await import("@aws-sdk/credential-providers");
+  return fromNodeProviderChain()();
+}
+const iamCredentials = backendIdentityPoolId
+  ? cognitoIdentityCredentialsProvider({
+      region: backendRegion,
+      identityPoolId: backendIdentityPoolId,
+    })
+  : getNodeCredentials;
 
 const noStoreHeaders = {
   "cache-control": "no-store",
@@ -23,19 +46,21 @@ async function forwardToAwsBackend(payload: BriefRequest, requireLive: boolean) 
     return null;
   }
 
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-  };
-
-  if (backendApiKey) {
-    headers["x-api-key"] = backendApiKey;
-  }
-
-  const response = await fetch(backendUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-  });
+  const response = useIamBackendAuth
+    ? await signedJsonFetch(
+        backendUrl,
+        payload,
+        iamCredentials,
+        backendRegion
+      )
+    : await fetch(backendUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(backendApiKey ? { "x-api-key": backendApiKey } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
 
   const body = await response.text();
 
@@ -67,6 +92,12 @@ export async function GET() {
     {
       liveConfigured: Boolean(backendUrl),
       apiKeyConfigured: Boolean(backendApiKey),
+      authMode: useIamBackendAuth
+        ? backendIdentityPoolId
+          ? "iam-cognito-demo"
+          : "iam"
+        : "api-key",
+      region: backendRegion,
       provider: backendUrl ? "bedrock" : "demo",
     },
     { headers: noStoreHeaders }

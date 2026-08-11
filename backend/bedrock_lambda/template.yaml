@@ -21,6 +21,8 @@ Metadata:
           - AllowedOrigin
           - PillarPrepApiKey
           - PermissionsBoundaryArn
+          - DailyBudgetLimitUsd
+          - BudgetNotificationEmail
     ParameterLabels:
       ResourcePrefix:
         default: Resource name prefix
@@ -70,9 +72,19 @@ Parameters:
     Type: String
     Default: ""
     Description: Optional IAM permissions boundary ARN attached to the Lambda execution role.
+  DailyBudgetLimitUsd:
+    Type: Number
+    Default: 1
+    MinValue: 0.01
+    Description: Daily account-level AWS Budget limit for the demo guardrail.
+  BudgetNotificationEmail:
+    Type: String
+    Default: ""
+    Description: Optional email address for AWS Budget threshold alerts.
 
 Conditions:
   HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
+  HasBudgetNotificationEmail: !Not [!Equals [!Ref BudgetNotificationEmail, ""]]
 
 Globals:
   Function:
@@ -105,15 +117,101 @@ Resources:
         ManagedBy: cloudformation
         Repository: aadams35/Pilarprep
         DataClassification: demo
+      Auth:
+        EnableIamAuthorizer: true
+        DefaultAuthorizer: AWS_IAM
       CorsConfiguration:
         AllowOrigins:
           - !Ref AllowedOrigin
         AllowHeaders:
+          - accept
+          - authorization
           - content-type
-          - x-api-key
+          - x-amz-content-sha256
+          - x-amz-date
+          - x-amz-security-token
         AllowMethods:
           - POST
           - OPTIONS
+  DemoInvokeIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub "${ResourcePrefix}-demo-identities"
+      AllowUnauthenticatedIdentities: true
+      AllowClassicFlow: false
+      IdentityPoolTags:
+        - Key: Name
+          Value: !Sub "${ResourcePrefix}-demo-identities"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Application
+          Value: sa-briefing-generator
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: aadams35/Pilarprep
+        - Key: DataClassification
+          Value: demo
+
+  DemoInvokeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ResourcePrefix}-demo-api-invoke-role"
+      Description: !Sub "Public demo IAM role allowed only to invoke ${ProjectName} ${EnvironmentName} brief API"
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: !Ref DemoInvokeIdentityPool
+              ForAnyValue:StringLike:
+                cognito-identity.amazonaws.com:amr: unauthenticated
+      Tags:
+        - Key: Name
+          Value: !Sub "${ResourcePrefix}-demo-api-invoke-role"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Application
+          Value: sa-briefing-generator
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: ManagedBy
+          Value: cloudformation
+        - Key: Repository
+          Value: aadams35/Pilarprep
+        - Key: DataClassification
+          Value: demo
+      Policies:
+        - PolicyName: !Sub "${ResourcePrefix}-invoke-brief-api"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: InvokeOnlyBriefRoute
+                Effect: Allow
+                Action: execute-api:Invoke
+                Resource: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${BriefApi}/*/POST/brief"
+
+  DemoIdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref DemoInvokeIdentityPool
+      Roles:
+        unauthenticated: !GetAtt DemoInvokeRole.Arn
 
   BriefFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -414,8 +512,38 @@ Resources:
             }
           ]
         }
+  DemoDailyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${ResourcePrefix}-daily-demo-budget"
+        BudgetLimit:
+          Amount: !Ref DailyBudgetLimitUsd
+          Unit: USD
+        BudgetType: COST
+        TimeUnit: DAILY
+      NotificationsWithSubscribers: !If
+        - HasBudgetNotificationEmail
+        - - Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 80
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: !Ref BudgetNotificationEmail
+          - Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 100
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: !Ref BudgetNotificationEmail
+        - !Ref "AWS::NoValue"
 
 Outputs:
+
   BriefApiUrl:
     Description: API Gateway endpoint for PillarPrep brief generation
     Value: !Sub "https://${BriefApi}.execute-api.${AWS::Region}.amazonaws.com/brief"
@@ -431,6 +559,15 @@ Outputs:
   BriefFunctionRoleName:
     Description: IAM role used by the Lambda brief generator
     Value: !Ref BriefFunctionRole
+  DemoIdentityPoolId:
+    Description: Cognito Identity Pool ID that issues short-lived demo credentials
+    Value: !Ref DemoInvokeIdentityPool
+  DemoInvokeRoleName:
+    Description: IAM role assumed by unauthenticated demo identities
+    Value: !Ref DemoInvokeRole
+  DemoDailyBudgetName:
+    Description: AWS Budget guardrail for the demo
+    Value: !Ref DemoDailyBudget
   DashboardName:
     Description: CloudWatch dashboard for PillarPrep backend operations
     Value: !Ref PillarPrepDashboard

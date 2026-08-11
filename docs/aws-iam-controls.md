@@ -1,6 +1,26 @@
 # PillarPrep IAM Controls
 
-PillarPrep uses explicit IAM controls for the AWS model demo instead of relying on broad generated permissions.
+PillarPrep uses explicit IAM controls for the AWS model demo instead of relying on broad generated permissions or a browser API key.
+
+## Public Demo Auth Boundary
+
+The CloudFront demo can be public, but the model API is not open. The browser receives short-lived credentials from a Cognito Identity Pool unauthenticated identity and assumes `DemoInvokeRole`.
+
+That role can only do one thing:
+
+```text
+execute-api:Invoke on arn:aws:execute-api:<region>:<account>:<api-id>/*/POST/brief
+```
+
+The demo browser role has no direct permission for:
+
+- Amazon Bedrock
+- S3 brief artifacts
+- DynamoDB project state
+- CloudWatch Logs
+- IAM changes
+
+API Gateway uses IAM authorization, so unsigned requests fail with `403 Forbidden`.
 
 ## Lambda Execution Role
 
@@ -39,6 +59,10 @@ BedrockFoundationModelId=amazon.nova-micro-v1:0
 
 `BedrockModelId` is the model identifier passed to Bedrock at runtime. `BedrockFoundationModelId` is used in IAM so the role has permission to invoke the underlying foundation model associated with the inference profile.
 
+## Cost Guardrail
+
+The backend stack creates `DemoDailyBudget`, defaulting to `$1/day`. Add `-BudgetNotificationEmail <email>` during deploy if you want AWS Budget threshold emails at 80 percent and 100 percent actual spend.
+
 ## Demo Talking Point
 
-This gives the hackathon demo a security lane: the app generates briefs with Bedrock, but the Lambda role is limited to the model, artifact bucket, project state table, logs, and tracing it needs for the workflow.
+The public URL is shareable for the hackathon because public users receive only a narrow, temporary IAM identity that can invoke one API route. Bedrock, S3, DynamoDB, and logs stay behind Lambda's server-side role.

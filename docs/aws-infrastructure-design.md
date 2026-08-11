@@ -9,18 +9,24 @@ flowchart TD
   USER[User Browser] --> CF[Amazon CloudFront]
   CF --> S3FRONT[S3 Static Frontend Bucket]
   S3FRONT --> UI[React PillarPrep Console]
-  UI --> API[Amazon API Gateway HTTP API]
+  UI --> COGNITO[Cognito Identity Pool]
+  COGNITO --> DEMOROLE[Limited Demo IAM Role]
+  UI -->|SigV4 signed request| API[API Gateway HTTP API IAM Auth]
+  DEMOROLE -->|execute-api:Invoke only| API
   API --> LAMBDA[AWS Lambda Python Handler]
-  LAMBDA --> BEDROCK[Amazon Bedrock Model]
+  LAMBDA --> BEDROCK[Amazon Bedrock Nova Micro]
   BEDROCK --> LAMBDA
   LAMBDA --> ARTIFACTS[S3 Brief Artifact Bucket]
   LAMBDA --> STATE[DynamoDB Project State Table]
-  LAMBDA --> UI
+  LAMBDA --> API
+  API --> UI
+  LAMBDA --> DASH[CloudWatch Logs Metrics Dashboard]
+  BUDGET[AWS Budget 1 USD Daily Guardrail] --> DASH
 ```
 
 ## Current Frontend Mode
 
-The AWS-hosted frontend is deployed to S3 + CloudFront and currently runs in browser-only demo mode. It does not call `/api/brief`, API Gateway, Lambda, or Bedrock from the public bundle. AI model mode is available through the server-backed local Next.js route so the API key stays private.
+The AWS-hosted frontend is deployed to S3 + CloudFront. It can run deterministic demo mode or live AI model mode. Live mode does not use an API key. The browser gets short-lived unauthenticated Cognito Identity credentials, assumes a limited demo IAM role, and SigV4-signs the API Gateway request.
 
 Current frontend URL:
 
@@ -31,9 +37,9 @@ https://d2e0btay0ynyf.cloudfront.net
 ## Request Flow With Models Enabled
 
 1. The user enters customer context, Well-Architected pillar priorities, decision-maker notes, and meeting notes.
-2. The frontend posts the structured request to `/api/brief` or a configured API Gateway endpoint.
-3. In local demo mode, the frontend API route uses the deterministic demo generator.
-4. In AWS model mode, the frontend route forwards the same request to API Gateway.
+2. The frontend gets short-lived demo credentials from Cognito Identity.
+3. The frontend signs `POST /brief` with SigV4.
+4. API Gateway checks IAM authorization and rejects unsigned requests.
 5. API Gateway invokes the Lambda handler.
 6. Lambda builds the Bedrock prompt contract and invokes the configured model.
 7. Lambda normalizes the model JSON and stores the request/response artifact in S3.
@@ -52,6 +58,7 @@ Stored by PillarPrep:
 - The browser stores unsaved local workspace state for demo continuity.
 
 Future retrieval should add Bedrock Knowledge Bases over approved S3 artifacts. That creates searchable project memory without training, fine-tuning, or hosting a custom model.
+
 ## Deployed Resources
 
 The frontend stack deploys these resources:
@@ -63,48 +70,50 @@ The frontend stack deploys these resources:
 
 The backend stack deploys these resources:
 
-- `BriefApi`: Amazon API Gateway HTTP API with `POST /brief`
+- `BriefApi`: Amazon API Gateway HTTP API with IAM authorization on `POST /brief`
+- `DemoInvokeIdentityPool`: Cognito Identity Pool for public demo credentials
+- `DemoInvokeRole`: limited IAM role that can invoke only the brief route
 - `BriefFunction`: Python 3.12 AWS Lambda handler
 - `BriefArtifactsBucket`: private, encrypted, versioned S3 bucket for generated brief artifacts
 - `ProjectStateTable`: DynamoDB table keyed by `projectId` and `sortKey`
 - `BriefFunctionRole`: explicit least-privilege Lambda role for logs, X-Ray, Bedrock invocation, S3 artifacts, and DynamoDB state
-- Optional `x-api-key` enforcement in Lambda
+- `DemoDailyBudget`: daily AWS Budget guardrail, default `$1/day`
 - `PillarPrepDashboard`: CloudWatch dashboard for requests, success, unauthorized requests, Lambda health, API Gateway, and recent logs
-
 
 ## Resource Names And Tags
 
-The templates and deploy scripts now use a shared tagging standard. Default tags include `Project=PillarPrep`, `Application=sa-briefing-generator`, `Environment=demo`, `Owner=austin-adams`, `CostCenter=hackathon`, `ManagedBy=cloudformation`, `Repository=aadams35/Pilarprep`, and `DataClassification=demo`.
+The templates and deploy scripts use a shared tagging standard. Default tags include `Project=PillarPrep`, `Application=sa-briefing-generator`, `Environment=demo`, `Owner=austin-adams`, `CostCenter=hackathon`, `ManagedBy=cloudformation`, `Repository=aadams35/Pilarprep`, and `DataClassification=demo`.
 
-The `ResourcePrefix` parameter defaults to `pillarprep-demo` and drives safe display names such as `pillarprep-demo-brief-api`, `pillarprep-demo-brief-generator`, `pillarprep-demo-project-state`, and `pillarprep-demo-cloudfront-web`. Stateful resources use `Name` tags instead of forced physical renames to avoid replacing buckets, tables, or functions during the demo.
+The `ResourcePrefix` parameter defaults to `pillarprep-demo` and drives safe display names such as `pillarprep-demo-brief-api`, `pillarprep-demo-brief-generator`, `pillarprep-demo-project-state`, `pillarprep-demo-demo-identities`, `pillarprep-demo-demo-api-invoke-role`, `pillarprep-demo-daily-demo-budget`, and `pillarprep-demo-cloudfront-web`.
 
 Full standard: `docs/aws-resource-tags-and-names.md`. IAM controls: `docs/aws-iam-controls.md`.
+
 ## Current Demo Boundary
 
 Working now:
 
 - AWS CloudFront static frontend
-- Browser-only deterministic generator for no-model demos
-- Local frontend demo
-- Local deterministic generator
-- Local Project Brain ask loop
+- Browser deterministic generator for no-model demos
+- CloudFront live model mode through Cognito Identity + API Gateway IAM auth
+- Local frontend demo on `http://localhost:3002/`
+- Local live route with Cognito/IAM when `.env.local` includes the demo identity pool
 - Local Lambda unit tests with mocked Bedrock
 - AWS CLI deployment script for S3 + CloudFront frontend hosting
-- AWS CLI deployment script for API Gateway, Lambda, S3, and DynamoDB
+- AWS CLI deployment script for API Gateway, Lambda, S3, DynamoDB, Cognito Identity, IAM, AWS Budget, and CloudWatch dashboard
 
 Still to decide:
 
-- Whether to wire the CloudFront frontend directly to API Gateway when models are enabled
 - Whether to add a custom domain and ACM certificate
-- Whether to add lightweight auth before sharing beyond the hackathon team
+- Whether to replace the public demo identity with Cognito User Pool, IAM Identity Center, or another real auth layer after the hackathon demo
+- Whether to add Bedrock Knowledge Bases and Strands for the full Project Brain follow-on loop
 
 ## Later Hardening
 
 After the first demo works:
 
 - Add Bedrock Guardrails
-- Scope Bedrock IAM permissions to the selected model ARN
-- Add CloudWatch alarms
-- Replace the demo API key with stronger auth before public sharing
+- Add CloudWatch alarms tied to Lambda/API errors and cost thresholds
+- Replace the unauthenticated demo identity with real user auth before broader sharing
 - Add Bedrock Knowledge Bases for retrieval over approved project artifacts
 - Add Strands runtime for richer Project Brain tool orchestration
+- Add WAF rate-based rules or usage quotas if the public URL stays open

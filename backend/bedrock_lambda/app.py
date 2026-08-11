@@ -59,6 +59,9 @@ def _response(status_code, body):
         "headers": {
             "content-type": "application/json",
             "access-control-allow-origin": os.getenv("ALLOWED_ORIGIN", "*"),
+            "access-control-allow-headers": "accept,authorization,content-type,x-amz-content-sha256,x-amz-date,x-amz-security-token",
+            "access-control-allow-methods": "POST,OPTIONS",
+            "vary": "origin",
         },
         "body": json.dumps(body),
     }
@@ -89,7 +92,44 @@ Never claim that PillarPrep scraped, browsed, or verified LinkedIn or external p
 """.strip()
 
 
+def _briefing_guidance(payload):
+    industry = _clean_string(payload.get("industry"))
+    pillars = payload.get("pillars") if isinstance(payload.get("pillars"), list) else []
+    industry_hints = {
+        "Financial Services": ["audit evidence", "identity boundaries", "regulatory reporting", "customer trust"],
+        "Healthcare": ["patient access", "protected health data", "clinical continuity", "interoperability"],
+        "Retail": ["peak traffic", "checkout latency", "conversion", "unit cost"],
+        "Manufacturing": ["plant uptime", "forecasting data", "edge connectivity", "operational resilience"],
+        "Media": ["content workflow", "global delivery", "burst demand", "monetization"],
+        "SaaS": ["tenant isolation", "platform reliability", "release velocity", "gross margin"],
+    }
+    pillar_hints = {
+        "Operational Excellence": ["CloudWatch", "runbooks", "incident ownership", "deployment rollback"],
+        "Security": ["IAM", "KMS", "Security Hub", "least privilege", "audit trails"],
+        "Reliability": ["multi-AZ design", "RTO/RPO", "Route 53", "backup and restore"],
+        "Performance Efficiency": ["load testing", "Auto Scaling", "CloudFront", "latency budgets"],
+        "Cost Optimization": ["Budgets", "Cost Explorer", "right sizing", "unit economics"],
+        "Sustainability": ["right sizing", "managed services", "resource schedules", "waste reduction"],
+    }
+
+    selected_hints = []
+    for pillar in pillars:
+        selected_hints.extend(pillar_hints.get(_clean_string(pillar), []))
+
+    return {
+        "industrySignals": industry_hints.get(industry, ["modernization", "operational risk", "security", "measurable outcomes"]),
+        "pillarSignals": selected_hints[:10],
+        "qualityBar": [
+            "Mention the company or its stated context in each technical and executive item.",
+            "Prefer validate, quantify, map, confirm, compare, or sequence over generic recommend language.",
+            "Use AWS service names only in technical content and only when tied to a concrete customer risk or decision.",
+            "Executive content must explain risk, speed, cost, trust, revenue, or governance without AWS jargon.",
+        ],
+    }
+
+
 def _build_prompt(payload):
+    guidance = _briefing_guidance(payload)
     request_context = {
         "company": payload.get("company", ""),
         "industry": payload.get("industry", ""),
@@ -103,6 +143,7 @@ def _build_prompt(payload):
         "role": payload.get("role", ""),
         "prompt": payload.get("prompt", ""),
         "mode": payload.get("mode", "prebrief"),
+        "briefingGuidance": guidance,
     }
 
     schema = {
@@ -144,8 +185,8 @@ Required JSON schema:
 {json.dumps(schema, ensure_ascii=True, indent=2)}
 
 Content requirements:
-- technical: exactly 3 complete SA-facing sentences, each with a clear action or validation point, not headings.
-- executive: exactly 3 complete business-facing sentences with no AWS jargon, not headings.
+- technical: exactly 3 complete SA-facing sentences, each with a clear action or validation point, not headings; every sentence must connect to the company context, selected pillars, or industry signals.
+- executive: exactly 3 complete business-facing sentences with no AWS jargon, not headings; every sentence must name a business risk, outcome, metric, or decision.
 - stakeholders: exactly 3 complete sentences based only on supplied decision-maker context; say what to validate if context is thin.
 - gameplan: exactly 3 complete sentences for how the SA should run the meeting.
 - objections: exactly 3 complete sentences in "Concern: ... Response: ..." form.
@@ -156,6 +197,8 @@ Content requirements:
 - Include AWS services only when useful for the conversation.
 - Treat unknowns as assumptions to validate.
 - Keep output compact enough for a pre-meeting brief, but never return one- or two-word labels such as "IAM roles" or "Secure migration".
+- Avoid generic textbook cloud advice; tailor wording to the supplied customer context, industry signals, meeting type, and selected pillars.
+- If a service is named, include why it matters for this customer decision.
 
 Request JSON:
 {json.dumps(request_context, ensure_ascii=True, indent=2)}
@@ -357,7 +400,7 @@ def _fallback_generated(payload, model_text=""):
 
 def _is_useful_brief_line(item):
     words = item.replace("/", " ").replace("-", " ").split()
-    return len(words) >= 6
+    return len(words) >= 8
 
 
 def _ensure_string_items(value, fallback_items, count=LIST_ITEM_COUNT):

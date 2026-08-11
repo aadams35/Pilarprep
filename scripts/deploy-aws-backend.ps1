@@ -1,11 +1,13 @@
 param(
   [string]$StackName = "pillarprep-bedrock",
   [string]$Region = "us-east-1",
-  [string]$AllowedOrigin = "http://127.0.0.1:3002",
+  [string]$AllowedOrigin = "https://d2e0btay0ynyf.cloudfront.net",
   [string]$BedrockModelId = "us.amazon.nova-micro-v1:0",
   [string]$BedrockFoundationModelId = "amazon.nova-micro-v1:0",
   [string]$PillarPrepApiKey = "",
   [string]$PermissionsBoundaryArn = "",
+  [string]$DailyBudgetLimitUsd = "1",
+  [string]$BudgetNotificationEmail = "",
   [string]$ResourcePrefix = "pillarprep-demo",
   [string]$ProjectName = "PillarPrep",
   [string]$EnvironmentName = "demo",
@@ -105,7 +107,9 @@ $parameterOverrides = @(
   "BedrockFoundationModelId=$BedrockFoundationModelId",
   "AllowedOrigin=$AllowedOrigin",
   "PillarPrepApiKey=$PillarPrepApiKey",
-  "PermissionsBoundaryArn=$PermissionsBoundaryArn"
+  "PermissionsBoundaryArn=$PermissionsBoundaryArn",
+  "DailyBudgetLimitUsd=$DailyBudgetLimitUsd",
+  "BudgetNotificationEmail=$BudgetNotificationEmail"
 )
 
 $stackTags = @(

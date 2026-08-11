@@ -24,6 +24,9 @@ Current safe display names:
 | Backend | Lambda function Name tag | `pillarprep-demo-brief-generator` |
 | Backend | S3 artifact bucket Name tag | `pillarprep-demo-brief-artifacts` |
 | Backend | DynamoDB table Name tag | `pillarprep-demo-project-state` |
+| Backend | Cognito Identity Pool | `pillarprep-demo-demo-identities` |
+| Backend | Demo API invoke IAM role | `pillarprep-demo-demo-api-invoke-role` |
+| Backend | AWS Budget | `pillarprep-demo-daily-demo-budget` |
 | Backend | CloudWatch dashboard | `pillarprep-demo-ops-dashboard` |
 | Frontend | S3 frontend bucket Name tag | `pillarprep-demo-web-assets` |
 | Frontend | CloudFront distribution Name tag | `pillarprep-demo-cloudfront-web` |

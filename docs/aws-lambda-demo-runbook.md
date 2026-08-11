@@ -1,51 +1,48 @@
 # AWS Lambda Demo Runbook
 
-Use this path when the team is ready to run PillarPrep on AWS Lambda. The public CloudFront frontend can stay demo-only while live Bedrock mode runs through the local/server-backed route.
+Use this path when the team wants the shareable PillarPrep demo to run on AWS without putting an API key in the browser.
 
 ## Local Demo First
 
 ```bash
 npm install
-npm run verify:demo
-npm run start -- --host 127.0.0.1 --port 3002
+npm run lambda:test
+npm run dev -- --host localhost --port 3002
 ```
 
 Open:
 
 ```text
-http://127.0.0.1:3002/
+http://localhost:3002/
 ```
 
-The app works without AWS credentials when `PILLARPREP_BACKEND_URL` is empty.
-
-## Lambda Smoke Test Without AWS
-
-```bash
-npm run lambda:test
-```
-
-This mocks Bedrock and verifies that the Lambda handler accepts API Gateway events, including base64 bodies, validates malformed input, and returns structured project artifacts.
+The app can run without AWS by using the deterministic demo provider. When the non-secret Cognito demo values are present in `.env.local`, local live mode uses the same no-key IAM path as CloudFront.
 
 ## AWS Sandbox Setup
 
-If `aws sts get-caller-identity` says credentials are missing, run your normal AWS sign-in first. On this machine the AWS CLI is installed, but credentials were not active during the last check.
+1. Confirm AWS CLI credentials are active.
+2. Confirm Amazon Bedrock model access is enabled in `us-east-1` for `us.amazon.nova-micro-v1:0`.
+3. Deploy the backend first.
+4. Deploy the frontend second so it can discover the API URL and Cognito Identity Pool ID from the backend stack outputs.
 
-1. Confirm the AWS account has Amazon Bedrock model access enabled for the selected model.
-2. Confirm local AWS credentials are active.
-3. Deploy the backend with the AWS CLI script. This packages and deploys API Gateway, Lambda, S3, DynamoDB, API-key enforcement, explicit IAM controls, and a CloudWatch dashboard through CloudFormation.
+## Deploy Backend
 
 ```bash
-.\scripts\deploy-aws-backend.ps1 -Region us-east-1 -AllowedOrigin http://127.0.0.1:3002
+.\scripts\deploy-aws-backend.ps1 `
+  -Region us-east-1 `
+  -AllowedOrigin https://d2e0btay0ynyf.cloudfront.net `
+  -PillarPrepApiKey "" `
+  -DailyBudgetLimitUsd 1
 ```
 
 Optional parameters:
 
 ```text
 -StackName pillarprep-bedrock
--Region us-east-1
--AllowedOrigin http://127.0.0.1:3002
 -BedrockModelId us.amazon.nova-micro-v1:0
--PillarPrepApiKey <private-demo-key>
+-BedrockFoundationModelId amazon.nova-micro-v1:0
+-PermissionsBoundaryArn <boundary-arn>
+-BudgetNotificationEmail <email>
 -ResourcePrefix pillarprep-demo
 -ProjectName PillarPrep
 -EnvironmentName demo
@@ -53,28 +50,84 @@ Optional parameters:
 -CostCenter hackathon
 ```
 
-The deploy script applies the shared tag standard to the CloudFormation stack and to the packaging bucket. The application resources receive matching tags from the SAM template. The Lambda execution role is explicit and least-privilege, with optional permissions-boundary support. See `docs/aws-resource-tags-and-names.md` and `docs/aws-iam-controls.md`.
+The backend stack creates:
 
-The low-cost demo path uses `us.amazon.nova-micro-v1:0`. Anthropic Sonnet profiles were visible in the account, but Lambda calls required the Anthropic use-case details form before they could be used reliably.
+- API Gateway HTTP API with IAM authorization on `POST /brief`
+- Lambda Bedrock generator
+- S3 brief artifact bucket
+- DynamoDB project state table
+- Cognito Identity Pool with an unauthenticated demo role
+- Least-privilege IAM roles and policies
+- Daily AWS Budget guardrail, default `$1/day`
+- CloudWatch dashboard
+
+Current deployed outputs:
+
+```text
+BriefApiUrl=https://pzgejfvvpa.execute-api.us-east-1.amazonaws.com/brief
+DemoIdentityPoolId=us-east-1:51a31152-80e4-453f-b17e-5077109376fa
+DemoInvokeRoleName=pillarprep-demo-demo-api-invoke-role
+DemoDailyBudgetName=pillarprep-demo-daily-demo-budget
+```
+
+## Deploy Frontend
+
+```bash
+.\scripts\deploy-aws-frontend.ps1 -Region us-east-1
+```
+
+The script builds the static React app with:
+
+```text
+VITE_PILLARPREP_STATIC_DEMO=true
+VITE_PILLARPREP_BACKEND_URL=<BriefApiUrl>
+VITE_PILLARPREP_BACKEND_REGION=us-east-1
+VITE_PILLARPREP_COGNITO_IDENTITY_POOL_ID=<DemoIdentityPoolId>
+```
+
+Current frontend URL:
+
+```text
+https://d2e0btay0ynyf.cloudfront.net
+```
+
+## Smoke Tests
+
+Unsigned API calls should fail:
+
+```text
+POST /brief without SigV4 -> 403 Forbidden
+```
+
+CloudFront browser calls should succeed because the browser receives short-lived Cognito credentials and SigV4-signs the API Gateway request.
+
+CORS should allow CloudFront with signed AWS headers:
+
+```text
+Origin=https://d2e0btay0ynyf.cloudfront.net
+Allowed headers=accept,authorization,content-type,x-amz-content-sha256,x-amz-date,x-amz-security-token
+Allowed methods=OPTIONS,POST
+```
+
+A successful live brief should return:
+
+```text
+provider=bedrock
+modelId=us.amazon.nova-micro-v1:0
+artifactKey=<S3 key>
+stateKey=<DynamoDB key>
+```
 
 ## Low-Cost Demo Guardrails
 
-Use `us.amazon.nova-micro-v1:0` for the default demo. Bedrock is on-demand, so model cost is token-based instead of hourly. Keep the public CloudFront bundle demo-only, keep the API key server-side, and avoid automated repeated calls. Add AWS Budgets or CloudWatch billing alarms before opening AI model mode beyond the hackathon team.
-## Connect Frontend To Lambda
+Use `us.amazon.nova-micro-v1:0` for the demo. Bedrock is on-demand, so model cost is token-based instead of hourly. The backend creates a daily AWS Budget, and there are no scheduled model calls.
 
-After the script deploys, copy the `BriefApiUrl` output into local env:
-
-```text
-PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
-PILLARPREP_BACKEND_API_KEY=<private-demo-key>
-```
-
-Restart the local app. If `PILLARPREP_BACKEND_URL` is configured, the UI selects `AI model` mode by default. Generate a brief and confirm the provider badge says `bedrock provider`. The UI should also show the S3 artifact key, DynamoDB state key, Bedrock model ID, token count, and latency after a live generation.
+Keep the public Cognito demo role limited to `execute-api:Invoke` on the single brief route. Do not grant the browser role direct Bedrock, S3, or DynamoDB access.
 
 ## Demo Fallback Plan
 
-If Bedrock access or AWS credentials are not ready, leave `PILLARPREP_BACKEND_URL` blank. The local demo provider still exercises the full workflow: pre-brief refinement, stakeholder lens, Project Brain ask loop, two-week plan, risk register, stakeholder map, and follow-up email artifact.
+If Bedrock access is interrupted, leave AI model mode off and use the deterministic demo provider. The UI still exercises the full workflow: pre-brief refinement, stakeholder lens, Project Brain ask loop, two-week plan, risk register, stakeholder map, and follow-up email artifact.
 
 ## CloudWatch Dashboard
 
-The backend stack outputs a `DashboardUrl`. Use it during the demo to show real AWS operations: request count, success count, unauthorized requests, Lambda duration/errors, API Gateway counts, and recent Lambda logs.
+The backend stack outputs a `DashboardUrl`. Use it during the demo to show request count, success count, unauthorized requests, Lambda duration/errors, API Gateway counts, and recent Lambda logs.

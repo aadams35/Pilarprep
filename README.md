@@ -14,14 +14,14 @@ Live demos:
 
 ## Current Shape
 
-- Frontend: React, Next-compatible Vinext app
-- Hosted demo: AWS CloudFront static frontend and OpenAI Sites
-- Local API contract: `POST /api/brief`
+- Frontend: React, Next-compatible Vinext app plus a static Vite build for AWS hosting
+- Hosted demo: private S3 static assets behind CloudFront
+- AWS auth: API Gateway IAM auth with short-lived Cognito Identity demo credentials, no API key in the browser
+- Backend: API Gateway HTTP API, Lambda, Amazon Bedrock, S3 artifacts, DynamoDB project state
 - Demo provider: deterministic local generator in `lib/pillarprep/generator.ts`
 - Decision-maker context: manual/customer-approved profile notes, not automated LinkedIn scraping
 - Working Project Brain loop: role/prompt ask flow plus generated handoff artifacts
 - Local workspace persistence: browser saves the current demo workspace until reset
-- AWS implementation target: `backend/bedrock_lambda/`
 - Prompt contract: `docs/prompt-contract.md`
 - Architecture notes: `docs/aws-infrastructure-design.md`
 - AWS Lambda demo runbook: `docs/aws-lambda-demo-runbook.md`
@@ -37,7 +37,9 @@ Recommended production path:
 
 ```text
 React app
-  -> API Gateway
+  -> CloudFront + S3
+  -> Cognito Identity demo role
+  -> API Gateway IAM auth
   -> Lambda
   -> Amazon Bedrock
   -> S3 approved brief artifacts
@@ -58,7 +60,7 @@ Recommended split:
 
 ## API Contract
 
-`POST /api/brief`
+`POST /api/brief` locally or `POST /brief` through API Gateway.
 
 ```json
 {
@@ -88,7 +90,7 @@ Response:
 
 ```json
 {
-  "provider": "demo",
+  "provider": "bedrock",
   "generatedAt": "2026-07-22T00:00:00.000Z",
   "technical": [],
   "executive": [],
@@ -105,7 +107,13 @@ Response:
       "body": ""
     }
   },
-  "citations": []
+  "citations": [],
+  "metadata": {
+    "modelId": "us.amazon.nova-micro-v1:0",
+    "artifactKey": "...",
+    "projectId": "...",
+    "stateKey": "..."
+  }
 }
 ```
 
@@ -121,12 +129,16 @@ What PillarPrep stores:
 - Browser workspace: local draft state only, stored in the user's browser until reset.
 
 Future Project Brain memory should use Bedrock Knowledge Bases over approved S3 artifacts and meeting notes. That is retrieval over project documents, not fine-tuning or custom model training.
+
 ## Cost Posture
 
-The demo uses Amazon Bedrock on-demand inference with Amazon Nova Micro, so there is no always-on model endpoint. Normal demo usage should stay well under $1/day as long as AI model mode is used only for team demos and the public CloudFront build remains demo-only. Avoid Provisioned Throughput, Nova Act, large batch jobs, public unauthenticated model access, or automated refresh loops until budgets/alarms are added.
+The demo uses Amazon Bedrock on-demand inference with Amazon Nova Micro, so there is no always-on model endpoint. The backend stack also creates a daily AWS Budget guardrail, defaulting to `$1/day`. Normal hackathon demo usage should stay well under that as long as there are no automated refresh loops or public load tests.
+
+Avoid Provisioned Throughput, Nova Act, batch jobs, broad unauthenticated model access, or scheduled model calls until stronger quotas and alarms are added.
+
 ## AWS Frontend
 
-The AWS-hosted frontend uses a static Vite build of the existing React UI. It is deployed to a private S3 bucket behind CloudFront and runs in browser-only demo mode, so it does not call Bedrock or `/api/brief` from the public bundle. AI model mode is kept behind the server-backed local Next.js route so the API key stays private.
+The AWS-hosted frontend uses a static Vite build of the existing React UI. It is deployed to a private S3 bucket behind CloudFront. The browser can call the live model path without an API key by getting short-lived credentials from the Cognito Identity Pool demo role and SigV4-signing the API Gateway request.
 
 ```bash
 .\scripts\deploy-aws-frontend.ps1 -Region us-east-1
@@ -139,44 +151,36 @@ https://d2e0btay0ynyf.cloudfront.net
 ```
 
 Static frontend infrastructure lives in `backend/frontend_static/template.yaml`. Resource naming and tagging standard: `docs/aws-resource-tags-and-names.md`.
+
 ## AWS Backend
 
 The Lambda reference lives in `backend/bedrock_lambda/app.py`.
 
 The CloudFormation/SAM-compatible template lives in `backend/bedrock_lambda/template.yaml`.
 
-The fastest deployment path for this machine is the AWS CLI script:
+Deploy the backend first so the frontend deploy script can discover the API URL and Cognito Identity Pool ID:
 
 ```bash
-.\scripts\deploy-aws-backend.ps1 -Region us-east-1 -AllowedOrigin http://127.0.0.1:3002
+.\scripts\deploy-aws-backend.ps1 -Region us-east-1 -AllowedOrigin https://d2e0btay0ynyf.cloudfront.net -PillarPrepApiKey "" -DailyBudgetLimitUsd 1
 ```
 
-That script packages and deploys API Gateway, Lambda, S3, DynamoDB, optional API-key enforcement, explicit least-privilege IAM controls, and a CloudWatch dashboard. Full deployment steps are in `docs/aws-lambda-demo-runbook.md`, the IAM control summary is in `docs/aws-iam-controls.md`, and the current infrastructure map is in `docs/aws-infrastructure-design.md`.
+That script packages and deploys API Gateway, Lambda, S3, DynamoDB, IAM controls, a Cognito Identity Pool demo role, a daily AWS Budget, and a CloudWatch dashboard. Full deployment steps are in `docs/aws-lambda-demo-runbook.md`, the IAM control summary is in `docs/aws-iam-controls.md`, and the current infrastructure map is in `docs/aws-infrastructure-design.md`.
 
-After deployment, set the frontend environment variable to the stack output URL:
+The backend stack outputs `BriefApiUrl`, `DemoIdentityPoolId`, `DashboardUrl`, `ArtifactBucketName`, and `ProjectStateTableName`. Live Bedrock responses include metadata with `artifactKey`, `projectId`, and `stateKey` so the UI can show where the project artifact was saved.
+
+For local no-key model testing, use these non-secret values:
 
 ```bash
 PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
+PILLARPREP_BACKEND_AUTH_MODE=iam
+PILLARPREP_COGNITO_IDENTITY_POOL_ID=us-east-1:example
+VITE_PILLARPREP_STATIC_DEMO=true
+VITE_PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
+VITE_PILLARPREP_BACKEND_REGION=us-east-1
+VITE_PILLARPREP_COGNITO_IDENTITY_POOL_ID=us-east-1:example
 ```
 
-For AI model mode, set the protected API key on the server only:
-
-```bash
-PILLARPREP_BACKEND_API_KEY=...
-```
-
-When `PILLARPREP_BACKEND_URL` is absent, or when the UI is in Demo mode, the app uses the local demo generator. AI model mode forwards through the server route with the private API key.
-
-The backend stack outputs `DashboardUrl` for the CloudWatch operations view. Live Bedrock responses also include metadata with `artifactKey`, `projectId`, and `stateKey` so the UI can show where the project artifact was saved.
-
-The Lambda reference writes generated output to S3 and DynamoDB when these environment variables are present:
-
-```bash
-ARTIFACT_BUCKET=...
-PROJECT_TABLE=...
-```
-
-For production, keep the scoped Bedrock IAM policy, add Bedrock Guardrails, configure alarms, and replace the demo API key with stronger auth before public sharing.
+For production, replace the public unauthenticated demo identity with real user auth, keep API Gateway IAM authorization, add Bedrock Guardrails, configure CloudWatch alarms, and tighten model quotas before broader sharing.
 
 Optional Strands reference:
 
@@ -191,8 +195,9 @@ npm install
 npm run dev
 npm test
 npm run eval:briefs
+npm run lambda:test
 ```
 
-The server-backed local app now checks `/api/brief` model status on load. When `PILLARPREP_BACKEND_URL` and `PILLARPREP_BACKEND_API_KEY` are set, AI model mode becomes the default and briefs are generated through API Gateway, Lambda, and Amazon Bedrock. When those values are absent, the app falls back to the deterministic demo provider.
+When the Cognito demo variables are present, AI model mode signs API Gateway requests with a limited IAM role. When backend settings are absent, the app falls back to the deterministic demo provider.
 
 The browser also stores the current workspace locally so the demo can survive refreshes. Use `Reset workspace` in the UI when you want to return to the default scenario.

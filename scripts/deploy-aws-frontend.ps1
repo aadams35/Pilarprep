@@ -8,7 +8,11 @@ param(
   [string]$Owner = "austin-adams",
   [string]$CostCenter = "hackathon",
   [string]$WebACLId = "",
-  [string]$CloudFrontPriceClass = ""
+  [string]$CloudFrontPriceClass = "",
+  [string]$BackendStackName = "pillarprep-bedrock",
+  [string]$BackendApiUrl = "",
+  [string]$BackendRegion = "",
+  [string]$CognitoIdentityPoolId = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,7 +49,39 @@ if (-not $BucketName) {
 
 Write-Host "Using AWS account $accountId in $Region"
 Write-Host "Frontend bucket: $BucketName"
-Write-Host "Building static frontend with model calls disabled..."
+
+if (-not $BackendRegion) {
+  $BackendRegion = $Region
+}
+
+if (-not $BackendApiUrl -or -not $CognitoIdentityPoolId) {
+  try {
+    $backendOutputs = Invoke-Aws cloudformation describe-stacks `
+      --stack-name $BackendStackName `
+      --region $BackendRegion `
+      --query "Stacks[0].Outputs" `
+      --output json | ConvertFrom-Json
+
+    if (-not $BackendApiUrl) {
+      $apiOutput = $backendOutputs | Where-Object { $_.OutputKey -eq "BriefApiUrl" } | Select-Object -First 1
+      $BackendApiUrl = $apiOutput.OutputValue
+    }
+
+    if (-not $CognitoIdentityPoolId) {
+      $identityOutput = $backendOutputs | Where-Object { $_.OutputKey -eq "DemoIdentityPoolId" } | Select-Object -First 1
+      $CognitoIdentityPoolId = $identityOutput.OutputValue
+    }
+  } catch {
+    Write-Host "No backend IAM demo outputs detected. Static build will stay demo-only."
+  }
+}
+
+$hostedIamEnabled = [bool]($BackendApiUrl -and $CognitoIdentityPoolId)
+if ($hostedIamEnabled) {
+  Write-Host "Building static frontend with IAM-signed model calls enabled..."
+} else {
+  Write-Host "Building static frontend with model calls disabled..."
+}
 
 if (-not $WebACLId) {
   try {
@@ -74,6 +110,9 @@ if (-not $WebACLId) {
 Push-Location $repoRoot
 try {
   $env:VITE_PILLARPREP_STATIC_DEMO = "true"
+  $env:VITE_PILLARPREP_BACKEND_URL = if ($hostedIamEnabled) { $BackendApiUrl } else { "" }
+  $env:VITE_PILLARPREP_BACKEND_REGION = if ($hostedIamEnabled) { $BackendRegion } else { "" }
+  $env:VITE_PILLARPREP_COGNITO_IDENTITY_POOL_ID = if ($hostedIamEnabled) { $CognitoIdentityPoolId } else { "" }
   npm.cmd run build:aws-frontend
   if ($LASTEXITCODE -ne 0) {
     throw "Frontend build failed."
