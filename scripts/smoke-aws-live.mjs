@@ -163,8 +163,16 @@ if (body.provider !== "bedrock") {
   throw new Error(`Expected provider=bedrock, got ${body.provider}.`);
 }
 
-if (!body.metadata?.artifactKey || !body.metadata?.stateKey) {
-  throw new Error("Live response did not include S3 artifactKey and DynamoDB stateKey metadata.");
+if (!body.metadata?.artifactKey || !body.metadata?.docxArtifactKey || !body.metadata?.stateKey) {
+  throw new Error("Live response did not include S3 JSON, S3 DOCX, and DynamoDB state metadata.");
+}
+
+if (!body.metadata.artifactKey.endsWith("/latest.json") || !body.metadata.docxArtifactKey.endsWith("/latest.docx")) {
+  throw new Error("Live response did not save latest-only JSON and DOCX artifact keys.");
+}
+
+if (body.metadata.stateKey !== "BRIEF#LATEST") {
+  throw new Error(`Expected DynamoDB stateKey BRIEF#LATEST, got ${body.metadata.stateKey}.`);
 }
 
 if (!body.metadata?.guardrailId || !body.metadata?.guardrailVersion) {
@@ -179,6 +187,7 @@ console.table({
   guardrailId: body.metadata.guardrailId,
   guardrailVersion: body.metadata.guardrailVersion,
   artifactKey: body.metadata.artifactKey,
+  docxArtifactKey: body.metadata.docxArtifactKey,
   stateKey: body.metadata.stateKey,
   totalTokens: body.metadata.totalTokens ?? "n/a",
   latencyMs: body.metadata.latencyMs ?? "n/a",

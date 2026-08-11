@@ -365,7 +365,7 @@ const modelStoragePath = [
     layer: "Generated brief",
     service: "S3 artifacts",
     detail:
-      "Every live response can be saved as a JSON artifact with the original request, model output, timestamp, and project metadata.",
+      "Every live response is saved as a latest-only JSON packet plus a DOCX brief with the original request, model output, timestamp, and project metadata.",
   },
   {
     layer: "Project state",
@@ -1891,8 +1891,8 @@ const industryFocus = useMemo(() => {
                 </strong>
               </div>
               <div className="provider-note">
-                <span>Saved artifact</span>
-                <strong>{generatedBrief?.metadata?.artifactKey ?? "Not saved yet"}</strong>
+                <span>Saved packet</span>
+                <strong>{generatedBrief?.metadata?.docxArtifactKey ?? generatedBrief?.metadata?.artifactKey ?? "Not saved yet"}</strong>
               </div>
               {generatedBrief?.metadata?.projectId || generatedBrief?.metadata?.stateKey ? (
                 <div className="evidence-tray">

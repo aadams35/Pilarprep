@@ -113,7 +113,9 @@ Response:
   "citations": [],
   "metadata": {
     "modelId": "us.amazon.nova-micro-v1:0",
-    "artifactKey": "...",
+    "artifactKey": "projects/apex-mutual/briefs/latest.json",
+    "docxArtifactKey": "projects/apex-mutual/briefs/latest.docx",
+    "artifactRetention": "latest-only",
     "projectId": "...",
     "stateKey": "..."
   }
@@ -127,7 +129,7 @@ PillarPrep does not store or host the foundation model. Amazon Bedrock manages t
 What PillarPrep stores:
 
 - Prompt contract and fallback rules: versioned in the Lambda code and GitHub repo.
-- Generated brief artifact: request, response, timestamp, provider, guardrail metadata, and project metadata in S3.
+- Generated brief artifacts: one latest JSON packet and one latest DOCX packet per project in S3.
 - Project state index: projectId, sortKey, company, meeting type, provider, and createdAt in DynamoDB.
 - Browser workspace: local draft state only, stored in the user's browser until reset.
 
@@ -169,7 +171,7 @@ Deploy the backend first so the frontend deploy script can discover the API URL 
 
 That script packages and deploys API Gateway, Lambda, Bedrock Guardrails, S3, DynamoDB, IAM controls, a Cognito Identity Pool demo role, a daily AWS Budget, CloudWatch alarms, and a CloudWatch dashboard. Full deployment steps are in `docs/aws-lambda-demo-runbook.md`, the IAM control summary is in `docs/aws-iam-controls.md`, and the current infrastructure map is in `docs/aws-infrastructure-design.md`.
 
-The backend stack outputs `BriefApiUrl`, `DemoIdentityPoolId`, `DashboardUrl`, `ArtifactBucketName`, and `ProjectStateTableName`. Live Bedrock responses include metadata with `artifactKey`, `projectId`, and `stateKey` so the UI can show where the project artifact was saved.
+The backend stack outputs `BriefApiUrl`, `DemoIdentityPoolId`, `DashboardUrl`, `ArtifactBucketName`, and `ProjectStateTableName`. Live Bedrock responses include metadata with `artifactKey`, `docxArtifactKey`, `projectId`, and `stateKey` so the UI can show where the latest project packet was saved.
 
 For local no-key model testing, use these non-secret values:
 

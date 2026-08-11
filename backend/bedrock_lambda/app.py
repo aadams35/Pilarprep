@@ -2,6 +2,9 @@ import base64
 import json
 import os
 from datetime import datetime, timezone
+from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
+from xml.sax.saxutils import escape as xml_escape
 
 import boto3
 
@@ -598,29 +601,180 @@ def _project_id(payload):
     return payload.get("projectId") or slug or "customer"
 
 
+def _xml_text(value):
+    return xml_escape(str(value or ""), {'"': '&quot;'})
+
+
+def _docx_paragraph(text, style=None):
+    style_xml = f'<w:pPr><w:pStyle w:val="{style}"/></w:pPr>' if style else ""
+    safe_text = _xml_text(text)
+    return f'<w:p>{style_xml}<w:r><w:t xml:space="preserve">{safe_text}</w:t></w:r></w:p>'
+
+
+def _docx_bullet(text):
+    return _docx_paragraph(f"- {text}")
+
+
+def _artifact_rows(items):
+    rows = []
+    if not isinstance(items, list):
+        return rows
+
+    for item in items:
+        if isinstance(item, dict):
+            title = _clean_string(item.get("title")) or "Untitled item"
+            detail = _clean_string(item.get("detail"))
+            owner = _clean_string(item.get("owner"))
+            status = _clean_string(item.get("status"))
+            suffix = ""
+            if owner or status:
+                suffix = f" Owner: {owner or 'TBD'}. Status: {status or 'TBD'}."
+            rows.append(f"{title}: {detail}{suffix}".strip())
+        else:
+            rows.append(_clean_string(item))
+
+    return [row for row in rows if row]
+
+
+def _brief_docx_bytes(payload, generated, metadata):
+    company = _clean_string(payload.get("company")) or "Customer"
+    generated_at = _clean_string(generated.get("generatedAt")) or datetime.now(timezone.utc).isoformat()
+    sections = [
+        _docx_paragraph(f"PillarPrep Brief - {company}", "Title"),
+        _docx_paragraph(f"Generated: {generated_at}"),
+        _docx_paragraph(f"Project ID: {metadata.get('projectId', 'customer')}"),
+        _docx_paragraph("Customer Context", "Heading1"),
+        _docx_paragraph(f"Industry: {_clean_string(payload.get('industry')) or 'Not provided'}"),
+        _docx_paragraph(f"Meeting type: {_clean_string(payload.get('meetingType')) or 'Not provided'}"),
+        _docx_paragraph(f"Company size: {_clean_string(payload.get('companySize')) or 'Not provided'}"),
+        _docx_paragraph(f"Context: {_clean_string(payload.get('context')) or 'Not provided'}"),
+    ]
+
+    ranked_pillars = _pillar_ranking(payload)
+    if ranked_pillars:
+        sections.append(_docx_paragraph("AWS Pillar Ranking", "Heading1"))
+        for ranked in ranked_pillars:
+            sections.append(_docx_bullet(f"{ranked.get('rank')}. {ranked.get('pillar')}"))
+
+    for heading, key in (
+        ("Technical Brief", "technical"),
+        ("Executive Brief", "executive"),
+        ("Stakeholder Lens", "stakeholders"),
+        ("SA Game Plan", "gameplan"),
+        ("Objections And Responses", "objections"),
+    ):
+        sections.append(_docx_paragraph(heading, "Heading1"))
+        for index, item in enumerate(generated.get(key, []), start=1):
+            sections.append(_docx_paragraph(f"{index}. {item}"))
+
+    sections.append(_docx_paragraph("Project Model", "Heading1"))
+    sections.append(_docx_paragraph(generated.get("projectAnswer", "")))
+
+    artifacts = generated.get("projectArtifacts") if isinstance(generated.get("projectArtifacts"), dict) else {}
+    for heading, key in (
+        ("Two-Week Plan", "twoWeekPlan"),
+        ("Risk Register", "riskRegister"),
+        ("Stakeholder Map", "stakeholderMap"),
+    ):
+        rows = _artifact_rows(artifacts.get(key)) if isinstance(artifacts, dict) else []
+        if rows:
+            sections.append(_docx_paragraph(heading, "Heading2"))
+            for row in rows:
+                sections.append(_docx_bullet(row))
+
+    follow_up = artifacts.get("followUpEmail") if isinstance(artifacts, dict) else None
+    if isinstance(follow_up, dict):
+        sections.append(_docx_paragraph("Follow-Up Email", "Heading2"))
+        sections.append(_docx_paragraph(f"Subject: {_clean_string(follow_up.get('subject'))}"))
+        sections.append(_docx_paragraph(_clean_string(follow_up.get("body"))))
+
+    citations = generated.get("citations") if isinstance(generated.get("citations"), list) else []
+    if citations:
+        sections.append(_docx_paragraph("Source Labels", "Heading1"))
+        for citation in citations:
+            sections.append(_docx_bullet(citation))
+
+    body_xml = "".join(sections)
+    document_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>{body_xml}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body>
+</w:document>'''
+    styles_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
+  <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="24"/></w:rPr></w:style>
+</w:styles>'''
+    content_types_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>'''
+    rels_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>'''
+    document_rels_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'''
+
+    output = BytesIO()
+    with ZipFile(output, "w", ZIP_DEFLATED) as docx:
+        docx.writestr("[Content_Types].xml", content_types_xml)
+        docx.writestr("_rels/.rels", rels_xml)
+        docx.writestr("word/document.xml", document_xml)
+        docx.writestr("word/_rels/document.xml.rels", document_rels_xml)
+        docx.writestr("word/styles.xml", styles_xml)
+
+    return output.getvalue()
+
+
+def _delete_existing_brief_artifacts(s3, bucket, prefix):
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        objects = [{"Key": item["Key"]} for item in page.get("Contents", []) if item.get("Key")]
+        if objects:
+            s3.delete_objects(Bucket=bucket, Delete={"Objects": objects, "Quiet": True})
+
+
 def _store_project_artifacts(payload, generated):
-    metadata = {"projectId": _project_id(payload)}
+    metadata = {"projectId": _project_id(payload), "artifactRetention": "latest-only"}
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stored_at = datetime.now(timezone.utc).isoformat()
+    brief_prefix = f"projects/{metadata['projectId']}/briefs/"
+    artifact_key = f"{brief_prefix}latest.json"
+    docx_artifact_key = f"{brief_prefix}latest.docx"
     document = {
         "request": payload,
         "response": generated,
-        "storedAt": datetime.now(timezone.utc).isoformat(),
+        "storedAt": stored_at,
+        "briefVersion": timestamp,
     }
 
     try:
         if ARTIFACT_BUCKET:
-            artifact_key = f"projects/{metadata['projectId']}/briefs/{timestamp}.json"
             s3 = boto3.client("s3", region_name=REGION)
+            _delete_existing_brief_artifacts(s3, ARTIFACT_BUCKET, brief_prefix)
             s3.put_object(
                 Bucket=ARTIFACT_BUCKET,
                 Key=artifact_key,
                 Body=json.dumps(document).encode("utf-8"),
                 ContentType="application/json",
             )
+            s3.put_object(
+                Bucket=ARTIFACT_BUCKET,
+                Key=docx_artifact_key,
+                Body=_brief_docx_bytes(payload, generated, metadata),
+                ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
             metadata["artifactKey"] = artifact_key
+            metadata["docxArtifactKey"] = docx_artifact_key
+            metadata["briefVersion"] = timestamp
 
         if PROJECT_TABLE:
-            state_key = f"BRIEF#{timestamp}"
+            state_key = "BRIEF#LATEST"
             dynamodb = boto3.client("dynamodb", region_name=REGION)
             dynamodb.put_item(
                 TableName=PROJECT_TABLE,
@@ -631,7 +785,10 @@ def _store_project_artifacts(payload, generated):
                     "industry": {"S": payload.get("industry", "")},
                     "meetingType": {"S": payload.get("meetingType", "")},
                     "provider": {"S": "bedrock"},
-                    "createdAt": {"S": document["storedAt"]},
+                    "updatedAt": {"S": stored_at},
+                    "briefVersion": {"S": timestamp},
+                    "artifactKey": {"S": artifact_key},
+                    "docxArtifactKey": {"S": docx_artifact_key},
                 },
             )
             metadata["stateKey"] = state_key

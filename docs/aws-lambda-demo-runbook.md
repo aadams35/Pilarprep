@@ -120,8 +120,9 @@ A successful live brief should return:
 ```text
 provider=bedrock
 modelId=us.amazon.nova-micro-v1:0
-artifactKey=<S3 key>
-stateKey=<DynamoDB key>
+artifactKey=projects/apex-mutual/briefs/latest.json
+docxArtifactKey=projects/apex-mutual/briefs/latest.docx
+stateKey=BRIEF#LATEST
 ```
 
 ## Low-Cost Demo Guardrails

@@ -219,6 +219,7 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
     generatedAt: new Date().toISOString(),
     metadata: {
       projectId: toProjectId(company),
+      artifactRetention: "browser-local",
     },
     technical: [
       `${company} should be framed around the ranked Well-Architected priorities (${rankingSummary}), with rank 1 treated as the first discovery lens instead of a generic checkbox. Current-state validation should focus on how ${primaryPillar.toLowerCase()} shows up in the architecture today: identity boundaries, data movement, failure modes, operating ownership, and evidence the customer already has. Ask: "Which current-state assumption would be most dangerous if we got it wrong, and what artifact can we review to validate it before proposing a target design?"`,

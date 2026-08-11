@@ -16,7 +16,7 @@ Use this before sharing the CloudFront URL or walking into the hackathon demo.
 - Bedrock model access is enabled for `us.amazon.nova-micro-v1:0`.
 - Unsigned API calls return `403 Forbidden`.
 - `npm run smoke:aws` passes.
-- Browser live mode returns `provider=bedrock` and includes `artifactKey`, `projectId`, and `stateKey` metadata.
+- Browser live mode returns `provider=bedrock` and includes `artifactKey`, `docxArtifactKey`, `projectId`, and `BRIEF#LATEST` metadata.
 - CloudWatch dashboard shows recent request and success metrics.
 - AWS Budget guardrail exists with the demo limit, defaulting to `1 USD/day`.
 

@@ -315,12 +315,23 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              - Sid: ListBriefArtifacts
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt BriefArtifactsBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - projects/*/briefs/
+                      - projects/*/briefs/*
               - Sid: WriteBriefArtifacts
                 Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub "${BriefArtifactsBucket.Arn}/*"
+                  - s3:DeleteObject
+                Resource: !Sub "${BriefArtifactsBucket.Arn}/projects/*/briefs/*"
               - Sid: UpdateProjectState
                 Effect: Allow
                 Action:

@@ -34,7 +34,7 @@ Run this before presenting:
 npm run smoke:aws
 ```
 
-Expected result: CloudFront `200`, unsigned API `403`, signed API `provider=bedrock`, plus S3 `artifactKey` and DynamoDB `stateKey` metadata.
+Expected result: CloudFront `200`, unsigned API `403`, signed API `provider=bedrock`, plus S3 `latest.json`, S3 `latest.docx`, and DynamoDB `BRIEF#LATEST` metadata.
 
 ## Close
 

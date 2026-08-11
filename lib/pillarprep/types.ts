@@ -53,6 +53,8 @@ export type BriefResponse = {
   metadata?: {
     projectId?: string;
     artifactKey?: string;
+    docxArtifactKey?: string;
+    artifactRetention?: string;
     stateKey?: string;
     storageWarning?: string;
     modelId?: string;

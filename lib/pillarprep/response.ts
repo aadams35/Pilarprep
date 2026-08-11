@@ -41,6 +41,8 @@ function asMetadata(value: unknown) {
   return {
     projectId: asString(value.projectId) || undefined,
     artifactKey: asString(value.artifactKey) || undefined,
+    docxArtifactKey: asString(value.docxArtifactKey) || undefined,
+    artifactRetention: asString(value.artifactRetention) || undefined,
     stateKey: asString(value.stateKey) || undefined,
     storageWarning: asString(value.storageWarning) || undefined,
     modelId: asString(value.modelId) || undefined,

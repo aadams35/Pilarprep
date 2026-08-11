@@ -1,6 +1,8 @@
 import base64
 import json
 import sys
+from io import BytesIO
+from zipfile import ZipFile
 import types
 import unittest
 from pathlib import Path
@@ -201,6 +203,84 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertIn("Do not write a paragraph that could be reused unchanged", prompt)
         self.assertIn("exactly 4 SA-facing paragraphs", prompt)
         self.assertIn("Ask:", prompt)
+
+    def test_docx_export_contains_brief_sections(self):
+        generated = json.loads(MODEL_RESPONSE)
+        docx_bytes = app._brief_docx_bytes(VALID_PAYLOAD, generated, {"projectId": "apex-mutual"})
+
+        with ZipFile(BytesIO(docx_bytes)) as docx:
+            self.assertIn("word/document.xml", docx.namelist())
+            document_xml = docx.read("word/document.xml").decode("utf-8")
+
+        self.assertIn("PillarPrep Brief - Apex Mutual", document_xml)
+        self.assertIn("Technical Brief", document_xml)
+        self.assertIn("Executive Brief", document_xml)
+        self.assertIn("Two-Week Plan", document_xml)
+
+    def test_store_project_artifacts_replaces_previous_s3_outputs(self):
+        generated = json.loads(MODEL_RESPONSE)
+        put_objects = []
+        delete_batches = []
+        dynamodb_items = []
+
+        paginator_calls = []
+
+        class FakePaginator:
+            def paginate(self, **kwargs):
+                paginator_calls.append(kwargs)
+                return [
+                    {
+                        "Contents": [
+                            {"Key": "projects/apex-mutual/briefs/old.json"},
+                            {"Key": "projects/apex-mutual/briefs/old.docx"},
+                        ]
+                    }
+                ]
+
+        paginator_names = []
+
+        class FakeS3:
+            def get_paginator(self, name):
+                paginator_names.append(name)
+                return FakePaginator()
+
+            def delete_objects(self, **kwargs):
+                delete_batches.append(kwargs)
+
+            def put_object(self, **kwargs):
+                put_objects.append(kwargs)
+
+        class FakeDynamoDB:
+            def put_item(self, **kwargs):
+                dynamodb_items.append(kwargs)
+
+        def fake_client(service_name, **_kwargs):
+            if service_name == "s3":
+                return FakeS3()
+            if service_name == "dynamodb":
+                return FakeDynamoDB()
+            raise AssertionError(f"Unexpected client: {service_name}")
+
+        with (
+            patch.object(app, "ARTIFACT_BUCKET", "artifact-bucket"),
+            patch.object(app, "PROJECT_TABLE", "project-table"),
+            patch.object(app.boto3, "client", side_effect=fake_client),
+        ):
+            metadata = app._store_project_artifacts(VALID_PAYLOAD, generated)
+
+        self.assertEqual(paginator_names, ["list_objects_v2"])
+        self.assertEqual(paginator_calls[0]["Bucket"], "artifact-bucket")
+        self.assertEqual(paginator_calls[0]["Prefix"], "projects/apex-mutual/briefs/")
+        self.assertEqual(metadata["artifactKey"], "projects/apex-mutual/briefs/latest.json")
+        self.assertEqual(metadata["docxArtifactKey"], "projects/apex-mutual/briefs/latest.docx")
+        self.assertEqual(metadata["stateKey"], "BRIEF#LATEST")
+        self.assertEqual(metadata["artifactRetention"], "latest-only")
+        self.assertEqual(delete_batches[0]["Delete"]["Objects"][0]["Key"], "projects/apex-mutual/briefs/old.json")
+        self.assertEqual(len(put_objects), 2)
+        self.assertEqual(put_objects[0]["ContentType"], "application/json")
+        self.assertEqual(put_objects[1]["ContentType"], "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        self.assertTrue(put_objects[1]["Body"].startswith(b"PK"))
+        self.assertEqual(dynamodb_items[0]["Item"]["sortKey"]["S"], "BRIEF#LATEST")
 
     def test_bedrock_invocation_uses_guardrail_when_configured(self):
         captured = {}
