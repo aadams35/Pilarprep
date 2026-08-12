@@ -48,6 +48,7 @@ type Scenario = {
   companySize: string;
   pillars: string[];
   context: string;
+  companyValues: string;
   decisionMakers: DecisionMakerContext[];
   meetingNotes: string;
   challenge: string;
@@ -74,6 +75,45 @@ const companySizes = ["Startup", "Mid-market", "Enterprise"];
 
 const scenarios: Scenario[] = [
   {
+    id: "bluemesa",
+    name: "Payments resilience program",
+    company: "BlueMesa Payments",
+    industry: "Financial Services",
+    meetingType: "Executive Briefing",
+    companySize: "Enterprise",
+    pillars: ["Security", "Reliability", "Operational Excellence"],
+    context:
+      "BlueMesa Payments is consolidating merchant dispute processing and customer reporting after two acquisitions. The current platform mixes on-prem services with aging integrations, and leadership wants a phased AWS modernization path before holiday transaction volume ramps. The team is especially worried about PCI evidence, identity boundaries across acquired systems, overnight batch failures that delay merchant settlement, and the risk of introducing customer-visible disruption during cutover.",
+    companyValues: "Merchant trust, rigorous compliance, low-drama change management, and faster delivery only when customer impact stays protected.",
+    decisionMakers: [
+      {
+        name: "Ariana Cole",
+        title: "Chief Digital Officer",
+        source: "Customer-approved profile notes",
+        context:
+          "Focused on merchant trust, faster launch cycles for new payment products, and board-level confidence that modernization will not create a public incident during peak season.",
+      },
+      {
+        name: "Dev Malik",
+        title: "VP Infrastructure and Resilience",
+        source: "Customer-approved profile notes",
+        context:
+          "Concerned with brittle overnight settlement jobs, inconsistent observability, unclear failover ownership, and the need to prove recovery objectives before any migration wave is approved.",
+      },
+      {
+        name: "Rachel Kim",
+        title: "Chief Risk and Compliance Officer",
+        source: "Customer-approved profile notes",
+        context:
+          "Needs clean PCI evidence, tenant and identity separation across acquired systems, and a migration approach that keeps audit documentation ahead of delivery work.",
+      },
+    ],
+    meetingNotes:
+      "BlueMesa approved a discovery-to-pilot path if the team can show a low-disruption first wave. Ariana wants a board-ready story around merchant trust and faster product launches. Dev asked for explicit RTO and RPO validation, rollback criteria, and clearer ownership for settlement failures. Rachel wants audit evidence, access boundary validation, and a plan for keeping compliance sign-off in the critical path instead of after the fact.",
+    challenge: "High-trust payments modernization",
+    winTheme: "Modernize payment operations without risking merchant confidence, compliance evidence, or settlement continuity.",
+  },
+  {
     id: "apex",
     name: "Financial modernization",
     company: "Apex Mutual",
@@ -83,6 +123,7 @@ const scenarios: Scenario[] = [
     pillars: ["Security", "Reliability", "Cost Optimization"],
     context:
       "Customer is modernizing a customer portal, worried about compliance, and wants a clearer migration path without disrupting peak business periods.",
+    companyValues: "Customer trust, controlled modernization, board visibility, and measurable governance.",
     decisionMakers: [
       {
         name: "Lena Ortiz",
@@ -114,6 +155,7 @@ const scenarios: Scenario[] = [
     pillars: ["Security", "Reliability", "Operational Excellence"],
     context:
       "Hospital network is consolidating patient scheduling systems and needs stronger disaster recovery, lower support burden, and clear compliance controls.",
+    companyValues: "Patient-first reliability, clinical continuity, privacy protection, and simpler frontline operations.",
     decisionMakers: [
       {
         name: "Priya Shah",
@@ -145,6 +187,7 @@ const scenarios: Scenario[] = [
     pillars: ["Performance Efficiency", "Cost Optimization", "Reliability"],
     context:
       "Digital commerce team is preparing for peak season. They need better elasticity, fewer checkout incidents, and a clearer cost story for executive sponsors.",
+    companyValues: "Fast customer experience, confident launches, revenue protection, and disciplined spend.",
     decisionMakers: [
       {
         name: "Emma Chen",
@@ -237,6 +280,21 @@ function buildPillarRanking(items: string[]) {
     rank: index + 1,
     pillar,
   }));
+}
+
+function buildApprovedBriefSnapshot(brief: BriefResponse | null): BriefRequest["approvedBrief"] {
+  if (!brief) {
+    return undefined;
+  }
+
+  return {
+    technical: [...brief.technical],
+    executive: [...brief.executive],
+    stakeholders: [...brief.stakeholders],
+    gameplan: [...brief.gameplan],
+    objections: [...brief.objections],
+    citations: [...brief.citations],
+  };
 }
 const feedbackCategories = [
   {
@@ -621,6 +679,7 @@ export default function Home() {
   );
   const [draggedPillar, setDraggedPillar] = useState<string | null>(null);
   const [context, setContext] = useState(activeScenario.context);
+  const [companyValues, setCompanyValues] = useState(activeScenario.companyValues);
   const [decisionMakers, setDecisionMakers] = useState<DecisionMakerContext[]>(
     () => cloneDecisionMakers(activeScenario.decisionMakers)
   );
@@ -706,6 +765,7 @@ export default function Home() {
           : normalizePillarRanking(selectedPillars)
       );
       setContext(typeof saved.context === "string" ? saved.context : context);
+      setCompanyValues(typeof saved.companyValues === "string" ? saved.companyValues : activeScenario.companyValues);
       setDecisionMakers(
         Array.isArray(saved.decisionMakers)
           ? saved.decisionMakers
@@ -845,6 +905,7 @@ export default function Home() {
         companySize,
         selectedPillars,
         context,
+        companyValues,
         decisionMakers,
         meetingNotes,
         activeTab,
@@ -871,6 +932,7 @@ export default function Home() {
     company,
     companySize,
     context,
+    companyValues,
     decisionMakers,
     feedback,
     generatedBrief,
@@ -1074,6 +1136,8 @@ const industryFocus = useMemo(() => {
       "",
       "Customer context",
       context || "No customer context captured yet.",
+      "Company values",
+      companyValues || "No company values captured yet.",
       "",
       briefSection("Technical brief", briefContent.technical),
       "",
@@ -1174,6 +1238,27 @@ const industryFocus = useMemo(() => {
       },
     ];
   }, [generatedBrief]);
+
+  const projectArtifactGroups = useMemo(
+    () => [
+      {
+        title: "Two-week implementation plan",
+        items: generatedBrief?.projectArtifacts?.twoWeekPlan ?? [],
+        empty: "Generate handoff to build the first implementation sprint.",
+      },
+      {
+        title: "Risk register",
+        items: generatedBrief?.projectArtifacts?.riskRegister ?? [],
+        empty: "Generate handoff to capture delivery risks and blockers.",
+      },
+      {
+        title: "Stakeholder map",
+        items: generatedBrief?.projectArtifacts?.stakeholderMap ?? [],
+        empty: "Generate handoff to map approvers, owners, and follow-through signals.",
+      },
+    ],
+    [generatedBrief]
+  );
 
   const handoffReady = Boolean(
     generatedBrief &&
@@ -1362,6 +1447,7 @@ const industryFocus = useMemo(() => {
     setCompanySize(nextScenario.companySize);
     setSelectedPillars(normalizePillarRanking(nextScenario.pillars));
     setContext(nextScenario.context);
+    setCompanyValues(nextScenario.companyValues);
     setDecisionMakers(cloneDecisionMakers(nextScenario.decisionMakers));
     setMeetingNotes(nextScenario.meetingNotes);
     setBriefVersion(1);
@@ -1509,6 +1595,7 @@ const industryFocus = useMemo(() => {
       companySize,
       selectedPillars: [...selectedPillars],
       context,
+      companyValues,
       decisionMakers: cloneDecisionMakers(usableDecisionMakers),
       meetingNotes,
       feedback: [...feedback],
@@ -1529,6 +1616,7 @@ const industryFocus = useMemo(() => {
     setCompanySize(entry.companySize);
     setSelectedPillars(normalizePillarRanking(entry.selectedPillars));
     setContext(entry.context);
+    setCompanyValues(entry.companyValues);
     setDecisionMakers(cloneDecisionMakers(entry.decisionMakers));
     setMeetingNotes(entry.meetingNotes);
     setFeedback([...entry.feedback]);
@@ -1564,15 +1652,19 @@ const industryFocus = useMemo(() => {
     const requestRole = role;
     const requestPrompt = activePrompt;
     const requestProjectAnswerKey = `${requestRole}::${requestPrompt}`;
+    const approvedBrief = buildApprovedBriefSnapshot(generatedBrief);
+    const preserveExistingOutput = mode === "project";
 
     setIsGenerating(true);
     setGenerationError("");
     setGenerationNotice("");
-    setGeneratedBrief(null);
-    setProjectBrainAnswer("");
-    setProjectAnswerKey("");
-    setPromoted(false);
-    setApproved(false);
+    if (!preserveExistingOutput) {
+      setGeneratedBrief(null);
+      setProjectBrainAnswer("");
+      setProjectAnswerKey("");
+      setPromoted(false);
+      setApproved(false);
+    }
     try {
       const briefRequest = {
         mode,
@@ -1583,11 +1675,13 @@ const industryFocus = useMemo(() => {
         pillars: selectedPillars,
         pillarRanking,
         context,
+        companyValues,
         meetingNotes,
         feedback,
         decisionMakers: usableDecisionMakers,
         role: requestRole,
         prompt: requestPrompt,
+        approvedBrief: mode === "project" ? approvedBrief : undefined,
       };
       const validationError = validateBriefRequest(briefRequest);
 
@@ -2153,6 +2247,7 @@ const industryFocus = useMemo(() => {
                 Brief inputs
               </p>
               <h2 className="mt-1 text-xl font-black">Customer context</h2>
+              <p className="mt-2 text-sm leading-6 text-[#526070]">Known context, company values, and stakeholder notes shape how the brief is framed.</p>
             </div>
 
             <div className="brief-input-grid p-5">
@@ -2285,6 +2380,15 @@ const industryFocus = useMemo(() => {
                   className="field min-h-28 resize-none"
                   value={context}
                   onChange={(event) => setContext(event.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="field-label">Company values</span>
+                <textarea
+                  className="field min-h-24 resize-none"
+                  value={companyValues}
+                  onChange={(event) => setCompanyValues(event.target.value)}
+                  placeholder="What principles or behaviors matter most to this customer?"
                 />
               </label>
               </div>
@@ -3048,6 +3152,59 @@ const industryFocus = useMemo(() => {
                         </div>
                       ))}
                     </div>
+
+                    <div className="mt-5 grid gap-4 xl:grid-cols-3">
+                      {projectArtifactGroups.map((group) => (
+                        <section key={group.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#7dd3fc]">AI handoff output</p>
+                              <h3 className="mt-1 text-base font-black text-white">{group.title}</h3>
+                            </div>
+                            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">
+                              {group.items.length ? `${group.items.length} items` : "Waiting"}
+                            </span>
+                          </div>
+
+                          <div className="mt-4 space-y-3">
+                            {group.items.length ? (
+                              group.items.map((item, index) => (
+                                <article key={`${group.title}-${item.title}-${index}`} className="rounded-xl border border-white/10 bg-[#0f172a] px-4 py-3">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <strong className="block text-sm text-white">{item.title}</strong>
+                                      <span className="mt-1 block text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                                        {item.owner ?? "Owner TBD"}
+                                      </span>
+                                    </div>
+                                    <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#7dd3fc]">
+                                      {item.status ?? "Queued"}
+                                    </span>
+                                  </div>
+                                  <p className="mt-3 text-sm leading-6 text-white/72">{item.detail}</p>
+                                </article>
+                              ))
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-white/12 px-4 py-5 text-sm leading-6 text-white/55">
+                                {group.empty}
+                              </div>
+                            )}
+                          </div>
+                        </section>
+                      ))}
+                    </div>
+
+                    <section className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#7dd3fc]">Customer follow-through</p>
+                        <h3 className="mt-1 text-base font-black text-white">
+                          {generatedBrief?.projectArtifacts?.followUpEmail?.subject ?? "Follow-up email will appear after handoff generation"}
+                        </h3>
+                      </div>
+                      <p className="mt-4 whitespace-pre-line text-sm leading-6 text-white/72">
+                        {generatedBrief?.projectArtifacts?.followUpEmail?.body ?? "Generate the handoff to draft the customer-ready follow-up and internal continuity note."}
+                      </p>
+                    </section>
                   </div>
 
                   <div className="meeting-panel" id="project-notes-section">

@@ -12,6 +12,15 @@ export type PillarRankingItem = {
   pillar: string;
 };
 
+export type ApprovedBriefSnapshot = {
+  technical: string[];
+  executive: string[];
+  stakeholders: string[];
+  gameplan: string[];
+  objections: string[];
+  citations?: string[];
+};
+
 export type BriefRequest = {
   mode?: BriefMode;
   company: string;
@@ -21,11 +30,13 @@ export type BriefRequest = {
   pillars: string[];
   pillarRanking?: PillarRankingItem[];
   context: string;
+  companyValues?: string;
   decisionMakers?: DecisionMakerContext[];
   meetingNotes?: string;
   feedback?: string[];
   role?: string;
   prompt?: string;
+  approvedBrief?: ApprovedBriefSnapshot;
 };
 
 export type ProjectArtifactItem = {
@@ -76,3 +87,4 @@ export type BriefResponse = {
   projectArtifacts?: ProjectArtifacts;
   citations: string[];
 };
+

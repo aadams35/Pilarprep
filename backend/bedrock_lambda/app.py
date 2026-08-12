@@ -134,9 +134,23 @@ def _briefing_guidance(payload):
     }
 
 
+def _approved_brief(payload):
+    source = payload.get("approvedBrief") if isinstance(payload.get("approvedBrief"), dict) else {}
+
+    return {
+        "technical": _as_string_list(source.get("technical"))[:LIST_ITEM_COUNT],
+        "executive": _as_string_list(source.get("executive"))[:LIST_ITEM_COUNT],
+        "stakeholders": _as_string_list(source.get("stakeholders"))[:LIST_ITEM_COUNT],
+        "gameplan": _as_string_list(source.get("gameplan"))[:LIST_ITEM_COUNT],
+        "objections": _as_string_list(source.get("objections"))[:LIST_ITEM_COUNT],
+        "citations": _as_string_list(source.get("citations"))[:4],
+    }
+
+
 def _build_prompt(payload):
     guidance = _briefing_guidance(payload)
     ranked_pillars = guidance.get("pillarRanking", [])
+    approved_brief = _approved_brief(payload)
     request_context = {
         "company": payload.get("company", ""),
         "industry": payload.get("industry", ""),
@@ -145,12 +159,14 @@ def _build_prompt(payload):
         "pillars": [item.get("pillar", "") for item in ranked_pillars],
         "pillarRanking": ranked_pillars,
         "context": payload.get("context", ""),
+        "companyValues": payload.get("companyValues", ""),
         "decisionMakers": payload.get("decisionMakers", []),
         "meetingNotes": payload.get("meetingNotes", ""),
         "feedback": payload.get("feedback", []),
         "role": payload.get("role", ""),
         "prompt": payload.get("prompt", ""),
         "mode": payload.get("mode", "prebrief"),
+        "approvedBrief": approved_brief,
         "briefingGuidance": guidance,
     }
 
@@ -197,8 +213,10 @@ Required JSON schema:
 {json.dumps(schema, ensure_ascii=True, indent=2)}
 
 Content requirements:
-- Before writing, identify the company name, industry, meeting type, ranked pillar order, decision-maker notes, feedback, and meeting notes from the Request JSON. Use those as hard anchors, not optional flavor.
-- Every technical and executive paragraph must name the company or a supplied stakeholder, refer to the rank 1 pillar, and connect to at least one supplied context detail. Do not write a paragraph that could be reused unchanged for another customer.
+- Before writing, identify the company name, industry, meeting type, ranked pillar order, company values, decision-maker notes, feedback, and meeting notes from the Request JSON. Use those as hard anchors, not optional flavor.
+- If approvedBrief is supplied, treat it as the approved pre-brief packet and convert it into follow-on delivery context instead of rewriting the project from scratch.
+- In mode "project", make the projectAnswer and projectArtifacts feel like the morning-after handoff for implementation, delivery, sales follow-up, and onboarding: concrete owners, sequence, evidence, dependencies, and next-step communication.
+- Every technical and executive paragraph must name the company or a supplied stakeholder, refer to the rank 1 pillar, and connect to at least one supplied context detail. When companyValues are supplied, reflect them in the framing, tradeoffs, success criteria, or stakeholder language. Do not write a paragraph that could be reused unchanged for another customer.
 - If decision-maker context is supplied, at least two stakeholder or executive paragraphs must use the supplied names, roles, or approved notes. Treat those notes as hypotheses to validate, not as facts.
 - If feedback or meetingNotes are supplied, reflect them directly in the refinement, game plan, projectAnswer, and projectArtifacts.
 - technical: exactly 4 SA-facing paragraphs, not headings. Each paragraph must be 75-120 words, 4-6 complete sentences, connect to the company context, ranked pillars, industry signals, current-state assumptions, and include one explicit discovery question starting with "Ask:".
@@ -207,13 +225,14 @@ Content requirements:
 - gameplan: exactly 4 meeting-plan paragraphs of 60-100 words. Each paragraph must explain what the SA should do in that part of the meeting and include one question the SA can ask live.
 - objections: exactly 4 paragraphs of 60-100 words in "Concern: ... Response: ... Ask: ..." form. Make each response specific enough to use in front of a customer.
 - projectAnswer: answer the requested follow-on role and prompt with one substantial paragraph of 4-6 sentences using the generated brief context so the Project model can auto-build from the same response.
+- If approvedBrief is present, explicitly reuse at least two of its validated themes in projectAnswer or projectArtifacts, but turn them into post-meeting actions, risks, or owner decisions.
 - projectArtifacts: always include exactly 4 two-week plan items, exactly 4 risks, exactly 4 stakeholder map items, and one follow-up email in the same response. Details should be concrete, owner-oriented, and implementation-ready.
 - citations: 2-4 short labels only, such as "Customer context", "Decision-maker notes", or "AWS Well-Architected pillars".
 - Treat pillarRanking as highest-to-lowest priority; rank 1 is the primary discovery lens and lower ranks should shape secondary tradeoffs.
 - Tie technical content to the ranked AWS Well-Architected pillars.
 - Include AWS services only when useful for the conversation, and never list services without explaining the customer decision they support.
 - Treat unknowns as assumptions to validate; do not present guesses as facts.
-- Avoid generic textbook cloud advice; tailor wording to the supplied customer context, industry signals, meeting type, ranked pillars, feedback, decision-maker context, and meeting notes. If a section sounds generic, rewrite it with the customer name, a ranked pillar tradeoff, a stakeholder signal, and a concrete validation question.
+- Avoid generic textbook cloud advice; tailor wording to the supplied customer context, company values, industry signals, meeting type, ranked pillars, feedback, decision-maker context, and meeting notes. If a section sounds generic, rewrite it with the customer name, a ranked pillar tradeoff, a stakeholder signal, a value statement when provided, and a concrete validation question.
 - Make the answer feel like a strong SA wrote it for a real upcoming meeting: specific, practical, question-led, and useful without follow-up clarification.
 - Do not return short bullets. Every array item should stand alone as a useful mini-brief paragraph.
 
@@ -434,6 +453,7 @@ def _fallback_generated(payload, model_text=""):
     industry = _clean_string(payload.get("industry")) or "the customer's industry"
     meeting_type = _clean_string(payload.get("meetingType")) or "customer meeting"
     context = _clean_string(payload.get("context"))
+    company_values = _clean_string(payload.get("companyValues"))
     model_hint = " The model response was not valid JSON, so this safe fallback should be refined before sharing." if model_text else ""
 
     decision_makers = payload.get("decisionMakers") if isinstance(payload.get("decisionMakers"), list) else []
@@ -483,7 +503,7 @@ def _fallback_generated(payload, model_text=""):
             "Concern: \"We do not have enough internal capacity.\" Response: identify the smallest validation path, name only the first two weeks of owners, and keep the project model updated from approved notes. Ask: \"Who can own validation, who can approve risk, and who needs to be informed but not pulled into every detail?\"",
             "Concern: \"The generated brief may be wrong.\" Response: agree, then position the brief as a structured hypothesis map that speeds validation rather than replacing customer discovery. Ask: \"Which assumption should we mark as highest risk until your team confirms it?\"",
         ],
-        "projectAnswer": f"Start with a two-week validation sprint for {company}: confirm stakeholders, validate rank 1 {primary_pillar.lower()} assumptions, capture current-state architecture, document risks and owners, and publish a decision log before implementation expands. Use the approved brief, decision-maker notes, and meeting outcomes as the shared project model so sales, SA, engineering, and the sponsor are working from the same context. The first deliverable should be a concise owner-based plan that says what will be validated, what evidence is needed, what risk could block approval, and when the next decision happens. Treat every generated statement as a hypothesis until the customer validates it.",        "projectArtifacts": _fallback_project_artifacts(payload),
+        "projectAnswer": f"Start with a two-week validation sprint for {company}: confirm stakeholders, validate rank 1 {primary_pillar.lower()} assumptions, capture current-state architecture, document risks and owners, and publish a decision log before implementation expands. Use the approved brief, decision-maker notes, meeting outcomes, and{f" company values ({company_values})" if company_values else ""} as the shared project model so sales, SA, engineering, and the sponsor are working from the same context. The first deliverable should be a concise owner-based plan that says what will be validated, what evidence is needed, what risk could block approval, and when the next decision happens. Treat every generated statement as a hypothesis until the customer validates it.",        "projectArtifacts": _fallback_project_artifacts(payload),
         "citations": ["Customer context", "Decision-maker notes", "AWS Well-Architected pillars" if context else "PilarPrep fallback"],
     }
 
@@ -648,6 +668,7 @@ def _brief_docx_bytes(payload, generated, metadata):
         _docx_paragraph(f"Meeting type: {_clean_string(payload.get('meetingType')) or 'Not provided'}"),
         _docx_paragraph(f"Company size: {_clean_string(payload.get('companySize')) or 'Not provided'}"),
         _docx_paragraph(f"Context: {_clean_string(payload.get('context')) or 'Not provided'}"),
+        _docx_paragraph(f"Company values: {_clean_string(payload.get('companyValues')) or 'Not provided'}"),
     ]
 
     ranked_pillars = _pillar_ranking(payload)

@@ -114,6 +114,7 @@ VALID_PAYLOAD = {
         {"rank": 3, "pillar": "Cost Optimization"},
     ],
     "context": "Modernizing a customer portal with audit and migration risk.",
+    "companyValues": "Trust, transparent governance, careful change management, and measurable customer impact.",
     "decisionMakers": [
         {
             "name": "Lena Ortiz",
@@ -125,6 +126,14 @@ VALID_PAYLOAD = {
     "meetingNotes": "CIO approved a pilot if evidence is clear.",
     "role": "PM",
     "prompt": "Create the first two-week plan.",
+    "approvedBrief": {
+        "technical": [f"{MODEL_TECHNICAL} Approved {index + 1}." for index in range(4)],
+        "executive": [f"{MODEL_EXECUTIVE} Approved {index + 1}." for index in range(4)],
+        "stakeholders": [f"{MODEL_STAKEHOLDER} Approved {index + 1}." for index in range(4)],
+        "gameplan": [f"{MODEL_GAMEPLAN} Approved {index + 1}." for index in range(4)],
+        "objections": [f"{MODEL_OBJECTION} Approved {index + 1}." for index in range(4)],
+        "citations": ["Approved packet", "Customer context"],
+    },
 }
 
 
@@ -198,6 +207,10 @@ class LambdaHandlerTest(unittest.TestCase):
 
         self.assertIn('"pillarRanking"', prompt)
         self.assertIn('"rank": 1', prompt)
+        self.assertIn('"approvedBrief"', prompt)
+        self.assertIn('"companyValues"', prompt)
+        self.assertIn("treat it as the approved pre-brief packet", prompt)
+        self.assertIn("morning-after handoff", prompt)
         self.assertIn("rank 1 is the primary discovery lens", prompt)
         self.assertIn("hard anchors, not optional flavor", prompt)
         self.assertIn("Do not write a paragraph that could be reused unchanged", prompt)

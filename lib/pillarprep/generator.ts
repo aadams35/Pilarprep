@@ -28,6 +28,16 @@ function compactPillarRanking(items: string[], limit = 3) {
     .join("; ");
 }
 
+function companyValuesSignal(companyValues: string | undefined) {
+  const cleanValues = companyValues?.trim();
+
+  if (!cleanValues) {
+    return "";
+  }
+
+  return ` Company values to respect in tone and tradeoffs: ${cleanValues}`;
+}
+
 function industryFocus(industry: string) {
   if (industry === "Financial Services") {
     return "auditability, identity controls, regulatory evidence, and migration risk";
@@ -77,12 +87,33 @@ function normalizeDecisionMakers(
     }))
     .filter((person) => person.name || person.title || person.context);
 }
+
+function approvedBriefContext(input: BriefRequest) {
+  const approvedBrief = input.approvedBrief;
+
+  if (!approvedBrief) {
+    return "Use the generated brief as the working packet, then confirm what changed in the meeting before treating anything as final.";
+  }
+
+  const approvedSignals = [
+    approvedBrief.technical?.[0],
+    approvedBrief.executive?.[0],
+    approvedBrief.stakeholders?.[0],
+  ].filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+
+  if (!approvedSignals.length) {
+    return "Use the approved brief as the source packet for the handoff, then turn its assumptions, risks, and stakeholder signals into owned follow-through.";
+  }
+
+  return `Approved brief context: ${approvedSignals.slice(0, 2).join(" ")}`;
+}
 function buildProjectArtifacts(
   input: BriefRequest,
   company: string,
   pillars: string[],
   decisionMakers: DecisionMakerContext[],
-  focus: string
+  focus: string,
+  valuesSignal: string
 ): ProjectArtifacts {
   const primaryPillar = pillars[0] ?? "Security";
   const sponsor = decisionMakers[0]?.name || "executive sponsor";
@@ -171,7 +202,7 @@ function buildProjectArtifacts(
         ],
     followUpEmail: {
       subject: `Follow-up from PilarPrep briefing for ${company}`,
-      body: `Thanks for the conversation. We captured ${focus} as the main business context and ${primaryPillar.toLowerCase()} as the first technical validation area.\n\nRecommended next step: run a focused working session to confirm stakeholders, current-state assumptions, success criteria, risks, and pilot scope.\n\nWe will use the approved brief, decision-maker notes, meeting outcomes, and owner list as the shared project context.`,
+      body: `Thanks for the conversation. We captured ${focus} as the main business context and ${primaryPillar.toLowerCase()} as the first technical validation area.${valuesSignal}\n\nRecommended next step: run a focused working session to confirm stakeholders, current-state assumptions, success criteria, risks, and pilot scope.\n\nWe will use the approved brief, decision-maker notes, meeting outcomes, and owner list as the shared project context.`,
     },
   };
 }
@@ -189,6 +220,8 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
     ? `Refinements applied: ${compactList(input.feedback)}.`
     : "No extra refinement feedback applied yet.";
   const focus = industryFocus(input.industry);
+  const valuesSignal = companyValuesSignal(input.companyValues);
+  const approvedContext = approvedBriefContext(input);
   const stakeholderText = stakeholderLead
     ? `Decision-maker angle: anchor the conversation to ${stakeholderLead.name || "the primary stakeholder"}${stakeholderLead.title ? ` (${stakeholderLead.title})` : ""} and validate the priorities captured in the approved profile notes.`
     : "Decision-maker angle: add approved stakeholder notes to tailor the opening, questions, and objection handling.";
@@ -197,7 +230,8 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
     company,
     rankedPillars,
     decisionMakers,
-    focus
+    focus,
+    valuesSignal
   );
   const stakeholderBriefing = [
     ...decisionMakers.slice(0, 3).map((person) => {
@@ -229,7 +263,7 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
       `Use the ranked pillar order to shape the proof plan for ${company}: rank 1 gets the deepest evidence review, ranks 2 and 3 become tradeoff checks, and lower-ranked pillars stay visible so they are not ignored. Capture which artifacts are missing, who owns each artifact, and how a pilot would prove the riskiest assumption. Ask: "What proof would let us move from discussion to a small approved pilot?"`,
     ],
     executive: [
-      `${company} is balancing speed with risk control, so the executive conversation should start with ${focus} rather than architecture diagrams. The strongest framing is that PilarPrep improves decision quality before the meeting and preserves follow-through after the meeting, reducing the chance that good discovery turns into scattered notes. Ask: "What business outcome would make this meeting a success 30 days from now?"`,
+      `${company} is balancing speed with risk control, so the executive conversation should start with ${focus} rather than architecture diagrams. ${valuesSignal ? `Tie the framing back to how ${company} says it operates: ${input.companyValues?.trim()}. ` : ""}The strongest framing is that PilarPrep improves decision quality before the meeting and preserves follow-through after the meeting, reducing the chance that good discovery turns into scattered notes. Ask: "What business outcome would make this meeting a success 30 days from now?"`,
       `The business case should emphasize fewer missed risks, faster alignment across sales/SA/project teams, and a clearer path from discussion to pilot. Avoid AWS jargon unless an executive asks how it works; describe the result as a repeatable way to prepare, validate assumptions, and turn meeting outcomes into owners, risks, and next actions. Ask: "Where do projects like this usually slow down: funding, security approval, technical uncertainty, or lack of ownership?"`,
       `For the sponsor, the important decision is whether to approve a bounded validation sprint with clear success measures, decision owners, and evidence checkpoints. ${stakeholderText} ${feedback} Ask: "What would make you comfortable saying yes to the next step, and what evidence would you need before scaling beyond a pilot?"`,
       `Frame the ROI for ${company} as decision speed and rework reduction: better prep should reduce repeated discovery, unclear handoffs, and late risk surprises. The executive sponsor does not need a service tour; they need confidence that the team can move in a controlled way and know when to stop, pivot, or expand. Ask: "Which delay costs more right now: waiting for perfect information, or moving forward without enough evidence?"`,
@@ -251,7 +285,7 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
         : `Concern: "We do not know what the decision makers care about." Response: capture approved stakeholder context before the follow-up and use Project Brain to refresh the plan from known notes, not guessed profile data. Ask: "Who must approve the business case, technical plan, security posture, and funding path?"`,
       `Concern: "The generated brief may be wrong." Response: agree, then position the brief as a structured hypothesis map that speeds validation rather than replacing customer discovery. Ask: "Which assumption should we mark as highest risk until your team confirms it?"`,
     ],
-    projectAnswer: `For ${input.role ?? "the project team"}, use the generated brief as the starting project model, not as final truth. The next useful move is a two-week sprint, structured as a validation sprint for ${company}: confirm stakeholders, validate rank 1 ${primaryPillar.toLowerCase()} assumptions, review current-state evidence, turn meeting notes into owners and risks, and publish a decision log that sales, SA, engineering, and the sponsor can all reuse. For the prompt "${input.prompt ?? "What should we do next?"}", answer with concrete owner-based actions, the evidence needed to proceed, and the blocker that should be escalated first${stakeholderLead ? ` with ${stakeholderLead.name || "the primary stakeholder"}` : ""}.`,
+    projectAnswer: `For ${input.role ?? "the project team"}, use the approved brief as the starting project model, not as final truth. ${approvedContext}${valuesSignal} The next useful move is a two-week sprint for ${company}: confirm stakeholders, validate rank 1 ${primaryPillar.toLowerCase()} assumptions, review current-state evidence, turn meeting notes into owners and risks, and publish a decision log that sales, SA, engineering, and the sponsor can all reuse. For the prompt "${input.prompt ?? "What should we do next?"}", answer with concrete owner-based actions, the evidence needed to proceed, and the blocker that should be escalated first${stakeholderLead ? ` with ${stakeholderLead.name || "the primary stakeholder"}` : ""}.`,
     projectArtifacts,
     citations: [
       "Customer-provided context",
@@ -304,5 +338,10 @@ export function validateBriefRequest(input: Partial<BriefRequest>) {
     return "context is required";
   }
 
+  if (input.companyValues !== undefined && typeof input.companyValues !== "string") {
+    return "companyValues must be a string";
+  }
+
   return null;
 }
+
