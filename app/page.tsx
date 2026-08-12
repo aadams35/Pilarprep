@@ -28,7 +28,16 @@ type AudienceRole = "Sales" | "Executive" | "PM" | "Engineer" | "New member";
 type RiskLevel = "Low" | "Medium" | "High";
 type GenerationMode = "demo" | "live";
 type ModelStatus = { checked: boolean; liveConfigured: boolean; apiKeyConfigured: boolean; authMode?: string };
-type ConsolePage = "setup" | "brief" | "project" | "aws";
+type ConsolePage = "setup" | "brief" | "project" | "demo" | "library" | "aws";
+type WorkflowStepId =
+  | "phase1-generate"
+  | "phase1-review"
+  | "phase1-refine"
+  | "phase1-approve"
+  | "phase2-capture"
+  | "phase2-autobuild"
+  | "phase2-plan"
+  | "phase2-update";
 
 type Scenario = {
   id: string;
@@ -357,14 +366,6 @@ const rolePrompts: Record<AudienceRole, string[]> = {
   ],
 };
 
-const lifecycleStages = [
-  "Context",
-  "AI Brief",
-  "Review",
-  "Approve",
-  "Project Model",
-  "Handoff",
-];
 
 const evidenceSources = [
   "Customer notes",
@@ -376,23 +377,66 @@ const evidenceSources = [
 const storyBeats = [
   {
     time: "0:00",
-    title: "Select the customer",
-    detail: "Choose a scenario and show how sparse context becomes structured prep.",
+    title: "Frame the problem",
+    detail: "Open with the SA pain point: pre-meeting prep is manual, inconsistent, and rarely reusable after the meeting ends.",
   },
   {
-    time: "0:25",
-    title: "Refine the brief",
-    detail: "Apply SA feedback to tune the brief for audience, pillar, and risk.",
+    time: "2:00",
+    title: "Set the client context",
+    detail: "Choose a customer scenario, show the ranked pilar priorities, and explain how the meeting context shapes both technical and executive outputs.",
   },
   {
-    time: "0:50",
-    title: "Auto-build Project model",
-    detail: "Use the generated brief and notes to create shared delivery memory automatically.",
+    time: "4:30",
+    title: "Generate the pre-brief",
+    detail: "Show the first AI-generated packet with a technical brief, executive brief, stakeholder lens, and SA game plan from the same input.",
   },
   {
-    time: "1:15",
-    title: "Review follow-on outputs",
-    detail: "Switch roles to see the plan, exec framing, risks, and onboarding view.",
+    time: "7:00",
+    title: "Refine with SA feedback",
+    detail: "Apply targeted feedback to improve tone, depth, questions, and objections so the brief becomes customer-ready instead of generic.",
+  },
+  {
+    time: "9:30",
+    title: "Approve and promote",
+    detail: "Approve the final pre-brief and explain that PilarPrep converts the final packet into follow-on handoff context automatically.",
+  },
+  {
+    time: "12:00",
+    title: "Show delivery handoff",
+    detail: "Walk through the project handoff outputs for implementation teams, delivery leads, sales follow-up, and new project members catching up.",
+  },
+  {
+    time: "14:00",
+    title: "Close with AWS proof",
+    detail: "Finish on the AWS story: CloudFront and S3 for the app, API Gateway and Lambda for orchestration, Bedrock for generation, and S3 plus DynamoDB for latest-state storage.",
+  },
+];
+
+const demoHowItWorks = [
+  {
+    step: "1",
+    title: "Capture the meeting context",
+    detail: "The seller selects the client scenario, meeting type, decision-maker notes, and ranked pilar priorities.",
+  },
+  {
+    step: "2",
+    title: "Authorize the browser",
+    detail: "CloudFront serves the app and the browser uses limited IAM-backed credentials to call the brief API safely.",
+  },
+  {
+    step: "3",
+    title: "Generate with Bedrock",
+    detail: "API Gateway and Lambda shape the request, then Bedrock returns the technical brief, executive brief, and stakeholder output.",
+  },
+  {
+    step: "4",
+    title: "Refine and approve",
+    detail: "The SA applies feedback until the packet is customer-ready and ready to promote into follow-on delivery context.",
+  },
+  {
+    step: "5",
+    title: "Save and hand off",
+    detail: "S3 stores the latest packet artifacts while DynamoDB tracks the active handoff state for the team.",
   },
 ];
 
@@ -402,32 +446,133 @@ const architectureFlow = [
   "Refine",
   "S3",
   "Knowledge Base",
-  "Project model",
+  "Team handoff",
 ];
 
 const packetOutputs = [
   {
     title: "Technical brief",
+    key: "technical",
     detail: "Architecture assumptions, risk areas, service references, and deep-dive questions.",
   },
   {
     title: "Executive brief",
+    key: "executive",
     detail: "Business context, outcome framing, success criteria, and low-jargon questions.",
   },
   {
     title: "Decision-maker lens",
+    key: "stakeholders",
     detail: "Approved stakeholder context, likely priorities, tailored questions, and influence notes.",
   },
   {
     title: "SA game plan",
+    key: "gameplan",
     detail: "Meeting objective, talk track, likely objections, and closeout checklist.",
   },
   {
     title: "Project handoff",
+    key: "handoff",
     detail: "Notes, decisions, owners, risks, timeline, and role-aware follow-on answers.",
   },
-];
+] as const;
 
+const awsArchitectureColumns = [
+  {
+    title: "Experience edge",
+    detail: "Customer-facing delivery for the console and demo path.",
+    services: [
+      {
+        badge: "USR",
+        service: "User browser",
+        note: "The seller or architect runs the workflow from a shared web console.",
+      },
+      {
+        badge: "CF",
+        service: "Amazon CloudFront",
+        note: "HTTPS delivery, caching, and SPA routing for the React experience.",
+      },
+      {
+        badge: "S3",
+        service: "Amazon S3 frontend bucket",
+        note: "Private origin that stores the built static UI assets.",
+      },
+    ],
+  },
+  {
+    title: "Identity and API",
+    detail: "Public demo access without exposing an API key.",
+    services: [
+      {
+        badge: "COG",
+        service: "Cognito Identity Pool",
+        note: "Issues short-lived browser credentials for the public demo flow.",
+      },
+      {
+        badge: "IAM",
+        service: "Demo invoke role",
+        note: "Limits the browser to invoking only the approved brief route.",
+      },
+      {
+        badge: "API",
+        service: "Amazon API Gateway",
+        note: "Enforces IAM auth on POST /brief and forwards the request to Lambda.",
+      },
+    ],
+  },
+  {
+    title: "Generation plane",
+    detail: "Prompt orchestration, safety, and model invocation.",
+    services: [
+      {
+        badge: "LMB",
+        service: "AWS Lambda brief function",
+        note: "Builds the prompt contract, validates JSON, and saves the response.",
+      },
+      {
+        badge: "BR",
+        service: "Amazon Bedrock",
+        note: "Invokes the configured foundation model for brief and handoff content.",
+      },
+      {
+        badge: "GRD",
+        service: "Bedrock Guardrails",
+        note: "Adds safety filtering and prompt-attack protection around generation.",
+      },
+    ],
+  },
+  {
+    title: "Project memory",
+    detail: "Latest-only artifacts, team context, and operations visibility.",
+    services: [
+      {
+        badge: "DDB",
+        service: "Amazon DynamoDB",
+        note: "Tracks the active project state, provider, and approved packet metadata.",
+      },
+      {
+        badge: "DOC",
+        service: "Amazon S3 artifacts",
+        note: "Stores the latest JSON packet and DOCX brief for each client workspace.",
+      },
+      {
+        badge: "CW",
+        service: "CloudWatch and Budget",
+        note: "Captures logs, alarms, and daily demo cost guardrails.",
+      },
+    ],
+  },
+] as const;
+
+const awsFlowSteps = [
+  "User opens PilarPrep",
+  "CloudFront serves the React console",
+  "Cognito issues a limited demo identity",
+  "API Gateway verifies IAM authorization",
+  "Lambda orchestrates the brief workflow",
+  "Bedrock generates structured content",
+  "S3 and DynamoDB save the latest project memory",
+] as const;
 const modelStoragePath = [
   {
     layer: "Bedrock model",
@@ -451,7 +596,7 @@ const modelStoragePath = [
     layer: "Project state",
     service: "DynamoDB",
     detail:
-      "Project model uses projectId and sortKey records to track generated briefs, handoff state, provider, and creation time.",
+      "The handoff workspace uses projectId and sortKey records to track generated briefs, handoff state, provider, and creation time.",
   },
   {
     layer: "Future memory",
@@ -469,7 +614,7 @@ const awsRunway = [
   {
     layer: "API",
     service: "API Gateway + Lambda",
-    detail: "Thin request layer for brief generation, feedback capture, and project model updates.",
+    detail: "Thin request layer for brief generation, feedback capture, and handoff updates.",
   },
   {
     layer: "AI generation",
@@ -530,7 +675,7 @@ const demoSignals = [
   },
   {
     label: "Project handoff",
-    detail: "The approved brief auto-builds Project model context for follow-through.",
+    detail: "The approved brief auto-builds the team handoff context for follow-through.",
   },
 ];
 
@@ -541,25 +686,11 @@ const judgeProofPoints = [
   { label: "Cost", value: "Budget guardrail" },
 ];
 
-const briefQualityTargets = [
-  {
-    label: "Long-form answers",
-    detail: "Paragraphs include context, reasoning, and next-step guidance.",
-  },
-  {
-    label: "Actual questions",
-    detail: "Technical, executive, stakeholder, and objection sections include prompts to ask live.",
-  },
-  {
-    label: "Model handoff",
-    detail: "The same response creates project model output and implementation artifacts.",
-  },
-];
 
 const heroProofPoints = [
   "Bedrock generation loop",
   "Well-Architected pillar ranking",
-  "Project model handoff",
+  "Team handoff",
   "AWS-ready deployment path",
 ];
 
@@ -572,13 +703,37 @@ const implementationBacklog = [
   "CloudWatch dashboard",
 ];
 
-const consolePages: Array<{ id: ConsolePage; label: string; detail: string }> = [
-  { id: "setup", label: "1. Context", detail: "Customer input" },
-  { id: "brief", label: "2. Brief", detail: "Review output" },
-  { id: "project", label: "3. Project", detail: "Team handoff" },
-  { id: "aws", label: "AWS", detail: "Infrastructure" },
+const consolePages: Array<{ id: ConsolePage; label: string }> = [
+  { id: "setup", label: "1. Context" },
+  { id: "brief", label: "2. Brief" },
+  { id: "project", label: "3. Handoff" },
+  { id: "demo", label: "4. Demo" },
+  { id: "aws", label: "AWS" },
 ];
 
+const prebriefWorkflowSteps: Array<{
+  id: WorkflowStepId;
+  label: string;
+  page: ConsolePage;
+  sectionId: string;
+}> = [
+  { id: "phase1-generate", label: "Generate", page: "setup", sectionId: "setup" },
+  { id: "phase1-review", label: "Review", page: "brief", sectionId: "brief-review-section" },
+  { id: "phase1-refine", label: "Refine", page: "brief", sectionId: "brief-refine-section" },
+  { id: "phase1-approve", label: "Approve", page: "brief", sectionId: "brief-approve-section" },
+];
+
+const projectWorkflowSteps: Array<{
+  id: WorkflowStepId;
+  label: string;
+  page: ConsolePage;
+  sectionId: string;
+}> = [
+  { id: "phase2-capture", label: "Capture notes", page: "project", sectionId: "project-notes-section" },
+  { id: "phase2-autobuild", label: "Auto-build", page: "project", sectionId: "project-autobuild-section" },
+  { id: "phase2-plan", label: "Plan", page: "project", sectionId: "project-plan-section" },
+  { id: "phase2-update", label: "Update", page: "project", sectionId: "project-handoff-section" },
+];
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -642,6 +797,8 @@ export default function Home() {
   const [role, setRole] = useState<AudienceRole>(defaultRole);
   const [activePrompt, setActivePrompt] = useState(rolePrompts[defaultRole][0]);
   const [generatedBrief, setGeneratedBrief] = useState<BriefResponse | null>(null);
+  const [briefHistory, setBriefHistory] = useState<BriefHistoryEntry[]>([]);
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [projectBrainAnswer, setProjectBrainAnswer] = useState("");
   const [projectAnswerKey, setProjectAnswerKey] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -669,6 +826,7 @@ export default function Home() {
   );
   const [copiedLabel, setCopiedLabel] = useState("");
   const [activePage, setActivePage] = useState<ConsolePage>("setup");
+  const [pendingSectionId, setPendingSectionId] = useState<string | null>(null);
   const [judgeMode, setJudgeMode] = useState(false);
 
   useEffect(() => {
@@ -755,6 +913,17 @@ export default function Home() {
         typeof saved.generatedBrief === "object" && saved.generatedBrief !== null
           ? (saved.generatedBrief as BriefResponse)
           : null
+      );
+      setBriefHistory(
+        Array.isArray(saved.briefHistory)
+          ? saved.briefHistory.filter(
+              (entry): entry is BriefHistoryEntry =>
+                typeof entry === "object" && entry !== null
+            )
+          : []
+      );
+      setSelectedHistoryId(
+        typeof saved.selectedHistoryId === "string" ? saved.selectedHistoryId : null
       );
       setProjectBrainAnswer(
         typeof saved.projectBrainAnswer === "string"
@@ -848,6 +1017,8 @@ export default function Home() {
         role,
         activePrompt,
         generatedBrief,
+        briefHistory,
+        selectedHistoryId,
         projectBrainAnswer,
         projectAnswerKey,
         judgeMode,
@@ -857,6 +1028,7 @@ export default function Home() {
     activePrompt,
     activeTab,
     approved,
+    briefHistory,
     briefVersion,
     company,
     companySize,
@@ -873,6 +1045,7 @@ export default function Home() {
     promoted,
     role,
     scenarioId,
+    selectedHistoryId,
     selectedPillars,
     workspaceLoaded,
   ]);
@@ -1074,7 +1247,7 @@ const industryFocus = useMemo(() => {
       "",
       briefSection("Objection handling", briefContent.objections),
       "",
-      "Project model answer",
+      "Team handoff answer",
       displayedProjectAnswer,
       "",
       artifactList("Two-week implementation plan", generatedBrief?.projectArtifacts?.twoWeekPlan),
@@ -1164,40 +1337,6 @@ const industryFocus = useMemo(() => {
     ];
   }, [generatedBrief]);
 
-  const awsProofItems = useMemo(() => {
-    const metadata = generatedBrief?.metadata;
-    return [
-      {
-        label: "Access",
-        value: generationMode === "live" && hostedIamMode ? "IAM browser role" : "Backend mediated",
-      },
-      {
-        label: "Model",
-        value: metadata?.modelId ?? (generatedBrief ? providerLabel(generatedBrief.provider) : "Waiting"),
-      },
-      {
-        label: "Guardrail",
-        value: metadata?.guardrailId
-          ? `${metadata.guardrailId}${metadata.guardrailVersion ? ` v${metadata.guardrailVersion}` : ""}`
-          : generatedBrief?.provider === "bedrock"
-            ? "Configured"
-            : "Demo fallback",
-      },
-      {
-        label: "Latest DOCX",
-        value: metadata?.docxArtifactKey ? "Saved in S3" : "Not saved yet",
-      },
-      {
-        label: "Project state",
-        value: metadata?.stateKey ? "Tracked in DynamoDB" : "Not written yet",
-      },
-      {
-        label: "Retention",
-        value: metadata?.artifactRetention ?? "latest-only",
-      },
-    ];
-  }, [generatedBrief, generationMode, hostedIamMode]);
-
   const handoffReady = Boolean(
     generatedBrief &&
       promoted &&
@@ -1207,22 +1346,173 @@ const industryFocus = useMemo(() => {
       generatedBrief.projectArtifacts?.riskRegister?.length &&
       generatedBrief.projectArtifacts?.stakeholderMap?.length
   );
+  const selectedHistoryEntry = useMemo(
+    () => briefHistory.find((entry) => entry.id === selectedHistoryId) ?? briefHistory[0] ?? null,
+    [briefHistory, selectedHistoryId]
+  );
+
+  const selectedHistoryPacketItems = useMemo(
+    () =>
+      packetOutputs.map((packet) => ({
+        ...packet,
+        status: selectedHistoryEntry ? "Saved" : "Empty",
+      })),
+    [selectedHistoryEntry]
+  );
+
+  const libraryPreviewCards = useMemo(() => {
+    if (!selectedHistoryEntry) {
+      return [];
+    }
+
+    const savedBrief = selectedHistoryEntry.generatedBrief;
+
+    return [
+      {
+        title: "Technical brief",
+        detail: savedBrief.technical[0] ?? "No technical brief saved yet.",
+      },
+      {
+        title: "Executive brief",
+        detail: savedBrief.executive[0] ?? "No executive brief saved yet.",
+      },
+      {
+        title: "Stakeholder lens",
+        detail: savedBrief.stakeholders[0] ?? "No stakeholder detail saved yet.",
+      },
+      {
+        title: "Handoff signal",
+        detail:
+          savedBrief.projectArtifacts?.twoWeekPlan?.[0]?.title ??
+          savedBrief.gameplan[0] ??
+          "No handoff detail saved yet.",
+      },
+    ];
+  }, [selectedHistoryEntry]);
+
+  const packetPreviewItems = useMemo(
+    () =>
+      packetOutputs.map((packet) => {
+        if (packet.key === "technical" || packet.key === "executive") {
+          return {
+            ...packet,
+            status: generatedBrief ? (approved ? "Approved" : "Generated") : "Queued",
+          };
+        }
+
+        if (packet.key === "stakeholders") {
+          return {
+            ...packet,
+            status: usableDecisionMakers.length
+              ? generatedBrief
+                ? "Tailored"
+                : "Context ready"
+              : "Needs context",
+          };
+        }
+
+        if (packet.key === "gameplan") {
+          return {
+            ...packet,
+            status: generatedBrief ? "Generated" : "Queued",
+          };
+        }
+
+        return {
+          ...packet,
+          status: handoffReady
+            ? "Ready"
+            : promoted
+              ? "Building"
+              : generatedBrief
+                ? "Next step"
+                : "Queued",
+        };
+      }),
+    [approved, generatedBrief, handoffReady, promoted, usableDecisionMakers.length]
+  );
+  const currentWorkflowStep = useMemo<WorkflowStepId>(() => {
+    if (activePage === "project") {
+      if (handoffReady) {
+        return "phase2-update";
+      }
+
+      if (promoted) {
+        return generatedBrief?.projectArtifacts?.twoWeekPlan?.length
+          ? "phase2-plan"
+          : "phase2-autobuild";
+      }
+
+      return "phase2-capture";
+    }
+
+    if (activePage === "brief") {
+      if (approved) {
+        return "phase1-approve";
+      }
+
+      if (briefVersion > 1) {
+        return "phase1-refine";
+      }
+
+      return "phase1-review";
+    }
+
+    return "phase1-generate";
+  }, [activePage, approved, briefVersion, generatedBrief, handoffReady, promoted]);
+  const completedWorkflowSteps = useMemo(() => {
+    const steps = new Set<WorkflowStepId>();
+
+    if (generatedBrief) {
+      steps.add("phase1-generate");
+    }
+
+    if (generatedBrief && activePage !== "setup") {
+      steps.add("phase1-review");
+    }
+
+    if (briefVersion > 1) {
+      steps.add("phase1-refine");
+    }
+
+    if (approved) {
+      steps.add("phase1-approve");
+    }
+
+    if (approved && meetingNotes.trim()) {
+      steps.add("phase2-capture");
+    }
+
+    if (promoted) {
+      steps.add("phase2-autobuild");
+    }
+
+    if (promoted && generatedBrief?.projectArtifacts?.twoWeekPlan?.length) {
+      steps.add("phase2-plan");
+    }
+
+    if (handoffReady) {
+      steps.add("phase2-update");
+    }
+
+    return steps;
+  }, [activePage, approved, briefVersion, generatedBrief, handoffReady, meetingNotes, promoted]);
   const presenterSteps = [
     {
-      label: "Problem",
-      value: "SA prep and handoff are manual",
+      label: "0-3 min",
+      value: "Problem, user, and customer context",
     },
     {
-      label: "AWS proof",
-      value: generatedBrief?.provider === "bedrock" ? "Bedrock run captured" : "Ready to generate",
+      label: "3-7 min",
+      value: generatedBrief ? "Live brief generated" : "Generate the pre-brief live",
     },
     {
-      label: "Artifacts",
-      value: generatedBrief?.metadata?.docxArtifactKey ? "S3 DOCX + JSON saved" : "Awaiting first run",
+      label: "7-11 min",
+      value: approved ? "Refined brief approved" : generatedBrief ? "Refine and approve the packet" : "Show feedback-to-brief loop",
     },
     {
-      label: "Finish",
-      value: handoffReady ? "Handoff packet ready" : promoted ? "Review packet" : "Build project model",
+      label: "11-15 min",
+      value: handoffReady ? "Handoff and AWS proof ready" : promoted ? "Open handoff and AWS architecture" : "Promote into handoff and close on AWS",
     },
   ];
 
@@ -1371,6 +1661,67 @@ const industryFocus = useMemo(() => {
     }
   }
 
+  function pushBriefHistory(nextBrief: BriefResponse, nextBriefVersion: number, nextApproved: boolean) {
+    const historyEntry: BriefHistoryEntry = {
+      id: `${Date.now()}-${Math.round(Math.random() * 100000)}`,
+      savedAt: nextBrief.generatedAt || new Date().toISOString(),
+      company,
+      industry,
+      meetingType,
+      companySize,
+      selectedPillars: [...selectedPillars],
+      context,
+      decisionMakers: cloneDecisionMakers(usableDecisionMakers),
+      meetingNotes,
+      feedback: [...feedback],
+      briefVersion: nextBriefVersion,
+      approved: nextApproved,
+      promoted: true,
+      generatedBrief: nextBrief,
+    };
+
+    setBriefHistory((current) => [historyEntry, ...current].slice(0, 8));
+    setSelectedHistoryId(historyEntry.id);
+  }
+
+  function loadBriefHistoryEntry(entry: BriefHistoryEntry) {
+    setCompany(entry.company);
+    setIndustry(entry.industry);
+    setMeetingType(entry.meetingType);
+    setCompanySize(entry.companySize);
+    setSelectedPillars(normalizePillarRanking(entry.selectedPillars));
+    setContext(entry.context);
+    setDecisionMakers(cloneDecisionMakers(entry.decisionMakers));
+    setMeetingNotes(entry.meetingNotes);
+    setFeedback([...entry.feedback]);
+    setBriefVersion(entry.briefVersion);
+    setApproved(entry.approved);
+    setPromoted(entry.promoted);
+    setGeneratedBrief(entry.generatedBrief);
+    setProjectBrainAnswer(entry.generatedBrief.projectAnswer || "");
+    setProjectAnswerKey(`${role}::${activePrompt}`);
+    setSelectedHistoryId(entry.id);
+    setGenerationError("");
+    setGenerationNotice("");
+    setActiveTab("technical");
+    setActivePage("brief");
+  }
+
+  function resetWorkspace() {
+    window.localStorage.removeItem(workspaceStorageKey);
+    setBriefHistory([]);
+    setSelectedHistoryId(null);
+    setFeedback(defaultFeedback);
+    setRole(defaultRole);
+    setActivePrompt(rolePrompts[defaultRole][0]);
+    setActivePage("setup");
+    setPendingSectionId(null);
+    setJudgeMode(false);
+    setCopiedLabel("");
+    setGenerationNotice("");
+    loadScenario(scenarios[0]);
+  }
+
   async function requestBrief(mode: "prebrief" | "project" = "prebrief") {
     const requestRole = role;
     const requestPrompt = activePrompt;
@@ -1431,7 +1782,11 @@ const industryFocus = useMemo(() => {
         nextBrief = normalizeBriefResponse(generateDemoBrief(briefRequest), "demo");
       }
 
+      const nextApproved = mode === "project";
+      const nextBriefVersion = mode === "project" ? briefVersion : briefVersion + 1;
+
       setGeneratedBrief(nextBrief);
+      pushBriefHistory(nextBrief, nextBriefVersion, nextApproved);
       setProjectBrainAnswer(nextBrief.projectAnswer || projectAnswer);
       setProjectAnswerKey(requestProjectAnswerKey);
       setPromoted(true);
@@ -1506,6 +1861,49 @@ const industryFocus = useMemo(() => {
     void copyText("DOCX path", generatedBrief?.metadata?.docxArtifactKey ?? "");
   }
 
+  function openWorkflowStep(stepId: WorkflowStepId) {
+    const step = [...prebriefWorkflowSteps, ...projectWorkflowSteps].find(
+      (candidate) => candidate.id === stepId
+    );
+
+    if (!step) {
+      return;
+    }
+
+    setActivePage(step.page);
+    setPendingSectionId(step.sectionId);
+  }
+
+  useEffect(() => {
+    if (!pendingSectionId) {
+      return;
+    }
+
+    const scrollToSection = () => {
+      const section = document.getElementById(pendingSectionId);
+
+      if (!section) {
+        return false;
+      }
+
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+      return true;
+    };
+
+    if (scrollToSection()) {
+      setPendingSectionId(null);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      if (scrollToSection()) {
+        setPendingSectionId(null);
+      }
+    }, 120);
+
+    return () => window.clearTimeout(timeout);
+  }, [activePage, generatedBrief, pendingSectionId, promoted]);
+
   function toggleJudgeMode() {
     const nextJudgeMode = !judgeMode;
     setJudgeMode(nextJudgeMode);
@@ -1513,17 +1911,6 @@ const industryFocus = useMemo(() => {
     if (nextJudgeMode) {
       setActivePage(handoffReady || promoted ? "project" : generatedBrief ? "brief" : "setup");
     }
-  }
-
-  function resetWorkspace() {
-    const firstScenario = scenarios[0];
-
-    window.localStorage.removeItem(workspaceStorageKey);
-    setFeedback(defaultFeedback);
-    setRole(defaultRole);
-    setActivePrompt(rolePrompts[defaultRole][0]);
-    setJudgeMode(false);
-    loadScenario(firstScenario);
   }
 
   return (
@@ -1536,6 +1923,20 @@ const industryFocus = useMemo(() => {
               PilarPrep workspace
             </div>
             <div className="top-command-actions">
+              <button
+                className={cx("command-icon-button", activePage === "library" && "command-icon-button-active")}
+                type="button"
+                aria-label="Open brief library"
+                title="Open brief library"
+                onClick={() => setActivePage("library")}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5a2.5 2.5 0 0 0-2.5-2.5H4z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  <path d="M6.5 3v15.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  <path d="M9 7h7M9 10.5h7M9 14h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+                <small>{briefHistory.length}</small>
+              </button>
               {consolePages.map((page) => (
                 <button
                   key={page.id}
@@ -1544,7 +1945,6 @@ const industryFocus = useMemo(() => {
                   onClick={() => setActivePage(page.id)}
                 >
                   <span>{page.label}</span>
-                  <small>{page.detail}</small>
                 </button>
               ))}
               <button
@@ -1552,8 +1952,7 @@ const industryFocus = useMemo(() => {
                 type="button"
                 onClick={toggleJudgeMode}
               >
-                <span>{judgeMode ? "Guide on" : "Presenter guide"}</span>
-                <small>{handoffReady ? "Packet ready" : "15-min story"}</small>
+                <span>{judgeMode ? "15-min mode on" : "15-min mode"}</span>
               </button>
             </div>
           </div>
@@ -1571,250 +1970,271 @@ const industryFocus = useMemo(() => {
             </div>
           ) : null}
         </div>
-        <div className="mx-auto grid max-w-[1500px] gap-5 px-5 py-6 xl:grid-cols-[1fr_400px] xl:items-stretch">
-          <div className="hero-copy">
-            <div className="flex items-center gap-4">
-              <div className="brand-mark">PP</div>
-              <div>
-                <p className="eyebrow">AWS Product Console</p>
-                <h1 className="mt-1 text-3xl font-black text-white sm:text-5xl">
-                  PilarPrep
-                </h1>
-              </div>
-            </div>
-            <p className="mt-5 max-w-3xl text-base leading-7 text-white/74">
-              An SA briefing cockpit that turns customer context into a refined
-              pre-meeting plan, then auto-builds the final brief into a living
-              project model for the team that has to execute.
-            </p>
-            <div className="product-strip" aria-label="Product value signals">
-              {heroProofPoints.map((point, index) => (
-                <span key={point}>
-                  <i>{String(index + 1).padStart(2, "0")}</i>
-                  {point}
-                </span>
-              ))}
-            </div>
-            <div className="mt-6 grid gap-3 md:grid-cols-3">
-              {[
-                ["Current customer", company || "Customer"],
-                ["Primary concern", primaryConcern],
-                ["Win theme", activeScenario.winTheme],
-              ].map(([label, value]) => (
-                <div key={label} className="hero-stat">
-                  <span>{label}</span>
-                  <strong>{value}</strong>
+        <div className="mx-auto max-w-[1500px] px-5 py-4">
+          <div className="workspace-banner">
+            <div className="workspace-banner-main">
+              <div className="workspace-banner-top">
+                <div className="brand-mark">PP</div>
+                <div>
+                  <p className="eyebrow">Client workspace</p>
+                  <h1 className="workspace-title">{company || "Select a client"}</h1>
                 </div>
-              ))}
+              </div>
+              <p className="workspace-summary">
+                Build the customer-ready brief, refine it quickly, then hand off the latest packet to the team that will execute.
+              </p>
+              <div className="workspace-chip-row">
+                <span>{activeScenario.challenge}</span>
+                <span>Top pilar: {selectedPillars[0] ?? "Set ranking"}</span>
+                <span>{approved ? "Brief approved" : generatedBrief ? "Brief generated" : "Context ready"}</span>
+              </div>
             </div>
-            <div className="judge-proof-row" aria-label="Judge proof points">
-              {judgeProofPoints.map((point) => (
-                <div key={point.label} className="judge-proof-chip">
-                  <span>{point.label}</span>
-                  <strong>{point.value}</strong>
+            <div className="workspace-banner-side">
+              <div className="workspace-side-grid">
+                <div className="workspace-side-card">
+                  <span>Current stage</span>
+                  <strong>{handoffReady ? "Handoff ready" : promoted ? "Handoff building" : approved ? "Ready for handoff" : generatedBrief ? "Review and refine" : "Generate first brief"}</strong>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="hero-panel">
-            <div className="panel-status">
-              <span>AI-backed AWS workload</span>
-              <strong>{generationMode === "live" ? "Bedrock ready" : "Fallback ready"}</strong>
-            </div>
-            <div className="hero-demo-state">
-              <div>
-                <p className="eyebrow text-[#7dd3fc]">Workspace state</p>
-                <h2>{promoted ? "Project model built" : generatedBrief ? "Brief generated" : "Ready to generate"}</h2>
-                <p>
-                  Ranked priorities, richer questions, and follow-on artifacts are generated in one clean pass.
-                </p>
-              </div>
-              <span className="hero-pill">
-                {promoted ? "Follow-on ready" : approved ? "Brief approved" : "Pre-brief loop"}
-              </span>
-            </div>
-            <div className="mt-5 grid grid-cols-3 gap-2 text-center">
-              <div className="mini-stat">
-                <span>Brief</span>
-                <strong>v{briefVersion}</strong>
-              </div>
-              <div className="mini-stat">
-                <span>Rank 1</span>
-                <strong>{primaryConcern}</strong>
-              </div>
-              <div className="mini-stat">
-                <span>Runtime</span>
-                <strong>{generationMode === "live" ? "AWS" : "Fallback"}</strong>
-              </div>
-            </div>
-            <div className="demo-signal-list">
-              {demoSignals.map((signal) => (
-                <div key={signal.label} className="demo-signal-card">
-                  <strong>{signal.label}</strong>
-                  <p>{signal.detail}</p>
+                <div className="workspace-side-card">
+                  <span>Primary focus</span>
+                  <strong>{primaryConcern}</strong>
                 </div>
-              ))}
+                <div className="workspace-side-card">
+                  <span>Packet version</span>
+                  <strong>Brief v{briefVersion}</strong>
+                </div>
+              </div>
+              <div className="workspace-actions">
+                <button className="small-action primary-small-action" type="button" disabled={isGenerating} onClick={refineBrief}>
+                  {isGenerating
+                    ? generationMode === "live"
+                      ? "Generating with AI..."
+                      : "Generating brief..."
+                    : generationMode === "live"
+                      ? "Generate AI brief + handoff"
+                      : "Generate brief + handoff"}
+                </button>
+                <button className="small-action" type="button" disabled={!generatedBrief} onClick={() => setActivePage("brief")}>
+                  Open brief
+                </button>
+                <button className="small-action" type="button" disabled={!generatedBrief} onClick={openProjectBrain}>
+                  Open handoff
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </section>
-
-      <section className="mx-auto max-w-[1500px] px-5 pt-5">
-        <div className="lifecycle-rail">
-          {lifecycleStages.map((stage, index) => {
-            const stageActive =
-              index === 0 ||
-              (briefVersion > 1 && index <= 2) ||
-              (approved && index <= 3) ||
-              (promoted && index <= 5);
-
-            return (
-              <div
-                key={stage}
-                className={cx("lifecycle-step", stageActive && "lifecycle-step-active")}
-              >
-                <span>{index + 1}</span>
-                <strong>{stage}</strong>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {activePage === "aws" ? (
+      {activePage === "library" ? (
         <div className="page-view">
-        <section className="mx-auto max-w-[1500px] px-5 pt-5">
-        <div className="spotlight-grid">
-          <div className="spotlight-card">
-            <span>Customer signal</span>
-            <strong>{activeScenario.challenge}</strong>
-            <p>{industryFocus}</p>
-          </div>
-          <div className="spotlight-card spotlight-card-strong">
-            <span>AWS value path</span>
-            <strong>{primaryConcern}</strong>
-            <p>Briefs use ranked Well-Architected priorities to shape model output and delivery context.</p>
-          </div>
-          <div className="spotlight-card">
-            <span>Next best action</span>
-            <strong>{promoted ? "Review project model" : approved ? "Capture meeting outcomes" : "Generate the workspace"}</strong>
-            <p>{promoted ? "Plans, risks, summaries, and onboarding answers are ready." : "Turn the customer conversation into reusable team memory."}</p>
-          </div>
-        </div>
-      </section>
+          <section className="mx-auto max-w-[1500px] px-5 pt-5">
+            <div className="library-shell">
+              <div className="section-head">
+                <p>Brief library</p>
+                <h2>Catch up on previous generated packets</h2>
+              </div>
+              {briefHistory.length ? (
+                <div className="library-grid">
+                  <div className="library-list">
+                    {briefHistory.map((entry) => (
+                      <button
+                        key={entry.id}
+                        className={cx("library-entry", selectedHistoryEntry?.id === entry.id && "library-entry-active")}
+                        type="button"
+                        onClick={() => setSelectedHistoryId(entry.id)}
+                      >
+                        <div className="library-entry-head">
+                          <strong>{entry.company}</strong>
+                          <span>{new Date(entry.savedAt).toLocaleString()}</span>
+                        </div>
+                        <p>{entry.meetingType} / {entry.industry} / {entry.companySize}</p>
+                        <div className="library-entry-meta">
+                          <span>Top pilar: {entry.selectedPillars[0] ?? "Not set"}</span>
+                          <span>{providerLabel(entry.generatedBrief.provider)}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
 
-      <section className="mx-auto max-w-[1500px] px-5 pt-5">
-        <div className="demo-grid">
-          <div className="demo-panel">
-            <div className="section-head">
-              <p>Presentation path</p>
-              <h2>90-second story</h2>
-            </div>
-            <div className="demo-beats">
-              {storyBeats.map((beat) => (
-                <div key={beat.time} className="demo-beat">
-                  <time>{beat.time}</time>
-                  <div>
-                    <strong>{beat.title}</strong>
-                    <p>{beat.detail}</p>
+                  <div className="library-detail">
+                    {selectedHistoryEntry ? (
+                      <>
+                        <div className="library-detail-head">
+                          <div>
+                            <p>Selected packet</p>
+                            <h3>{selectedHistoryEntry.company}</h3>
+                            <span>{selectedHistoryEntry.meetingType} / {selectedHistoryEntry.industry} / {selectedHistoryEntry.companySize}</span>
+                          </div>
+                          <div className="library-detail-actions">
+                            <button className="small-action primary-small-action" type="button" onClick={() => loadBriefHistoryEntry(selectedHistoryEntry)}>
+                              Load into workspace
+                            </button>
+                            {selectedHistoryEntry.generatedBrief.metadata?.docxDownloadUrl ? (
+                              <a
+                                className="setup-packet-link"
+                                href={selectedHistoryEntry.generatedBrief.metadata.docxDownloadUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Download DOCX
+                              </a>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="packet-grid library-packet-grid">
+                          {selectedHistoryPacketItems.map((packet, index) => (
+                            <div key={packet.title} className="packet-tile">
+                              <span>{index + 1}</span>
+                              <small>{packet.status}</small>
+                              <strong>{packet.title}</strong>
+                              <p>{packet.detail}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="library-preview-grid">
+                          {libraryPreviewCards.map((card) => (
+                            <div key={card.title} className="library-preview-card">
+                              <span>{card.title}</span>
+                              <p>{card.detail}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="demo-panel demo-panel-dark">
-            <div className="section-head section-head-dark">
-              <p>AWS system spine</p>
-              <h2>From brief to delivery brain</h2>
-            </div>
-            <div className="aws-spine">
-              {architectureFlow.map((node, index) => (
-                <div key={node} className="aws-spine-node">
-                  <span>{index + 1}</span>
-                  <strong>{node}</strong>
+              ) : (
+                <div className="library-empty-state">
+                  <strong>No saved briefs yet</strong>
+                  <p>Generate a brief once and it will appear here for fast catch-up and handoff review.</p>
                 </div>
-              ))}
+              )}
             </div>
-            <div className="aws-spine-caption">
-              <span>Guardrails</span>
-              <span>CloudWatch</span>
-              <span>DynamoDB</span>
-              <span>API Gateway</span>
-            </div>
-          </div>
+          </section>
         </div>
-      </section>
+      ) : null}
 
-      <section className="mx-auto max-w-[1500px] px-5 pt-5">
-        <div className="packet-band">
-          <div className="section-head">
-            <p>Model and memory storage</p>
-            <h2>What is stored, and what stays managed by AWS</h2>
-          </div>
-          <div className="packet-grid">
-            {modelStoragePath.map((item, index) => (
-              <div key={item.layer} className="packet-tile">
-                <span>{index + 1}</span>
-                <strong>{item.layer}</strong>
-                <small>{item.service}</small>
-                <p>{item.detail}</p>
+            {activePage === "aws" ? (
+        <div className="page-view">
+          <section className="mx-auto max-w-[1500px] px-5 pt-5">
+            <div className="aws-hero-band">
+              <div className="aws-hero-copy">
+                <p>AWS infrastructure</p>
+                <h2>Production-style architecture for the hackathon demo</h2>
+                <strong>CloudFront, API Gateway, Lambda, Bedrock, S3, and DynamoDB working as one clean AWS-native system.</strong>
+                <span>
+                  Built to stay low-cost, easy to explain, and ready to grow from a public demo into a client-scoped workspace model.
+                </span>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-      <section className="mx-auto max-w-[1500px] px-5 pt-5">
-        <div className="aws-runway">
-          <div className="section-head">
-            <p>AWS run path</p>
-            <h2>Designed to deploy as a native AWS workload</h2>
-          </div>
-          <div className="runway-grid">
-            {awsRunway.map((item) => (
-              <div key={item.layer} className="runway-card">
-                <span>{item.layer}</span>
-                <strong>{item.service}</strong>
-                <p>{item.detail}</p>
-              </div>
-            ))}
-          </div>
-          <div className="production-strip">
-            {productionChecks.map((check) => (
-              <span key={check}>{check}</span>
-            ))}
-          </div>
-          <div className="cost-guardrail-panel">
-            <div>
-              <p>Cost guardrails</p>
-              <strong>Demo target: under 1 USD per day</strong>
-            </div>
-            <div className="cost-guardrail-grid">
-              {costGuardrails.map((item) => (
-                <div key={item.label} className="cost-guardrail-card">
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                  <p>{item.detail}</p>
+              <div className="aws-hero-meta">
+                <div className="aws-hero-chip">
+                  <span>Auth</span>
+                  <strong>IAM-signed demo access</strong>
                 </div>
-              ))}
+                <div className="aws-hero-chip">
+                  <span>Model path</span>
+                  <strong>{generationMode === "live" ? "Bedrock live" : "Fallback with Bedrock-ready path"}</strong>
+                </div>
+                <div className="aws-hero-chip">
+                  <span>Storage policy</span>
+                  <strong>Latest-only brief artifacts</strong>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="implementation-queue">
-            <div>
-              <p>Implementation queue</p>
-              <strong>Next build sprint</strong>
+          </section>
+
+          <section className="mx-auto max-w-[1500px] px-5 pt-5">
+            <div className="aws-diagram-board">
+              <div className="section-head">
+                <p>AWS system map</p>
+                <h2>From customer input to reusable project memory</h2>
+              </div>
+              <div className="aws-flow-strip">
+                {awsFlowSteps.map((step, index) => (
+                  <div key={step} className="aws-flow-step">
+                    <span>{index + 1}</span>
+                    <strong>{step}</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="aws-lane-grid">
+                {awsArchitectureColumns.map((column) => (
+                  <section key={column.title} className="aws-lane-card">
+                    <div className="aws-lane-head">
+                      <p>{column.title}</p>
+                      <h3>{column.detail}</h3>
+                    </div>
+                    <div className="aws-service-stack">
+                      {column.services.map((service) => (
+                        <div key={service.service} className="aws-service-card">
+                          <div className="aws-service-icon">{service.badge}</div>
+                          <div>
+                            <strong>{service.service}</strong>
+                            <p>{service.note}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+              <div className="aws-support-strip">
+                {productionChecks.map((check) => (
+                  <span key={check}>{check}</span>
+                ))}
+              </div>
             </div>
-            <div className="implementation-items">
-              {implementationBacklog.map((item) => (
-                <span key={item}>{item}</span>
-              ))}
+          </section>
+
+          <section className="mx-auto max-w-[1500px] px-5 pt-5">
+            <div className="aws-detail-grid">
+              <div className="packet-band">
+                <div className="section-head">
+                  <p>Model and memory storage</p>
+                  <h2>What is stored, and what stays managed by AWS</h2>
+                </div>
+                <div className="packet-grid aws-storage-grid">
+                  {modelStoragePath.map((item, index) => (
+                    <div key={item.layer} className="packet-tile">
+                      <span>{index + 1}</span>
+                      <strong>{item.layer}</strong>
+                      <small>{item.service}</small>
+                      <p>{item.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="aws-ops-panel">
+                <div className="section-head">
+                  <p>Operations</p>
+                  <h2>Low-cost demo guardrails</h2>
+                </div>
+                <div className="cost-guardrail-grid aws-ops-grid">
+                  {costGuardrails.map((item) => (
+                    <div key={item.label} className="cost-guardrail-card">
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                      <p>{item.detail}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="implementation-queue aws-implementation-strip">
+                  <div>
+                    <p>Implementation queue</p>
+                    <strong>Next build sprint</strong>
+                  </div>
+                  <div className="implementation-items">
+                    {implementationBacklog.map((item) => (
+                      <span key={item}>{item}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          </section>
         </div>
-      </section>
-          </div>
-        ) : null}
+      ) : null}
 
       <section className="linear-workflow mx-auto max-w-[1500px] px-5 py-5">
         {activePage === "setup" ? (
@@ -1826,6 +2246,22 @@ const industryFocus = useMemo(() => {
             <h2>Pick a scenario or enter real meeting context</h2>
           </div>
         </div>
+
+        <section className="packet-band setup-packet-band">
+          <div className="section-head">
+            <p>Generated packet</p>
+            <h2>What the team walks away with</h2>
+          </div>
+          <div className="packet-grid">
+            {packetOutputs.map((packet, index) => (
+              <div key={packet.title} className="packet-tile">
+                <span>{index + 1}</span>
+                <strong>{packet.title}</strong>
+                <p>{packet.detail}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <div className="setup-grid">
           <section className="rounded-lg border border-[#d7dee8] bg-white shadow-sm">
@@ -2134,20 +2570,6 @@ const industryFocus = useMemo(() => {
                 </button>
                 {copiedLabel === "DOCX path" ? <span className="copy-state">DOCX path copied</span> : null}
               </div>
-              <div className="aws-proof-panel">
-                <div className="aws-proof-head">
-                  <span>AWS proof</span>
-                  <strong>{generatedBrief ? "Live run evidence" : "Ready when generated"}</strong>
-                </div>
-                <div className="aws-proof-grid">
-                  {awsProofItems.map((item) => (
-                    <div className="aws-proof-item" key={item.label}>
-                      <span>{item.label}</span>
-                      <strong>{item.value}</strong>
-                    </div>
-                  ))}
-                </div>
-              </div>
               <div className="workspace-tools">
                 <span>Workspace saves locally in this browser</span>
                 <button className="text-action" type="button" onClick={resetWorkspace}>
@@ -2165,7 +2587,6 @@ const industryFocus = useMemo(() => {
         </div>
           </div>
         ) : null}
-
         {activePage === "brief" ? (
           <div className="page-view">
         <div className="workflow-heading" id="brief">
@@ -2188,20 +2609,28 @@ const industryFocus = useMemo(() => {
                 </p>
               </div>
               <div className="phase-steps">
-                {["Generate", "Review", "Refine", "Approve"].map(
-                  (step, index) => (
-                    <div key={step} className="flow-step">
-                      <span>{index + 1}</span>
-                      <strong>{step}</strong>
-                    </div>
-                  )
-                )}
+                {prebriefWorkflowSteps.map((step, index) => (
+                  <button
+                    key={step.id}
+                    className={cx(
+                      "flow-step",
+                      "flow-step-button",
+                      currentWorkflowStep === step.id && "flow-step-active",
+                      completedWorkflowSteps.has(step.id) && "flow-step-complete"
+                    )}
+                    type="button"
+                    onClick={() => openWorkflowStep(step.id)}
+                  >
+                    <span>{index + 1}</span>
+                    <strong>{step.label}</strong>
+                  </button>
+                ))}
               </div>
             </div>
 
             <div className="phase-bridge">
               <div>
-                <span>Project model</span>
+                <span>Team handoff</span>
                 <strong>{promoted ? "Auto-built" : generatedBrief ? "Ready" : "Waiting for brief"}</strong>
               </div>
               <button
@@ -2213,34 +2642,43 @@ const industryFocus = useMemo(() => {
                 disabled={isGenerating}
                 onClick={openProjectBrain}
               >
-                {promoted ? "View project model" : generatedBrief ? "Open project model" : "Generate project model"}
+                {promoted ? "View handoff" : generatedBrief ? "Open handoff" : "Generate handoff"}
               </button>
-              <p>Latest brief and notes become project context</p>
+              <p>Latest brief and notes become handoff context</p>
             </div>
 
             <div className="phase-card phase-card-project">
               <div className="phase-copy">
                 <div className="loop-badge loop-badge-project">Phase 2</div>
-                <h2>Follow-on project model</h2>
+                <h2>Team handoff workspace</h2>
                 <p>
                   Capture meeting outcomes, auto-build the brief into shared
-                  memory, and use the project model for delivery follow-through.
+                  memory, and use the handoff workspace for delivery follow-through.
                 </p>
               </div>
               <div className="phase-steps">
-                {["Capture notes", "Auto-build", "Plan", "Update"].map(
-                  (step, index) => (
-                    <div key={step} className="flow-step project-step">
-                      <span>{index + 1}</span>
-                      <strong>{step}</strong>
-                    </div>
-                  )
-                )}
+                {projectWorkflowSteps.map((step, index) => (
+                  <button
+                    key={step.id}
+                    className={cx(
+                      "flow-step",
+                      "flow-step-button",
+                      "project-step",
+                      currentWorkflowStep === step.id && "flow-step-active",
+                      completedWorkflowSteps.has(step.id) && "flow-step-complete"
+                    )}
+                    type="button"
+                    onClick={() => openWorkflowStep(step.id)}
+                  >
+                    <span>{index + 1}</span>
+                    <strong>{step.label}</strong>
+                  </button>
+                ))}
               </div>
             </div>
           </section>
 
-          <section className="grid gap-5 2xl:grid-cols-[1fr_360px]">
+          <section id="brief-review-section" className="grid gap-5 2xl:grid-cols-[1fr_360px]">
             <div className="rounded-lg border border-[#d7dee8] bg-white shadow-sm">
               <div className="flex flex-col gap-4 border-b border-[#e0e7ef] p-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
@@ -2335,7 +2773,7 @@ const industryFocus = useMemo(() => {
                     </div>
                   </div>
 
-                  <div className="refinement-panel">
+                  <div className="refinement-panel" id="brief-refine-section">
                     <div className="refinement-header">
                       <div>
                         <h3 className="text-sm font-black">Refinement feedback</h3>
@@ -2400,6 +2838,28 @@ const industryFocus = useMemo(() => {
                         );
                       })}
                     </div>
+                    <div className="refinement-approve-row" id="brief-approve-section">
+                      <div>
+                        <strong>
+                          {approved ? "Customer-ready brief approved" : "Ready to lock the pre-brief?"}
+                        </strong>
+                        <p>
+                          {approved
+                            ? "This version becomes the baseline for the handoff packet and delivery follow-through."
+                            : "Approve once the brief reads the way you want the customer conversation to go."}
+                        </p>
+                      </div>
+                      <button
+                        className={cx(
+                          "approval-button",
+                          approved && "approval-done"
+                        )}
+                        type="button"
+                        onClick={approveBrief}
+                      >
+                        {approved ? "Brief approved" : "Approve final pre-brief"}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -2442,29 +2902,7 @@ const industryFocus = useMemo(() => {
                     </div>
                   </div>
 
-                  <div className="summary-panel">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#446076]">
-                      Brief quality target
-                    </p>
-                    <div className="mt-4 space-y-3">
-                      {briefQualityTargets.map((target) => (
-                        <div key={target.label} className="quality-target-item">
-                          <strong>{target.label}</strong>
-                          <p>{target.detail}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    className={cx(
-                      "approval-button",
-                      approved && "approval-done"
-                    )}
-                    type="button"
-                    onClick={approveBrief}
-                  >
-                    {approved ? "Brief approved" : "Approve final pre-brief"}
-                  </button>
+
                 </div>
               </div>
             </div>
@@ -2493,44 +2931,186 @@ const industryFocus = useMemo(() => {
             </div>
           </section>
 
-          <section className="packet-band">
-            <div className="section-head">
-              <p>Generated packet</p>
-              <h2>What the team walks away with</h2>
-            </div>
-            <div className="packet-grid">
-              {packetOutputs.map((packet, index) => (
-                <div key={packet.title} className="packet-tile">
-                  <span>{index + 1}</span>
-                  <strong>{packet.title}</strong>
-                  <p>{packet.detail}</p>
-                </div>
-              ))}
-            </div>
-          </section>
+
           </div>
           </div>
         ) : null}
 
+
+          {activePage === "demo" ? (
+            <div className="page-view">
+              <section className="mx-auto max-w-[1500px] px-5 pt-5">
+                <div className="demo-hero-band">
+                  <div className="demo-hero-copy">
+                    <p>Demo packet</p>
+                    <h2>What the team walks away with</h2>
+                    <strong>
+                      {generatedBrief
+                        ? `${company || "Customer"} is ready for the live walkthrough`
+                        : "Generate the brief once, then present everything from one clean page"}
+                    </strong>
+                    <span>
+                      {generatedBrief
+                        ? "Use this page to show judges the technical brief, executive brief, decision-maker context, meeting game plan, and delivery handoff in one place."
+                        : "This becomes the presentation surface as soon as the packet is generated and approved."}
+                    </span>
+                    <div className="demo-hero-actions">
+                      <button className="small-action primary-small-action" type="button" onClick={() => setActivePage("brief")}>
+                        Open brief
+                      </button>
+                      <button className="small-action" type="button" onClick={openProjectBrain}>
+                        Open handoff
+                      </button>
+                      {generatedBrief?.metadata?.docxDownloadUrl ? (
+                        <a
+                          className="setup-packet-link"
+                          href={generatedBrief.metadata.docxDownloadUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Download DOCX
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="demo-hero-stats">
+                    <div className="demo-stat-card">
+                      <span>Run state</span>
+                      <strong>{approved ? "Approved" : generatedBrief ? "Generated" : "Waiting"}</strong>
+                      <p>{approved ? "Pre-brief locked for walkthrough" : "Generate and refine before presenting"}</p>
+                    </div>
+                    <div className="demo-stat-card">
+                      <span>Runtime</span>
+                      <strong>{generatedBrief ? providerLabel(generatedBrief.provider) : generationMode === "live" ? "Bedrock path" : "Fallback path"}</strong>
+                      <p>{generatedBrief ? "Current run source for the visible packet" : "Live mode swaps in AWS when enabled"}</p>
+                    </div>
+                    <div className="demo-stat-card">
+                      <span>Handoff</span>
+                      <strong>{promoted ? "Team handoff ready" : "Brief-first flow"}</strong>
+                      <p>{promoted ? "Follow-on outputs are ready for delivery teams" : "Approve and promote to unlock the follow-on loop"}</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="mx-auto max-w-[1500px] px-5 pt-5">
+                <div className="packet-band demo-packet-band">
+                  <div className="packet-section-head">
+                    <div>
+                      <p>Generated packet</p>
+                      <h2>Everything the team leaves with after the customer meeting</h2>
+                    </div>
+                    <div className="packet-section-actions">
+                      <button className="small-action" type="button" onClick={() => setActivePage("setup")}>
+                        Edit context
+                      </button>
+                      <button className="small-action" type="button" onClick={() => setActivePage("aws")}>
+                        View AWS architecture
+                      </button>
+                    </div>
+                  </div>
+                  <div className="packet-grid demo-packet-grid">
+                    {packetPreviewItems.map((packet, index) => (
+                      <div key={packet.title} className="packet-tile demo-packet-tile">
+                        <span>{index + 1}</span>
+                        <small>{packet.status}</small>
+                        <strong>{packet.title}</strong>
+                        <p>{packet.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <section className="mx-auto max-w-[1500px] px-5 pt-5">
+                <div className="demo-story-grid">
+                  <div className="demo-panel demo-story-panel">
+                    <div className="section-head">
+                      <p>Presentation path</p>
+                      <h2>15-minute demo story</h2>
+                    </div>
+                    <div className="demo-beats">
+                      {storyBeats.map((beat) => (
+                        <div key={beat.time} className="demo-beat">
+                          <time>{beat.time}</time>
+                          <div>
+                            <strong>{beat.title}</strong>
+                            <p>{beat.detail}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="demo-panel demo-story-panel">
+                    <div className="section-head">
+                      <p>How it works</p>
+                      <h2>AWS-backed workflow</h2>
+                    </div>
+                    <div className="demo-flow-grid">
+                      {demoHowItWorks.map((step, index) => (
+                        <div key={step.step} className="demo-flow-step">
+                          <div className="demo-flow-step-top">
+                            <span>{step.step}</span>
+                            <strong>{step.title}</strong>
+                          </div>
+                          <p>{step.detail}</p>
+                          <small>
+                            {index === 0
+                              ? "Input"
+                              : index === 1
+                                ? "Access"
+                                : index === 2
+                                  ? generatedBrief
+                                    ? "Generated"
+                                    : isGenerating
+                                      ? "Running"
+                                      : "Ready"
+                                  : index === 3
+                                    ? approved
+                                      ? "Approved"
+                                      : generatedBrief
+                                        ? "In review"
+                                        : "Next"
+                                    : handoffReady
+                                      ? "Saved"
+                                      : promoted
+                                        ? "Building"
+                                        : "Next"}
+                          </small>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="demo-flow-footer">
+                      <span>{company || "Client to confirm"}</span>
+                      <span>{meetingType}</span>
+                      <span>Top pilar: {selectedPillars[0] ?? "Set ranking"}</span>
+                      <span>{handoffReady ? "Handoff packet ready" : promoted ? "Team handoff built" : generatedBrief ? "Brief generated" : "Ready to generate"}</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          ) : null}
           {activePage === "project" ? (
             <div className="page-view">
           <div className="workflow-heading workflow-heading-dark" id="project-brain">
             <span>Step 3</span>
             <div>
               <p>Auto-build after generation</p>
-              <h2>Turn the final brief into the follow-on project model</h2>
+              <h2>Turn the final brief into the delivery handoff</h2>
             </div>
           </div>
 
 
-          <div className={cx("handoff-ready-card", handoffReady && "handoff-ready-card-done")}>
+          <div id="project-handoff-section" className={cx("handoff-ready-card", handoffReady && "handoff-ready-card-done")}>
             <div>
               <span>{handoffReady ? "Handoff packet ready" : "Handoff packet building"}</span>
-              <h3>{handoffReady ? `${company || "Customer"} is ready for project handoff` : "Generate and review the project model to finish the demo"}</h3>
+              <h3>{handoffReady ? `${company || "Customer"} is ready for project handoff` : "Generate and review the handoff to finish the demo"}</h3>
               <p>
                 {handoffReady
                   ? "The latest DOCX, JSON packet, project state, implementation plan, risks, stakeholders, and follow-up email are ready for the delivery team."
-                  : "The finish state appears once the brief is generated, promoted into the Project model, and saved as the latest client packet."}
+                  : "The finish state appears once the brief is generated, promoted into the handoff workspace, and saved as the latest client packet."}
               </p>
             </div>
             <div className="handoff-ready-actions">
@@ -2569,9 +3149,9 @@ const industryFocus = useMemo(() => {
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7dd3fc]">
                   Loop 2 output
                 </p>
-                <h2 className="mt-1 text-xl font-black">Project model</h2>
+                <h2 className="mt-1 text-xl font-black">Team handoff</h2>
                 <p className="mt-3 text-sm leading-6 text-white/70">
-                  Once generated, the final brief becomes an auto-built project
+                  Once generated, the final brief becomes an auto-built handoff
                   model for people who need to implement, manage, sell, or
                   explain the work.
                 </p>
@@ -2642,7 +3222,7 @@ const industryFocus = useMemo(() => {
                                 : "project-state-waiting"
                             )}
                           >
-                            {promoted ? "Project model ready" : "Auto-build pending"}
+                            {promoted ? "Team handoff ready" : "Handoff pending"}
                           </span>
                           <button
                             className="copy-button copy-button-dark"
@@ -2672,7 +3252,7 @@ const industryFocus = useMemo(() => {
                       </p>
                     </div>
 
-                    <div className="mt-5 grid gap-3 md:grid-cols-4">
+                    <div id="project-plan-section" className="mt-5 grid gap-3 md:grid-cols-4">
                       {projectArtifactTiles.map((artifact) => (
                         <div key={artifact.title} className="artifact-tile">
                           <span />
@@ -2684,7 +3264,7 @@ const industryFocus = useMemo(() => {
                     </div>
                   </div>
 
-                  <div className="meeting-panel">
+                  <div className="meeting-panel" id="project-notes-section">
                     <label className="block">
                       <span className="dark-label">Meeting outcomes</span>
                       <textarea
@@ -2705,6 +3285,7 @@ const industryFocus = useMemo(() => {
                       ))}
                     </div>
                     <button
+                      id="project-autobuild-section"
                       className={cx(
                         "project-promote-wide",
                         promoted && "project-promote-wide-done"
@@ -2714,10 +3295,10 @@ const industryFocus = useMemo(() => {
                       onClick={refreshProjectModel}
                     >
                       {isGenerating
-                        ? "Updating project model..."
+                        ? "Updating handoff..."
                         : promoted
                           ? "Refresh from latest notes"
-                          : "Generate project model"}
+                          : "Generate handoff"}
                     </button>
                   </div>
                 </div>
@@ -2730,3 +3311,13 @@ const industryFocus = useMemo(() => {
     </main>
   );
 }
+
+
+
+
+
+
+
+
+
+
