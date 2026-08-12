@@ -412,43 +412,6 @@ const storyBeats = [
   },
 ];
 
-const demoHowItWorks = [
-  {
-    step: "1",
-    title: "Capture the meeting context",
-    detail: "The seller selects the client scenario, meeting type, decision-maker notes, and ranked pilar priorities.",
-  },
-  {
-    step: "2",
-    title: "Authorize the browser",
-    detail: "CloudFront serves the app and the browser uses limited IAM-backed credentials to call the brief API safely.",
-  },
-  {
-    step: "3",
-    title: "Generate with Bedrock",
-    detail: "API Gateway and Lambda shape the request, then Bedrock returns the technical brief, executive brief, and stakeholder output.",
-  },
-  {
-    step: "4",
-    title: "Refine and approve",
-    detail: "The SA applies feedback until the packet is customer-ready and ready to promote into follow-on delivery context.",
-  },
-  {
-    step: "5",
-    title: "Save and hand off",
-    detail: "S3 stores the latest packet artifacts while DynamoDB tracks the active handoff state for the team.",
-  },
-];
-
-const architectureFlow = [
-  "Context",
-  "Bedrock",
-  "Refine",
-  "S3",
-  "Knowledge Base",
-  "Team handoff",
-];
-
 const packetOutputs = [
   {
     title: "Technical brief",
@@ -564,145 +527,20 @@ const awsArchitectureColumns = [
   },
 ] as const;
 
-const awsFlowSteps = [
-  "User opens PilarPrep",
-  "CloudFront serves the React console",
-  "Cognito issues a limited demo identity",
-  "API Gateway verifies IAM authorization",
-  "Lambda orchestrates the brief workflow",
-  "Bedrock generates structured content",
-  "S3 and DynamoDB save the latest project memory",
-] as const;
-const modelStoragePath = [
-  {
-    layer: "Bedrock model",
-    service: "AWS managed",
-    detail:
-      "PilarPrep invokes Amazon Nova Micro through Bedrock. The foundation model weights are not copied into our account or stored in the app.",
-  },
-  {
-    layer: "Prompt contract",
-    service: "Lambda code",
-    detail:
-      "The briefing instructions, JSON shape, and fallback rules live in the Lambda source and are versioned in GitHub.",
-  },
-  {
-    layer: "Generated brief",
-    service: "S3 artifacts",
-    detail:
-      "Every live response is saved as a latest-only JSON packet plus a DOCX brief with the original request, model output, timestamp, and project metadata.",
-  },
-  {
-    layer: "Project state",
-    service: "DynamoDB",
-    detail:
-      "The handoff workspace uses projectId and sortKey records to track generated briefs, handoff state, provider, and creation time.",
-  },
-  {
-    layer: "Future memory",
-    service: "Knowledge Bases",
-    detail:
-      "Approved briefs and meeting notes can later be indexed for retrieval-backed answers without training a custom model.",
-  },
-];
-const awsRunway = [
-  {
-    layer: "Frontend",
-    service: "S3 + CloudFront",
-    detail: "Static React app with fast global delivery and a simple hackathon deployment path.",
-  },
-  {
-    layer: "API",
-    service: "API Gateway + Lambda",
-    detail: "Thin request layer for brief generation, feedback capture, and handoff updates.",
-  },
-  {
-    layer: "AI generation",
-    service: "Amazon Bedrock",
-    detail: "Role-aware brief generation, refinement loop, objection handling, and follow-on answers.",
-  },
-  {
-    layer: "Project memory",
-    service: "S3 + Knowledge Bases",
-    detail: "Final briefs, meeting notes, and project artifacts become searchable project context.",
-  },
-  {
-    layer: "State + telemetry",
-    service: "DynamoDB + CloudWatch",
-    detail: "Track project status, feedback, owners, timestamps, usage, and operational health.",
-  },
-];
-
-const productionChecks = [
-  "IAM least privilege",
-  "Bedrock Guardrails",
-  "CloudWatch logs",
-  "Structured JSON outputs",
-  "S3 artifact retention",
-  "DynamoDB project state",
-];
-const costGuardrails = [
-  {
-    label: "Daily cap",
-    value: "under 1 USD/day",
-    detail: "AWS Budget is deployed with a low daily threshold for the demo account.",
-  },
-  {
-    label: "Model choice",
-    value: "Nova Micro",
-    detail: "Default Bedrock model keeps brief generation inexpensive while the prompt stays portable.",
-  },
-  {
-    label: "Token control",
-    value: "Bounded output",
-    detail: "Lambda sets max tokens and validates short or malformed responses before returning them.",
-  },
-  {
-    label: "Usage trail",
-    value: "CloudWatch",
-    detail: "Each response records model ID, token count, latency, S3 artifact, and project state metadata.",
-  },
-];
-
-const demoSignals = [
-  {
-    label: "Ranked discovery",
-    detail: "Well-Architected priorities steer the model in order, not as loose tags.",
-  },
-  {
-    label: "Question-led briefs",
-    detail: "Each section gives the SA language they can use live in the meeting.",
-  },
-  {
-    label: "Project handoff",
-    detail: "The approved brief auto-builds the team handoff context for follow-through.",
-  },
-];
-
-const judgeProofPoints = [
-  { label: "Frontend", value: "CloudFront + S3" },
-  { label: "Auth", value: "IAM signed" },
-  { label: "Model", value: "Bedrock Nova" },
-  { label: "Cost", value: "Budget guardrail" },
-];
-
-
-const heroProofPoints = [
-  "Bedrock generation loop",
-  "Well-Architected pillar ranking",
-  "Team handoff",
-  "AWS-ready deployment path",
-];
-
-const implementationBacklog = [
-  "CDK or SAM stack",
-  "Bedrock prompt contract",
-  "Knowledge Base bucket",
-  "DynamoDB project schema",
-  "Guardrail policy",
-  "CloudWatch dashboard",
-];
-
+const awsServiceIcons: Record<string, string> = {
+  USR: "/globe.svg",
+  CF: "/aws-services/cloudfront.svg",
+  S3: "/aws-services/s3.svg",
+  COG: "/aws-services/cognito.svg",
+  IAM: "/aws-services/iam.svg",
+  API: "/aws-services/api-gateway.svg",
+  LMB: "/aws-services/lambda.svg",
+  BR: "/aws-services/bedrock.svg",
+  GRD: "/aws-services/bedrock.svg",
+  DDB: "/aws-services/dynamodb.svg",
+  DOC: "/aws-services/s3.svg",
+  CW: "/aws-services/cloudwatch.svg",
+};
 const consolePages: Array<{ id: ConsolePage; label: string }> = [
   { id: "setup", label: "1. Context" },
   { id: "brief", label: "2. Brief" },
@@ -1159,7 +997,7 @@ const industryFocus = useMemo(() => {
           gameplan: generatedBrief.gameplan,
           objections: generatedBrief.objections,
         }
-      : fallbackBriefContent;
+      : blankBriefContent;
   const activeBriefText = [
     `${company || "Customer"} - ${briefTabLabel(activeTab)}`,
     "",
@@ -1891,10 +1729,12 @@ const industryFocus = useMemo(() => {
     };
 
     if (scrollToSection()) {
-      setPendingSectionId(null);
-      return;
-    }
+      const frame = window.requestAnimationFrame(() => {
+        setPendingSectionId(null);
+      });
 
+      return () => window.cancelAnimationFrame(frame);
+    }
     const timeout = window.setTimeout(() => {
       if (scrollToSection()) {
         setPendingSectionId(null);
@@ -1913,127 +1753,159 @@ const industryFocus = useMemo(() => {
     }
   }
 
+  const currentStageLabel = handoffReady
+    ? "Handoff ready"
+    : approved
+      ? "Ready for handoff"
+      : generatedBrief
+        ? "Brief in review"
+        : "Context in progress";
+
+  function continueWorkflow() {
+    if (!generatedBrief) {
+      refineBrief();
+      return;
+    }
+
+    if (!approved) {
+      setActivePage("brief");
+      return;
+    }
+
+    if (!handoffReady) {
+      openProjectBrain();
+      return;
+    }
+
+    setActivePage("demo");
+  }
   return (
     <main className={cx("app-shell min-h-screen text-[#111827]", judgeMode && "presenter-guide-on")}>
-      <section className="hero-shell">
-        <div className="mx-auto max-w-[1500px] px-5 pt-4">
-          <div className="top-command">
-            <div className="top-command-title">
-              <span className="status-dot" />
-              PilarPrep workspace
-            </div>
-            <div className="top-command-actions">
-              <button
-                className={cx("command-icon-button", activePage === "library" && "command-icon-button-active")}
-                type="button"
-                aria-label="Open brief library"
-                title="Open brief library"
-                onClick={() => setActivePage("library")}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5a2.5 2.5 0 0 0-2.5-2.5H4z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
-                  <path d="M6.5 3v15.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                  <path d="M9 7h7M9 10.5h7M9 14h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                </svg>
-                <small>{briefHistory.length}</small>
-              </button>
-              {consolePages.map((page) => (
+      <header className="app-header">
+        <div className="app-header-inner">
+          <button className="product-brand" type="button" onClick={() => setActivePage("setup")} aria-label="Open PilarPrep context">
+            <span className="product-mark">P</span>
+            <span>PilarPrep</span>
+          </button>
+
+          <nav className="workflow-nav" aria-label="PilarPrep workflow">
+            {consolePages.filter((page) => page.id !== "aws").map((page, index) => {
+              const isComplete =
+                (page.id === "setup" && Boolean(generatedBrief)) ||
+                (page.id === "brief" && approved) ||
+                (page.id === "project" && handoffReady);
+
+              return (
                 <button
                   key={page.id}
-                  className={cx("command-tab", activePage === page.id && "command-tab-active")}
+                  className={cx(
+                    "workflow-nav-item",
+                    activePage === page.id && "workflow-nav-item-active",
+                    isComplete && "workflow-nav-item-complete"
+                  )}
                   type="button"
                   onClick={() => setActivePage(page.id)}
                 >
-                  <span>{page.label}</span>
+                  <span>{isComplete ? "✓" : index + 1}</span>
+                  <strong>{page.label.replace(/^\d+\.\s*/, "")}</strong>
                 </button>
-              ))}
-              <button
-                className={cx("judge-mode-toggle", judgeMode && "judge-mode-toggle-active")}
-                type="button"
-                onClick={toggleJudgeMode}
-              >
-                <span>{judgeMode ? "15-min mode on" : "15-min mode"}</span>
-              </button>
+              );
+            })}
+          </nav>
+
+          <div className="utility-nav">
+            <button
+              className={cx("utility-button", activePage === "library" && "utility-button-active")}
+              type="button"
+              onClick={() => setActivePage("library")}
+              aria-label="Open saved briefs"
+              title="Saved briefs"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5a2.5 2.5 0 0 0-2.5-2.5H4z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                <path d="M6.5 3v15.5M9 7h7M9 11h7M9 15h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+              <span>Saved</span>
+              {briefHistory.length ? <small>{briefHistory.length}</small> : null}
+            </button>
+            <button
+              className={cx("utility-button", activePage === "aws" && "utility-button-active")}
+              type="button"
+              onClick={() => setActivePage("aws")}
+              aria-label="Open AWS architecture"
+              title="AWS architecture"
+            >
+              <span className="aws-wordmark">AWS</span>
+              <span>Architecture</span>
+            </button>
+            <button
+              className={cx("presenter-button", judgeMode && "presenter-button-active")}
+              type="button"
+              onClick={toggleJudgeMode}
+              aria-pressed={judgeMode}
+            >
+              {judgeMode ? "Presenter on" : "Presenter"}
+            </button>
+          </div>
+        </div>
+
+        <div className="workspace-context-bar">
+          <div className="workspace-context-main">
+            <span className="workspace-avatar">{(company || "P").slice(0, 1).toUpperCase()}</span>
+            <div>
+              <small>Client workspace</small>
+              <strong>{company || "Select a client"}</strong>
             </div>
           </div>
-          {judgeMode ? (
-            <div className="presenter-strip" aria-label="Presenter walkthrough guide">
-              {presenterSteps.map((step, index) => (
-                <div key={step.label} className={cx("presenter-step", index === presenterSteps.length - 1 && handoffReady && "presenter-step-ready")}>
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <div>
-                    <strong>{step.label}</strong>
-                    <p>{step.value}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
+          <div className="workspace-context-meta" aria-label="Current client context">
+            <span>{meetingType}</span>
+            <span>{industry}</span>
+            <span>Top pilar: {selectedPillars[0] ?? "Set ranking"}</span>
+          </div>
+          <div className="workspace-context-action">
+            <span className={cx("stage-state", handoffReady && "stage-state-complete")}>{currentStageLabel}</span>
+            <button type="button" onClick={continueWorkflow} disabled={isGenerating}>
+              {isGenerating
+                ? "Generating..."
+                : !generatedBrief
+                  ? "Generate brief"
+                  : !approved
+                    ? "Review brief"
+                    : !handoffReady
+                      ? "Open handoff"
+                      : "Open demo"}
+            </button>
+          </div>
         </div>
-        <div className="mx-auto max-w-[1500px] px-5 py-4">
-          <div className="workspace-banner">
-            <div className="workspace-banner-main">
-              <div className="workspace-banner-top">
-                <div className="brand-mark">PP</div>
+
+        <div className="sr-only">PilarPrep workspace</div>
+        {judgeMode ? (
+          <div className="presenter-strip presenter-strip-v2" aria-label="Presenter walkthrough guide">
+            {presenterSteps.map((step, index) => (
+              <div key={step.label} className={cx("presenter-step", index === presenterSteps.length - 1 && handoffReady && "presenter-step-ready")}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
                 <div>
-                  <p className="eyebrow">Client workspace</p>
-                  <h1 className="workspace-title">{company || "Select a client"}</h1>
+                  <strong>{step.label}</strong>
+                  <p>{step.value}</p>
                 </div>
               </div>
-              <p className="workspace-summary">
-                Build the customer-ready brief, refine it quickly, then hand off the latest packet to the team that will execute.
-              </p>
-              <div className="workspace-chip-row">
-                <span>{activeScenario.challenge}</span>
-                <span>Top pilar: {selectedPillars[0] ?? "Set ranking"}</span>
-                <span>{approved ? "Brief approved" : generatedBrief ? "Brief generated" : "Context ready"}</span>
-              </div>
-            </div>
-            <div className="workspace-banner-side">
-              <div className="workspace-side-grid">
-                <div className="workspace-side-card">
-                  <span>Current stage</span>
-                  <strong>{handoffReady ? "Handoff ready" : promoted ? "Handoff building" : approved ? "Ready for handoff" : generatedBrief ? "Review and refine" : "Generate first brief"}</strong>
-                </div>
-                <div className="workspace-side-card">
-                  <span>Primary focus</span>
-                  <strong>{primaryConcern}</strong>
-                </div>
-                <div className="workspace-side-card">
-                  <span>Packet version</span>
-                  <strong>Brief v{briefVersion}</strong>
-                </div>
-              </div>
-              <div className="workspace-actions">
-                <button className="small-action primary-small-action" type="button" disabled={isGenerating} onClick={refineBrief}>
-                  {isGenerating
-                    ? generationMode === "live"
-                      ? "Generating with AI..."
-                      : "Generating brief..."
-                    : generationMode === "live"
-                      ? "Generate AI brief + handoff"
-                      : "Generate brief + handoff"}
-                </button>
-                <button className="small-action" type="button" disabled={!generatedBrief} onClick={() => setActivePage("brief")}>
-                  Open brief
-                </button>
-                <button className="small-action" type="button" disabled={!generatedBrief} onClick={openProjectBrain}>
-                  Open handoff
-                </button>
-              </div>
-            </div>
+            ))}
           </div>
-        </div>
-      </section>
-      {activePage === "library" ? (
+        ) : null}
+      </header>      {activePage === "library" ? (
         <div className="page-view">
           <section className="mx-auto max-w-[1500px] px-5 pt-5">
             <div className="library-shell">
-              <div className="section-head">
-                <p>Brief library</p>
-                <h2>Catch up on previous generated packets</h2>
-              </div>
-              {briefHistory.length ? (
+              <div className="library-titlebar">
+                <div>
+                  <p>Saved briefs</p>
+                  <h1>Pick up where the team left off</h1>
+                  <span>Review a previous customer packet, download the latest document, or load it back into the working brief.</span>
+                </div>
+                <button className="small-action primary-small-action" type="button" onClick={() => setActivePage("setup")}>
+                  New brief
+                </button>
+              </div>              {briefHistory.length ? (
                 <div className="library-grid">
                   <div className="library-list">
                     {briefHistory.map((entry) => (
@@ -2050,7 +1922,7 @@ const industryFocus = useMemo(() => {
                         <p>{entry.meetingType} / {entry.industry} / {entry.companySize}</p>
                         <div className="library-entry-meta">
                           <span>Top pilar: {entry.selectedPillars[0] ?? "Not set"}</span>
-                          <span>{providerLabel(entry.generatedBrief.provider)}</span>
+                          <span>{entry.approved ? "Approved packet" : `Draft v${entry.briefVersion}`}</span>
                         </div>
                       </button>
                     ))}
@@ -2114,60 +1986,52 @@ const industryFocus = useMemo(() => {
         </div>
       ) : null}
 
-            {activePage === "aws" ? (
-        <div className="page-view">
-          <section className="mx-auto max-w-[1500px] px-5 pt-5">
-            <div className="aws-hero-band">
-              <div className="aws-hero-copy">
-                <p>AWS infrastructure</p>
-                <h2>Production-style architecture for the hackathon demo</h2>
-                <strong>CloudFront, API Gateway, Lambda, Bedrock, S3, and DynamoDB working as one clean AWS-native system.</strong>
-                <span>
-                  Built to stay low-cost, easy to explain, and ready to grow from a public demo into a client-scoped workspace model.
-                </span>
+      {activePage === "aws" ? (
+        <div className="page-view architecture-page">
+          <section className="content-shell">
+            <div className="page-titlebar">
+              <div className="page-title-copy">
+                <span className="page-number page-number-aws">AWS</span>
+                <div>
+                  <p>Solution architecture</p>
+                  <h1>A focused serverless path from context to handoff</h1>
+                  <span>Every service has one clear job: deliver the workspace, authorize the request, generate the packet, and retain only the latest client state.</span>
+                </div>
               </div>
-              <div className="aws-hero-meta">
-                <div className="aws-hero-chip">
-                  <span>Auth</span>
-                  <strong>IAM-signed demo access</strong>
-                </div>
-                <div className="aws-hero-chip">
-                  <span>Model path</span>
-                  <strong>{generationMode === "live" ? "Bedrock live" : "Fallback with Bedrock-ready path"}</strong>
-                </div>
-                <div className="aws-hero-chip">
-                  <span>Storage policy</span>
-                  <strong>Latest-only brief artifacts</strong>
-                </div>
+              <div className="architecture-posture">
+                <span>Serverless</span>
+                <span>IAM controlled</span>
+                <span>Latest-only storage</span>
               </div>
             </div>
-          </section>
 
-          <section className="mx-auto max-w-[1500px] px-5 pt-5">
-            <div className="aws-diagram-board">
-              <div className="section-head">
-                <p>AWS system map</p>
-                <h2>From customer input to reusable project memory</h2>
+            <div className="architecture-board-v2">
+              <div className="architecture-board-head">
+                <div>
+                  <span>Request path</span>
+                  <h2>PilarPrep on AWS</h2>
+                </div>
+                <p>One synchronous generation path with durable handoff artifacts and operational guardrails.</p>
               </div>
-              <div className="aws-flow-strip">
-                {awsFlowSteps.map((step, index) => (
-                  <div key={step} className="aws-flow-step">
-                    <span>{index + 1}</span>
-                    <strong>{step}</strong>
-                  </div>
-                ))}
-              </div>
-              <div className="aws-lane-grid">
-                {awsArchitectureColumns.map((column) => (
-                  <section key={column.title} className="aws-lane-card">
-                    <div className="aws-lane-head">
-                      <p>{column.title}</p>
-                      <h3>{column.detail}</h3>
+
+              <div className="architecture-flow-v2">
+                {awsArchitectureColumns.map((column, columnIndex) => (
+                  <div className="architecture-zone" key={column.title}>
+                    <div className="architecture-zone-label">
+                      <span>{String(columnIndex + 1).padStart(2, "0")}</span>
+                      <div>
+                        <strong>{column.title}</strong>
+                        <small>{column.detail}</small>
+                      </div>
                     </div>
-                    <div className="aws-service-stack">
+                    <div className="architecture-services">
                       {column.services.map((service) => (
-                        <div key={service.service} className="aws-service-card">
-                          <div className="aws-service-icon">{service.badge}</div>
+                        <div className="architecture-service" key={service.service}>
+                          <span
+                            className={cx("architecture-service-icon", `architecture-service-icon-${columnIndex + 1}`)}
+                            style={{ backgroundImage: `url(${awsServiceIcons[service.badge]})` }}
+                            aria-hidden="true"
+                          />
                           <div>
                             <strong>{service.service}</strong>
                             <p>{service.note}</p>
@@ -2175,94 +2039,88 @@ const industryFocus = useMemo(() => {
                         </div>
                       ))}
                     </div>
-                  </section>
+                    {columnIndex < awsArchitectureColumns.length - 1 ? (
+                      <span className="architecture-connector" aria-hidden="true">→</span>
+                    ) : null}
+                  </div>
                 ))}
               </div>
-              <div className="aws-support-strip">
-                {productionChecks.map((check) => (
-                  <span key={check}>{check}</span>
-                ))}
+
+              <div className="architecture-foundation">
+                <div>
+                  <span>Security boundary</span>
+                  <strong>Short-lived identity, route-scoped IAM, least-privilege Lambda permissions, and Bedrock Guardrails.</strong>
+                </div>
+                <div>
+                  <span>Cost posture</span>
+                  <strong>Pay-per-request services, no idle compute, latest-only artifacts, and a daily budget target under 1 USD.</strong>
+                </div>
+                <div>
+                  <span>Operations</span>
+                  <strong>CloudWatch logs and alarms make the demo observable without adding a separate operations tier.</strong>
+                </div>
               </div>
             </div>
-          </section>
 
-          <section className="mx-auto max-w-[1500px] px-5 pt-5">
-            <div className="aws-detail-grid">
-              <div className="packet-band">
-                <div className="section-head">
-                  <p>Model and memory storage</p>
-                  <h2>What is stored, and what stays managed by AWS</h2>
-                </div>
-                <div className="packet-grid aws-storage-grid">
-                  {modelStoragePath.map((item, index) => (
-                    <div key={item.layer} className="packet-tile">
-                      <span>{index + 1}</span>
-                      <strong>{item.layer}</strong>
-                      <small>{item.service}</small>
-                      <p>{item.detail}</p>
-                    </div>
-                  ))}
-                </div>
+            <div className="architecture-explainer">
+              <div>
+                <span>How to explain it</span>
+                <h2>The brief is generated; the client context is retained.</h2>
               </div>
-
-              <div className="aws-ops-panel">
-                <div className="section-head">
-                  <p>Operations</p>
-                  <h2>Low-cost demo guardrails</h2>
-                </div>
-                <div className="cost-guardrail-grid aws-ops-grid">
-                  {costGuardrails.map((item) => (
-                    <div key={item.label} className="cost-guardrail-card">
-                      <span>{item.label}</span>
-                      <strong>{item.value}</strong>
-                      <p>{item.detail}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="implementation-queue aws-implementation-strip">
-                  <div>
-                    <p>Implementation queue</p>
-                    <strong>Next build sprint</strong>
-                  </div>
-                  <div className="implementation-items">
-                    {implementationBacklog.map((item) => (
-                      <span key={item}>{item}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <p>
+                Amazon Bedrock remains an AWS-managed foundation model. PilarPrep stores the approved prompt context,
+                generated packet, and handoff state in client-scoped S3 and DynamoDB records so the same workflow can
+                support a different customer without copying or hosting model weights.
+              </p>
             </div>
           </section>
         </div>
       ) : null}
-
       <section className="linear-workflow mx-auto max-w-[1500px] px-5 py-5">
         {activePage === "setup" ? (
           <div className="page-view">
-        <div className="workflow-heading" id="setup">
-          <span>Step 1</span>
-          <div>
-            <p>Set up the customer</p>
-            <h2>Pick a scenario or enter real meeting context</h2>
+        <div className="page-titlebar" id="setup">
+          <div className="page-title-copy">
+            <span className="page-number">01</span>
+            <div>
+              <p>Customer preparation</p>
+              <h1>Build the meeting context</h1>
+              <span>Choose a starting scenario, confirm what matters, and rank the AWS pillars that should shape the conversation.</span>
+            </div>
+          </div>
+          <div className="page-title-status">
+            <small>Next outcome</small>
+            <strong>A tailored technical and executive brief</strong>
           </div>
         </div>
 
-        <section className="packet-band setup-packet-band">
-          <div className="section-head">
-            <p>Generated packet</p>
-            <h2>What the team walks away with</h2>
+        <section className={cx("packet-glance", generatedBrief && "packet-glance-ready")} aria-label="Generated packet">
+          <div className="packet-glance-intro">
+            <span>Generated packet</span>
+            <strong>{generatedBrief ? "Your packet is ready to review" : "One input creates five reusable outputs"}</strong>
           </div>
-          <div className="packet-grid">
-            {packetOutputs.map((packet, index) => (
-              <div key={packet.title} className="packet-tile">
+          <div className="packet-glance-items">
+            {packetPreviewItems.map((packet, index) => (
+              <button
+                key={packet.title}
+                type="button"
+                onClick={() => setActivePage(packet.key === "handoff" ? "project" : "brief")}
+                disabled={!generatedBrief}
+              >
                 <span>{index + 1}</span>
-                <strong>{packet.title}</strong>
-                <p>{packet.detail}</p>
-              </div>
+                <div>
+                  <strong>{packet.title}</strong>
+                  <small>{packet.status}</small>
+                </div>
+              </button>
             ))}
           </div>
+          {generatedBrief?.metadata?.docxDownloadUrl ? (
+            <a href={generatedBrief.metadata.docxDownloadUrl} target="_blank" rel="noreferrer">
+              Download DOCX
+            </a>
+          ) : null}
         </section>
-
         <div className="setup-grid">
           <section className="rounded-lg border border-[#d7dee8] bg-white shadow-sm">
             <div className="border-b border-[#e0e7ef] p-5">
@@ -2292,7 +2150,7 @@ const industryFocus = useMemo(() => {
           <section className="rounded-lg border border-[#d7dee8] bg-white shadow-sm">
             <div className="border-b border-[#e0e7ef] p-5">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#446076]">
-                Loop 1 input
+                Brief inputs
               </p>
               <h2 className="mt-1 text-xl font-black">Customer context</h2>
             </div>
@@ -2505,8 +2363,8 @@ const industryFocus = useMemo(() => {
                       ? "Generating with AI..."
                       : "Generating brief..."
                     : generationMode === "live"
-                      ? "Generate AI brief + project model"
-                      : "Generate brief + project model"}
+                      ? "Generate AI brief + handoff"
+                      : "Generate brief + handoff"}
                 </button>
                 <button
                   className="secondary-link"
@@ -2589,97 +2447,45 @@ const industryFocus = useMemo(() => {
         ) : null}
         {activePage === "brief" ? (
           <div className="page-view">
-        <div className="workflow-heading" id="brief">
-          <span>Step 2</span>
-          <div>
-            <p>Refine the pre-brief</p>
-            <h2>Review the output, apply feedback, then approve it</h2>
+        <div className="page-titlebar page-titlebar-brief" id="brief">
+          <div className="page-title-copy">
+            <span className="page-number">02</span>
+            <div>
+              <p>Brief review</p>
+              <h1>Shape the customer conversation</h1>
+              <span>Review each audience view, apply focused feedback, and approve the version the team will use.</span>
+            </div>
+          </div>
+          <div className="page-title-actions">
+            <span className={cx("approval-state", approved && "approval-state-done")}>
+              {approved ? "Approved" : generatedBrief ? `Draft v${briefVersion}` : "Waiting for generation"}
+            </span>
+            <button type="button" disabled={!generatedBrief || approved} onClick={approveBrief}>
+              {approved ? "Brief approved" : "Approve brief"}
+            </button>
           </div>
         </div>
 
-        <div className="space-y-5">
-          <section className="phase-stack">
-            <div className="phase-card">
-              <div className="phase-copy">
-                <div className="loop-badge">Phase 1</div>
-                <h2>Pre-brief refinement</h2>
-                <p>
-                  Generate the first brief, review it with SA feedback, improve
-                  the questions, and approve the customer-ready version.
-                </p>
-              </div>
-              <div className="phase-steps">
-                {prebriefWorkflowSteps.map((step, index) => (
-                  <button
-                    key={step.id}
-                    className={cx(
-                      "flow-step",
-                      "flow-step-button",
-                      currentWorkflowStep === step.id && "flow-step-active",
-                      completedWorkflowSteps.has(step.id) && "flow-step-complete"
-                    )}
-                    type="button"
-                    onClick={() => openWorkflowStep(step.id)}
-                  >
-                    <span>{index + 1}</span>
-                    <strong>{step.label}</strong>
-                  </button>
-                ))}
-              </div>
-            </div>
+        <div className="inline-workflow" aria-label="Brief workflow">
+          {prebriefWorkflowSteps.map((step, index) => (
+            <button
+              key={step.id}
+              className={cx(
+                "inline-workflow-step",
+                currentWorkflowStep === step.id && "inline-workflow-step-active",
+                completedWorkflowSteps.has(step.id) && "inline-workflow-step-complete"
+              )}
+              type="button"
+              onClick={() => openWorkflowStep(step.id)}
+            >
+              <span>{completedWorkflowSteps.has(step.id) ? "✓" : index + 1}</span>
+              <strong>{step.label}</strong>
+            </button>
+          ))}
+        </div>
 
-            <div className="phase-bridge">
-              <div>
-                <span>Team handoff</span>
-                <strong>{promoted ? "Auto-built" : generatedBrief ? "Ready" : "Waiting for brief"}</strong>
-              </div>
-              <button
-                className={cx(
-                  "promote-button",
-                  promoted && "promote-button-done"
-                )}
-                type="button"
-                disabled={isGenerating}
-                onClick={openProjectBrain}
-              >
-                {promoted ? "View handoff" : generatedBrief ? "Open handoff" : "Generate handoff"}
-              </button>
-              <p>Latest brief and notes become handoff context</p>
-            </div>
-
-            <div className="phase-card phase-card-project">
-              <div className="phase-copy">
-                <div className="loop-badge loop-badge-project">Phase 2</div>
-                <h2>Team handoff workspace</h2>
-                <p>
-                  Capture meeting outcomes, auto-build the brief into shared
-                  memory, and use the handoff workspace for delivery follow-through.
-                </p>
-              </div>
-              <div className="phase-steps">
-                {projectWorkflowSteps.map((step, index) => (
-                  <button
-                    key={step.id}
-                    className={cx(
-                      "flow-step",
-                      "flow-step-button",
-                      "project-step",
-                      currentWorkflowStep === step.id && "flow-step-active",
-                      completedWorkflowSteps.has(step.id) && "flow-step-complete"
-                    )}
-                    type="button"
-                    onClick={() => openWorkflowStep(step.id)}
-                  >
-                    <span>{index + 1}</span>
-                    <strong>{step.label}</strong>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <section id="brief-review-section" className="grid gap-5 2xl:grid-cols-[1fr_360px]">
-            <div className="rounded-lg border border-[#d7dee8] bg-white shadow-sm">
+        <div className="space-y-5">          <section id="brief-review-section" className="brief-review-layout">
+            <div className="brief-workspace-shell">
               <div className="flex flex-col gap-4 border-b border-[#e0e7ef] p-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#446076]">
@@ -2721,7 +2527,7 @@ const industryFocus = useMemo(() => {
                 </div>
               </div>
 
-              <div className="grid gap-5 p-5 lg:grid-cols-[1fr_280px]">
+              <div className="brief-workspace-main">
                 <div className="space-y-4">
                   <div className={cx("brief-surface", isGenerating && "brief-surface-busy")}>
                     <div className="flex items-center justify-between gap-3">
@@ -2760,13 +2566,19 @@ const industryFocus = useMemo(() => {
                       </div>
                     </div>
                     <div className="mt-4 space-y-3 brief-output-canvas">
-                      {briefContent[activeTab].map((item) => (
-                        <p key={item} className="brief-line">
-                          {item}
-                        </p>
-                      ))}
-                    </div>
-                    <div className="evidence-tray">
+                      {briefContent[activeTab].length ? (
+                        briefContent[activeTab].map((item) => (
+                          <p key={item} className="brief-line">
+                            {item}
+                          </p>
+                        ))
+                      ) : (
+                        <div className="brief-empty-state">
+                          <strong>{isGenerating ? "Building the customer brief..." : "No brief generated yet"}</strong>
+                          <p>{isGenerating ? "The workspace will populate when the packet is ready." : "Return to Customer Context and generate the first packet."}</p>
+                        </div>
+                      )}
+                    </div>                    <div className="evidence-tray">
                       {(generatedBrief?.citations ?? evidenceSources).map((source) => (
                         <span key={source}>{source}</span>
                       ))}
@@ -2838,27 +2650,15 @@ const industryFocus = useMemo(() => {
                         );
                       })}
                     </div>
-                    <div className="refinement-approve-row" id="brief-approve-section">
+                    <div className={cx("refinement-approve-row", approved && "refinement-approve-row-done")} id="brief-approve-section">
                       <div>
-                        <strong>
-                          {approved ? "Customer-ready brief approved" : "Ready to lock the pre-brief?"}
-                        </strong>
+                        <strong>{approved ? "Approved for team use" : "Approval is the final quality gate"}</strong>
                         <p>
                           {approved
-                            ? "This version becomes the baseline for the handoff packet and delivery follow-through."
-                            : "Approve once the brief reads the way you want the customer conversation to go."}
+                            ? "This version now anchors the delivery handoff and saved packet."
+                            : "Use the approval action at the top once the audience views and questions are ready."}
                         </p>
                       </div>
-                      <button
-                        className={cx(
-                          "approval-button",
-                          approved && "approval-done"
-                        )}
-                        type="button"
-                        onClick={approveBrief}
-                      >
-                        {approved ? "Brief approved" : "Approve final pre-brief"}
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -2938,170 +2738,136 @@ const industryFocus = useMemo(() => {
 
 
           {activePage === "demo" ? (
-            <div className="page-view">
-              <section className="mx-auto max-w-[1500px] px-5 pt-5">
-                <div className="demo-hero-band">
-                  <div className="demo-hero-copy">
-                    <p>Demo packet</p>
-                    <h2>What the team walks away with</h2>
-                    <strong>
-                      {generatedBrief
-                        ? `${company || "Customer"} is ready for the live walkthrough`
-                        : "Generate the brief once, then present everything from one clean page"}
-                    </strong>
-                    <span>
-                      {generatedBrief
-                        ? "Use this page to show judges the technical brief, executive brief, decision-maker context, meeting game plan, and delivery handoff in one place."
-                        : "This becomes the presentation surface as soon as the packet is generated and approved."}
-                    </span>
-                    <div className="demo-hero-actions">
-                      <button className="small-action primary-small-action" type="button" onClick={() => setActivePage("brief")}>
-                        Open brief
-                      </button>
-                      <button className="small-action" type="button" onClick={openProjectBrain}>
-                        Open handoff
-                      </button>
-                      {generatedBrief?.metadata?.docxDownloadUrl ? (
-                        <a
-                          className="setup-packet-link"
-                          href={generatedBrief.metadata.docxDownloadUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Download DOCX
-                        </a>
-                      ) : null}
+            <div className="page-view demo-page">
+              <section className="content-shell">
+                <div className="page-titlebar page-titlebar-demo">
+                  <div className="page-title-copy">
+                    <span className="page-number">04</span>
+                    <div>
+                      <p>Presentation workspace</p>
+                      <h1>Tell the PilarPrep story in 15 minutes</h1>
+                      <span>A judge-ready view of the customer problem, generated packet, team handoff, and AWS architecture.</span>
                     </div>
                   </div>
-                  <div className="demo-hero-stats">
-                    <div className="demo-stat-card">
-                      <span>Run state</span>
-                      <strong>{approved ? "Approved" : generatedBrief ? "Generated" : "Waiting"}</strong>
-                      <p>{approved ? "Pre-brief locked for walkthrough" : "Generate and refine before presenting"}</p>
-                    </div>
-                    <div className="demo-stat-card">
-                      <span>Runtime</span>
-                      <strong>{generatedBrief ? providerLabel(generatedBrief.provider) : generationMode === "live" ? "Bedrock path" : "Fallback path"}</strong>
-                      <p>{generatedBrief ? "Current run source for the visible packet" : "Live mode swaps in AWS when enabled"}</p>
-                    </div>
-                    <div className="demo-stat-card">
-                      <span>Handoff</span>
-                      <strong>{promoted ? "Team handoff ready" : "Brief-first flow"}</strong>
-                      <p>{promoted ? "Follow-on outputs are ready for delivery teams" : "Approve and promote to unlock the follow-on loop"}</p>
+                  <div className="demo-ready-state">
+                    <span className={cx("demo-ready-dot", generatedBrief && approved && "demo-ready-dot-complete")} />
+                    <div>
+                      <small>Walkthrough status</small>
+                      <strong>{approved ? "Ready to present" : generatedBrief ? "Approve the brief to finish" : "Generate a packet to begin"}</strong>
                     </div>
                   </div>
                 </div>
-              </section>
 
-              <section className="mx-auto max-w-[1500px] px-5 pt-5">
-                <div className="packet-band demo-packet-band">
-                  <div className="packet-section-head">
+                <section className="demo-packet">
+                  <div className="demo-section-heading">
                     <div>
-                      <p>Generated packet</p>
-                      <h2>Everything the team leaves with after the customer meeting</h2>
+                      <span>Generated packet</span>
+                      <h2>{generatedBrief ? `${company} meeting packet` : "The five outputs judges will see"}</h2>
                     </div>
-                    <div className="packet-section-actions">
-                      <button className="small-action" type="button" onClick={() => setActivePage("setup")}>
-                        Edit context
-                      </button>
-                      <button className="small-action" type="button" onClick={() => setActivePage("aws")}>
-                        View AWS architecture
-                      </button>
+                    <div>
+                      <button type="button" onClick={() => setActivePage("brief")}>Open brief</button>
+                      <button type="button" onClick={openProjectBrain}>Open handoff</button>
                     </div>
                   </div>
-                  <div className="packet-grid demo-packet-grid">
+                  <div className="demo-packet-grid-v2">
                     {packetPreviewItems.map((packet, index) => (
-                      <div key={packet.title} className="packet-tile demo-packet-tile">
-                        <span>{index + 1}</span>
-                        <small>{packet.status}</small>
+                      <button
+                        key={packet.title}
+                        type="button"
+                        onClick={() => setActivePage(packet.key === "handoff" ? "project" : "brief")}
+                        className={cx(generatedBrief && "demo-packet-item-ready")}
+                      >
+                        <span>{String(index + 1).padStart(2, "0")}</span>
                         <strong>{packet.title}</strong>
                         <p>{packet.detail}</p>
-                      </div>
+                        <small>{packet.status}</small>
+                      </button>
                     ))}
                   </div>
-                </div>
-              </section>
+                </section>
 
-              <section className="mx-auto max-w-[1500px] px-5 pt-5">
-                <div className="demo-story-grid">
-                  <div className="demo-panel demo-story-panel">
-                    <div className="section-head">
-                      <p>Presentation path</p>
-                      <h2>15-minute demo story</h2>
+                <div className="demo-stage-grid-v2">
+                  <section className="demo-story-v2">
+                    <div className="demo-section-heading">
+                      <div>
+                        <span>Presenter timeline</span>
+                        <h2>The walkthrough</h2>
+                      </div>
                     </div>
-                    <div className="demo-beats">
-                      {storyBeats.map((beat) => (
-                        <div key={beat.time} className="demo-beat">
+                    <div className="demo-timeline-v2">
+                      {storyBeats.map((beat, index) => (
+                        <button
+                          key={beat.time}
+                          type="button"
+                          onClick={() => {
+                            if (index <= 1) setActivePage("setup");
+                            else if (index <= 4) setActivePage("brief");
+                            else if (index === 5) setActivePage("project");
+                            else setActivePage("aws");
+                          }}
+                        >
                           <time>{beat.time}</time>
+                          <span />
                           <div>
                             <strong>{beat.title}</strong>
                             <p>{beat.detail}</p>
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
-                  </div>
+                  </section>
 
-                  <div className="demo-panel demo-story-panel">
-                    <div className="section-head">
-                      <p>How it works</p>
-                      <h2>AWS-backed workflow</h2>
+                  <aside className="demo-run-card">
+                    <div>
+                      <span>Live demo path</span>
+                      <h2>Three scenes. One customer story.</h2>
                     </div>
-                    <div className="demo-flow-grid">
-                      {demoHowItWorks.map((step, index) => (
-                        <div key={step.step} className="demo-flow-step">
-                          <div className="demo-flow-step-top">
-                            <span>{step.step}</span>
-                            <strong>{step.title}</strong>
-                          </div>
-                          <p>{step.detail}</p>
-                          <small>
-                            {index === 0
-                              ? "Input"
-                              : index === 1
-                                ? "Access"
-                                : index === 2
-                                  ? generatedBrief
-                                    ? "Generated"
-                                    : isGenerating
-                                      ? "Running"
-                                      : "Ready"
-                                  : index === 3
-                                    ? approved
-                                      ? "Approved"
-                                      : generatedBrief
-                                        ? "In review"
-                                        : "Next"
-                                    : handoffReady
-                                      ? "Saved"
-                                      : promoted
-                                        ? "Building"
-                                        : "Next"}
-                          </small>
+                    <ol>
+                      <li>
+                        <span>1</span>
+                        <div>
+                          <strong>Prepare</strong>
+                          <p>Load a customer scenario and show how ranked priorities shape the brief.</p>
                         </div>
-                      ))}
-                    </div>
-                    <div className="demo-flow-footer">
-                      <span>{company || "Client to confirm"}</span>
-                      <span>{meetingType}</span>
-                      <span>Top pilar: {selectedPillars[0] ?? "Set ranking"}</span>
-                      <span>{handoffReady ? "Handoff packet ready" : promoted ? "Team handoff built" : generatedBrief ? "Brief generated" : "Ready to generate"}</span>
-                    </div>
-                  </div>
+                      </li>
+                      <li>
+                        <span>2</span>
+                        <div>
+                          <strong>Decide</strong>
+                          <p>Review technical and executive views, apply feedback, then approve.</p>
+                        </div>
+                      </li>
+                      <li>
+                        <span>3</span>
+                        <div>
+                          <strong>Continue</strong>
+                          <p>Open the team handoff and close with the concise AWS architecture.</p>
+                        </div>
+                      </li>
+                    </ol>
+                    <button type="button" onClick={() => setActivePage("setup")}>Start walkthrough</button>
+                    <button className="demo-architecture-link" type="button" onClick={() => setActivePage("aws")}>View AWS architecture</button>
+                  </aside>
                 </div>
               </section>
             </div>
           ) : null}
           {activePage === "project" ? (
             <div className="page-view">
-          <div className="workflow-heading workflow-heading-dark" id="project-brain">
-            <span>Step 3</span>
-            <div>
-              <p>Auto-build after generation</p>
-              <h2>Turn the final brief into the delivery handoff</h2>
+          <div className="page-titlebar page-titlebar-handoff" id="project-brain">
+            <div className="page-title-copy">
+              <span className="page-number">03</span>
+              <div>
+                <p>Team continuity</p>
+                <h1>Turn the approved brief into action</h1>
+                <span>Capture meeting outcomes, generate role-aware follow-through, and give every team member the same project context.</span>
+              </div>
+            </div>
+            <div className="page-title-status">
+              <small>Handoff state</small>
+              <strong>{handoffReady ? "Ready for the team" : promoted ? "Build in progress" : "Waiting for approved brief"}</strong>
             </div>
           </div>
-
 
           <div id="project-handoff-section" className={cx("handoff-ready-card", handoffReady && "handoff-ready-card-done")}>
             <div>
@@ -3124,14 +2890,7 @@ const industryFocus = useMemo(() => {
                   Download DOCX
                 </a>
               ) : null}
-              <button
-                className="handoff-ready-action"
-                type="button"
-                disabled={!generatedBrief?.metadata?.docxArtifactKey}
-                onClick={copyDocxPath}
-              >
-                Copy S3 path
-              </button>
+
               <button
                 className="handoff-ready-action"
                 type="button"
@@ -3147,12 +2906,12 @@ const industryFocus = useMemo(() => {
             <div className="grid gap-0 2xl:grid-cols-[380px_1fr]">
               <div className="border-b border-white/10 p-5 2xl:border-b-0 2xl:border-r">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7dd3fc]">
-                  Loop 2 output
+                  Handoff workspace
                 </p>
                 <h2 className="mt-1 text-xl font-black">Team handoff</h2>
                 <p className="mt-3 text-sm leading-6 text-white/70">
                   Once generated, the final brief becomes an auto-built handoff
-                  model for people who need to implement, manage, sell, or
+                  workspace for people who need to implement, manage, sell, or
                   explain the work.
                 </p>
 

@@ -31,21 +31,23 @@ async function fetchWorker(path, init) {
 test("server-renders the PilarPrep console", async () => {
   const response = await render();
   assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+  assert.ok((response.headers.get("content-type") ?? "").startsWith("text/html"));
 
   const html = await response.text();
   assert.match(html, /PilarPrep/);
   assert.match(html, /PilarPrep workspace/);
-  assert.match(html, /1\. Context/);
-  assert.match(html, /2\. Brief/);
-  assert.match(html, /3\. Handoff/);
-  assert.match(html, /4\. Demo/);
-  assert.match(html, /Pick a scenario or enter real meeting context/);
+  assert.match(html, />Context</);
+  assert.match(html, />Brief</);
+  assert.match(html, />Handoff</);
+  assert.match(html, />Demo</);
+  assert.match(html, /Build the meeting context/);
   assert.match(html, /Client workspace/);
-  assert.match(html, /Open handoff/);
-  assert.match(html, /Generate AI brief \+ handoff|Generate brief \+ handoff/);
-  assert.match(html, /Current stage/);
+  assert.match(html, /Generate brief/);
+  assert.match(html, /Context in progress/);
   assert.match(html, /Risk-sensitive modernization/);
+  assert.match(html, /Generated packet/);
+  assert.match(html, /Saved/);
+  assert.match(html, /Architecture/);
   assert.doesNotMatch(html, /Ask Project Brain|Ask Project model|Promote to Project|Lifecycle progress|Quality gate|Pillar heatmap|Run Presenter Guide|Demo state|PilarPrep demo console/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/i);
 });
@@ -57,25 +59,25 @@ test("removes the starter preview shell", async () => {
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /Team handoff|Open handoff/);
-  assert.match(page, /Generate handoff/);
-  assert.match(page, /Generate brief \+ handoff/);
-  assert.match(page, /Copy packet/);
-  assert.match(page, /Low-cost demo guardrails/);
-  assert.match(page, /under 1 USD\/day|under 1 USD per day/);
-  assert.match(page, /Amazon CloudFront|CloudFront, API Gateway/);
-  assert.match(page, /IAM-signed demo access|IAM signed/);
-  assert.match(page, /brief-surface-busy/);
-  assert.match(page, /const briefContent = isGenerating/);
-  assert.match(page, /setGeneratedBrief\(null\);/);
-  assert.match(page, /const displayedProjectAnswer = isGenerating/);
+  assert.match(page, /Team handoff|Handoff workspace/);
+  assert.ok(page.includes("Generate handoff"));
+  assert.ok(page.includes("Generate brief + handoff"));
+  assert.ok(page.includes("Copy packet"));
+  assert.ok(page.includes("Cost posture"));
+  assert.match(page, /under 1 USD/);
+  assert.ok(page.includes("Amazon CloudFront"));
+  assert.match(page, /Short-lived identity|IAM/);
+  assert.ok(page.includes("brief-surface-busy"));
+  assert.ok(page.includes("const briefContent = isGenerating"));
+  assert.ok(page.includes("setGeneratedBrief(null);"));
+  assert.ok(page.includes("const displayedProjectAnswer = isGenerating"));
   assert.doesNotMatch(page, /Ask Project Brain|Ask Project model|Promote to Project|Backend-ready map|AWS-native architecture|hero-progress|quality-bar|telemetry-bar|Run Presenter Guide|Demo state|PilarPrep demo console|AWS Product Console|AI-backed AWS workload/);
-  assert.match(layout, /PilarPrep \| AWS SA Briefing Copilot/);
+  assert.ok(layout.includes("PilarPrep | AWS SA Briefing Copilot"));
+  assert.ok(layout.includes("product.css"));
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.doesNotMatch(page, /SkeletonPreview|_sites-preview/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
 });
-
 test("generates a demo brief through the API contract", async () => {
   const response = await fetchWorker("/api/brief", {
     method: "POST",
