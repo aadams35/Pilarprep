@@ -2155,7 +2155,15 @@ const industryFocus = useMemo(() => {
               <h2 className="mt-1 text-xl font-black">Customer context</h2>
             </div>
 
-            <div className="space-y-4 p-5">
+            <div className="brief-input-grid p-5">
+              <div className="brief-input-column brief-input-basics">
+                <div className="brief-input-column-head">
+                  <span>01</span>
+                  <div>
+                    <strong>Customer</strong>
+                    <small>Who is in the meeting</small>
+                  </div>
+                </div>
               <label className="block">
                 <span className="field-label">Company name</span>
                 <input
@@ -2211,6 +2219,15 @@ const industryFocus = useMemo(() => {
                   ))}
                 </div>
               </div>
+              </div>
+              <div className="brief-input-column brief-input-priorities">
+                <div className="brief-input-column-head">
+                  <span>02</span>
+                  <div>
+                    <strong>Priorities</strong>
+                    <small>Drag to rank the discovery lens</small>
+                  </div>
+                </div>
 
               <div>
                 <span className="field-label">AWS pillar ranking</span>
@@ -2270,6 +2287,15 @@ const industryFocus = useMemo(() => {
                   onChange={(event) => setContext(event.target.value)}
                 />
               </label>
+              </div>
+              <div className="brief-input-column brief-input-stakeholders">
+                <div className="brief-input-column-head">
+                  <span>03</span>
+                  <div>
+                    <strong>Stakeholders</strong>
+                    <small>Approved decision-maker context</small>
+                  </div>
+                </div>
 
               <div className="decision-context-panel">
                 <div className="decision-context-head">
@@ -2348,6 +2374,7 @@ const industryFocus = useMemo(() => {
                     </div>
                   ))}
                 </div>
+              </div>
               </div>
 
               <div className="action-row">

@@ -983,3 +983,112 @@ textarea:focus-visible {
   background-repeat: no-repeat;
   background-size: 26px 26px;
 }
+/* Wide workbench: keep the core workflow in the first viewport. */
+@media (min-width: 1101px) {
+  .content-shell,
+  .linear-workflow {
+    width: min(100%, 1560px);
+    padding: 1rem 1.5rem 1.5rem;
+  }
+
+  .page-titlebar {
+    min-height: 82px;
+    padding: 0.1rem 0 0.8rem;
+  }
+
+  .page-title-copy h1,
+  .library-titlebar h1 { font-size: 1.55rem; }
+
+  .page-title-copy > div > span,
+  .library-titlebar > div > span {
+    margin-top: 0.22rem;
+    line-height: 1.4;
+  }
+
+  .packet-glance { margin: 0.75rem 0; }
+
+  .setup-grid {
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .setup-grid > section:first-child {
+    top: 132px;
+    align-self: start;
+  }
+
+  .setup-grid > section > div:last-child { padding: 0.8rem !important; }
+
+  .brief-input-grid {
+    display: grid;
+    grid-template-columns: minmax(250px, 0.78fr) minmax(265px, 0.72fr) minmax(330px, 1fr);
+    align-items: start;
+    gap: 0;
+  }
+
+  .brief-input-column {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 0.8rem;
+    padding: 0 1rem;
+  }
+
+  .brief-input-column:first-child { padding-left: 0; }
+  .brief-input-column:last-of-type { padding-right: 0; }
+  .brief-input-column + .brief-input-column { border-left: 1px solid var(--pp-line); }
+
+  .brief-input-column-head {
+    display: flex;
+    min-height: 40px;
+    align-items: center;
+    gap: 0.55rem;
+    border-bottom: 1px solid var(--pp-line);
+    padding-bottom: 0.55rem;
+  }
+
+  .brief-input-column-head > span {
+    display: grid;
+    width: 27px;
+    height: 27px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 6px;
+    background: var(--pp-ink);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 900;
+  }
+
+  .brief-input-column-head strong,
+  .brief-input-column-head small { display: block; }
+  .brief-input-column-head strong { font-size: 0.8rem; font-weight: 850; }
+  .brief-input-column-head small { margin-top: 0.08rem; color: var(--pp-muted); font-size: 0.64rem; }
+  .brief-input-grid .field { min-height: 38px; padding: 0.55rem 0.65rem; font-size: 0.78rem; }
+  .brief-input-grid textarea.field { min-height: 98px; }
+  .brief-input-grid .decision-context-panel { margin: 0; border: 0; background: transparent; padding: 0; }
+  .brief-input-grid .decision-context-head h3,
+  .brief-input-grid .decision-context-head > div > .field-label { display: none; }
+  .brief-input-grid .decision-context-note { margin: 0; }
+  .brief-input-grid .decision-maker-list { margin-top: 0.6rem; }
+  .brief-input-grid .decision-maker-card { padding: 0.65rem; }
+
+  .brief-input-grid .action-row {
+    grid-column: 1 / -1;
+    margin: 0.2rem -0.8rem -0.8rem;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .brief-input-grid .pillar-ranking-list { gap: 0.32rem; }
+  .brief-input-grid .pillar-rank-card { min-height: 41px; padding: 0.3rem 0.42rem; }
+  .brief-input-grid .pillar-rank-number { width: 1.5rem; height: 1.5rem; }
+  .brief-input-grid .pillar-rank-promote { min-height: 25px; padding: 0 0.4rem; font-size: 0.62rem; }
+  .inline-workflow { margin: 0.7rem 0; }
+  .brief-surface { min-height: 465px; max-height: calc(100vh - 275px); overflow: auto; }
+}
+
+@media (max-width: 1100px) {
+  .brief-input-grid,
+  .brief-input-column { display: grid; gap: 1rem; }
+  .brief-input-column-head { display: none; }
+}
