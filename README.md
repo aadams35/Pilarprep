@@ -9,8 +9,7 @@ The app has two loops:
 
 Live demos:
 
-- AWS CloudFront static frontend: https://d2e0btay0ynyf.cloudfront.net
-- OpenAI Sites demo: https://pillarprep-console.adamsaustin35.chatgpt.site
+- AWS CloudFront static frontend: pilarprep.app
 
 ## Current Shape
 
