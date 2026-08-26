@@ -481,6 +481,22 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:UpdateItem
                 Resource: !GetAtt ProjectStateTable.Arn
+        - !If
+          - UseDataKmsKey
+          - PolicyName: !Sub "${ResourcePrefix}-data-key-access"
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Sid: UsePilarPrepDataEncryptionKey
+                  Effect: Allow
+                  Action:
+                    - kms:Decrypt
+                    - kms:DescribeKey
+                    - kms:Encrypt
+                    - kms:GenerateDataKey*
+                    - kms:ReEncrypt*
+                  Resource: !GetAtt DataEncryptionKey.Arn
+          - !Ref "AWS::NoValue"
         - PolicyName: !Sub "${ResourcePrefix}-invoke-brief-worker"
           PolicyDocument:
             Version: "2012-10-17"
@@ -601,6 +617,22 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:UpdateItem
                 Resource: !GetAtt ProjectStateTable.Arn
+        - !If
+          - UseDataKmsKey
+          - PolicyName: !Sub "${ResourcePrefix}-worker-data-key-access"
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Sid: UsePilarPrepDataEncryptionKey
+                  Effect: Allow
+                  Action:
+                    - kms:Decrypt
+                    - kms:DescribeKey
+                    - kms:Encrypt
+                    - kms:GenerateDataKey*
+                    - kms:ReEncrypt*
+                  Resource: !GetAtt DataEncryptionKey.Arn
+          - !Ref "AWS::NoValue"
   BriefFunction:
     Type: AWS::Serverless::Function
     DependsOn:
