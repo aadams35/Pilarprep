@@ -1756,6 +1756,66 @@ class WorkerTests(unittest.TestCase):
 
         self.assertEqual(generated, [])
 
+    def test_refinement_uses_server_draft_before_screening(self):
+        authoritative = {"businessCase": {"scenario": "Trusted server draft"}}
+        generated = {
+            "provider": "bedrock",
+            "metadata": {"packetVersion": 2, "fallbackUsed": False},
+        }
+        model_payloads = []
+        screened_inputs = []
+
+        def screen(value, *, source, **_kwargs):
+            if source == "INPUT":
+                screened_inputs.append(json.loads(json.dumps(value)))
+            return value, {"source": source, "policyResult": "passed"}
+
+        brief_module = types.SimpleNamespace(
+            _validate_brief_payload=lambda _payload: None,
+            _resolve_model_id=lambda _payload: "us.amazon.nova-pro-v1:0",
+            _generate_brief=lambda payload: (
+                model_payloads.append(payload) or generated
+            ),
+        )
+        document = {
+            "action": "brief.refine",
+            "inputVersion": "input-0001",
+            "input": {
+                "company": "Custom Customer",
+                "baseBriefVersion": 1,
+                "refinementTarget": "businessCase",
+                "feedbackNotes": "Emphasize the approved outcome.",
+                "previousBrief": {
+                    "businessCase": {"scenario": "Untrusted browser copy"}
+                },
+            },
+        }
+        with (
+            patch.object(worker, "_brief_module", return_value=brief_module),
+            patch.object(
+                worker,
+                "_brief_latest",
+                return_value={
+                    "packetVersion": 1,
+                    "draftArtifactKey": "scoped/draft/latest.json",
+                },
+            ),
+            patch.object(
+                worker,
+                "_current_draft_response",
+                return_value=authoritative,
+            ),
+            patch.object(worker, "_screen_ai_payload", side_effect=screen),
+            patch.object(worker, "_write_brief_draft", return_value=generated),
+        ):
+            result = worker._run_brief(
+                SCOPE, document, "job-authoritative-draft"
+            )
+
+        self.assertIs(result, generated)
+        self.assertNotIn("previousBrief", screened_inputs[0])
+        self.assertEqual(model_payloads[0]["previousBrief"], authoritative)
+
     def test_refinement_can_bootstrap_missing_guest_server_state(self):
         generated = {
             "provider": "bedrock",

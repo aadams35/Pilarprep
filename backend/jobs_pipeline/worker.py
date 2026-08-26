@@ -498,6 +498,37 @@ def _brief_latest_key(scope: Mapping[str, str]) -> dict[str, dict[str, str]]:
     }
 
 
+def _current_draft_response(
+    scope: Mapping[str, str], latest: Mapping[str, Any]
+) -> dict[str, Any]:
+    draft_key = str(latest.get("draftArtifactKey") or "")
+    expected_prefix = f"{project_artifact_prefix(scope)}/brief/draft/"
+    if not draft_key:
+        raise NonRetryableJobError(
+            "The current brief draft could not be loaded; generate the brief again."
+        )
+    if not draft_key.startswith(expected_prefix):
+        raise PermissionError("Draft brief is outside the authorized scope")
+    document = json.loads(
+        aws_client("s3")
+        .get_object(Bucket=ARTIFACT_BUCKET, Key=draft_key)["Body"]
+        .read()
+        .decode("utf-8")
+    )
+    if not isinstance(document, dict):
+        raise NonRetryableJobError("The current brief draft is invalid")
+    if int(document.get("packetVersion") or 0) != int(
+        latest.get("packetVersion") or 0
+    ):
+        raise NonRetryableJobError(
+            "The current brief draft version is inconsistent; reload the latest packet."
+        )
+    response = document.get("response")
+    if not isinstance(response, dict):
+        raise NonRetryableJobError("The current brief draft is invalid")
+    return response
+
+
 def _write_brief_draft(
     scope: Mapping[str, str],
     payload: Mapping[str, Any],
@@ -620,6 +651,21 @@ def _run_brief(
             "_pipelineManagedPersistence": True,
         }
     )
+    latest: dict[str, Any] = {}
+    authoritative_previous: dict[str, Any] | None = None
+    if action == "brief.refine":
+        latest = _brief_latest(scope)
+        current_version = latest.get("packetVersion")
+        base_version = payload.get("baseBriefVersion")
+        if current_version is not None and int(current_version) != int(
+            base_version
+        ):
+            raise NonRetryableJobError(
+                "The brief changed before refinement; reload the latest packet and apply feedback again."
+            )
+        if current_version is not None:
+            authoritative_previous = _current_draft_response(scope, latest)
+            payload.pop("previousBrief", None)
     screened_payload, input_safety = _screen_ai_payload(
         payload,
         source="INPUT",
@@ -629,18 +675,13 @@ def _run_brief(
     if not isinstance(screened_payload, Mapping):
         raise NonRetryableJobError("The normalized brief input is invalid")
     payload = dict(screened_payload)
+    if authoritative_previous is not None:
+        payload["previousBrief"] = authoritative_previous
     brief_app = _brief_module()
     validation_error = brief_app._validate_brief_payload(payload)
     if validation_error:
         raise NonRetryableJobError(validation_error)
-    if action == "brief.refine":
-        latest = _brief_latest(scope)
-        current_version = latest.get("packetVersion")
-        base_version = payload.get("baseBriefVersion")
-        if current_version is not None and int(current_version) != int(base_version):
-            raise NonRetryableJobError(
-                "The brief changed before refinement; reload the latest packet and apply feedback again."
-            )
+
     brief_app._resolve_model_id(payload)
     try:
         generated = brief_app._generate_brief(payload)
