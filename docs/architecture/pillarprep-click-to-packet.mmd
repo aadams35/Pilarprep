@@ -1,0 +1,85 @@
+flowchart LR
+    subgraph client ["User Experience"]
+        browser["1 User browser: intake, model choice, validation, session, idempotency, processing status"]
+    end
+    subgraph gateway ["Public HTTPS and Identity Edge"]
+        webEdge["2 CloudFront + WAF: HTTPS redirect and Origin Access Control"]
+        cognito["3 Cognito Identity Pool: anonymous demo identity and temporary IAM credentials"]
+        jobsGateway["4 API Gateway HTTP API: AWS_IAM, SigV4 and restricted CORS"]
+    end
+    subgraph service ["Application and AI Services"]
+        frontendApp["React and Vite static application"]
+        jobsApi["5 Jobs API Lambda: HTTPS, scope, schema, quota and idempotency"]
+        worker["8 Unified AI Worker Lambda: Python 3.12, 1024 MB and 600 seconds"]
+        modelRouter["9 Model resolver: Nova Pro default, Nova Micro and Claude Sonnet 4.6"]
+        claudeRouter["10 Claude section router: Business Foundation, Audience Briefs and Meeting Readiness"]
+        validator["11 Validation and repair: JSON, completeness, questions, citations, contradictions and direction"]
+        packetWriter["12 Packet writer: draft JSON, DOCX, result and metadata"]
+        approval["14 Approval and refinement: target isolation, version check and approval state"]
+        agentRuntime["15 AgentCore Runtime: approved packet, role-aware reasoning and memory"]
+        agentTools["16 AgentCore governed tools: latest brief, project state, catch-up, save and handoff"]
+        meeting["Meeting intelligence: Transcribe and reviewed facts from synthetic audio"]
+        reliability["Reliability controls: lease, conditional writes, idempotency and prior-packet preservation"]
+    end
+    subgraph datastore ["Private Data and State"]
+        frontendStore["Private frontend S3: public access blocked"]
+        artifactStore["6 Private artifact S3: complete input, latest JSON and DOCX, SSE-S3 and versioning"]
+        projectTable["7 DynamoDB: jobs, idempotency, lease, BRIEF#LATEST, HANDOFF#LATEST and PROJECT#STATE"]
+        approvedPacket["13 Approved packet: authoritative server-side JSON and DOCX"]
+        agentMemory["AgentCore Memory: scoped session context"]
+        knowledgeBase["Bedrock Knowledge Base + S3 Vectors: approved Blue Mesa evidence"]
+        handoffStore["17 Latest handoff JSON and DOCX"]
+    end
+    subgraph external ["Managed AI and Operational Controls"]
+        bedrock["Amazon Bedrock: Nova Pro, Nova Micro and Claude Sonnet 4.6 with Guardrail 4n4bcsibf83u version 2"]
+        observability["CloudWatch: logs, traces, latency, tokens, cost, queue age and alarms"]
+        riskAndRoadmap["Verified gap: visibility 3600s versus worker 600s and lease 660s; recommended login, tighter retry timing, custom API domain and KMS"]
+    end
+    subgraph async ["Durable Asynchronous Processing"]
+        jobQueue["SQS Standard queue: pointer only, SSE-SQS, batch 1 and concurrency 2"]
+        jobDlq["DLQ: maximum receive 3 and retention 14 days"]
+    end
+
+    browser -->|"1 HTTPS application"| webEdge
+    browser -->|"2 GetId and temporary credentials"| cognito
+    browser -->|"3 SigV4 jobs and polling"| jobsGateway
+    webEdge -->|"Serves application"| frontendApp
+    frontendApp -->|"Static build through OAC"| frontendStore
+    cognito -->|"Temporary role authorizes"| jobsApi
+    jobsGateway -->|"4 Invoke IAM route"| jobsApi
+    jobsApi -->|"5 Store complete input only"| artifactStore
+    jobsApi -->|"6 Transaction job and idempotency"| projectTable
+    jobsApi -.->|"7 Enqueue S3 pointer"| jobQueue
+    jobQueue -.->|"8 Deliver batch of one"| worker
+    worker -->|"Claim and lease"| projectTable
+    worker -->|"Load authoritative input"| artifactStore
+    worker -->|"9 Resolve allowed model"| modelRouter
+    modelRouter -->|"Claude generation"| claudeRouter
+    modelRouter -.->|"Nova guarded inference"| bedrock
+    claudeRouter -.->|"Three guarded section calls"| bedrock
+    claudeRouter -->|"Merge routed sections"| validator
+    modelRouter -->|"Nova packet"| validator
+    modelRouter <---|"Focused repair"| validator
+    validator -->|"12 Valid result"| packetWriter
+    packetWriter -->|"Write latest draft and result"| artifactStore
+    packetWriter -->|"Complete job and latest pointer"| projectTable
+    packetWriter -->|"13 Present packet for review"| approval
+    approval -->|"Approved source of truth"| approvedPacket
+    modelRouter <---|"Refine one complete target"| approval
+    approval -->|"Version and approval state"| projectTable
+    agentRuntime -->|"Read approved context"| approvedPacket
+    worker -->|"Handoff and catch-up"| agentRuntime
+    agentRuntime -->|"15 Governed operations"| agentTools
+    agentRuntime -->|"Read and write memory"| agentMemory
+    agentTools -->|"Read and optimistic update"| projectTable
+    agentTools -->|"Retrieve approved evidence"| knowledgeBase
+    agentTools -->|"16 Persist handoff"| handoffStore
+    worker -->|"Meeting process"| meeting
+    meeting -->|"Reviewed facts and evidence"| knowledgeBase
+    worker -.->|"Retryable failure"| jobQueue
+    worker -.->|"Third failed receive"| jobDlq
+    jobsApi -.->|"Authorization and job metrics"| observability
+    worker -.->|"Trace, latency, tokens and validation"| observability
+    agentRuntime -.->|"Runtime and tool metrics"| observability
+    worker -->|"Duplicate and lease controls"| reliability
+    reliability -.->|"Gap and production roadmap"| riskAndRoadmap

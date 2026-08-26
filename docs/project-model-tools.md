@@ -1,27 +1,19 @@
-# Project Model Tools
+# AgentCore Project Tools
 
-The Project model should not only answer questions. In Phase 2, it should also produce project artifacts that help the team move.
+PilarPrep's follow-on loop uses five narrowly scoped tools exposed through an IAM-authenticated AgentCore Gateway. Implementations live in backend/agentcore/tools/app.py and contracts are declared in backend/agentcore/template.yaml.
 
-The reference tool functions live in:
+## Tool set
 
-```text
-backend/bedrock_lambda/project_tools.py
-```
+- get_latest_brief reads the authorized project's latest approved brief.
+- get_project_state reads decisions, risks, actions, owners, milestones, and open questions from DynamoDB.
+- save_project_update performs a confirmed, schema-validated, idempotent, optimistic-concurrency update.
+- create_handoff_packet replaces the latest JSON and DOCX handoff and returns a short-lived download URL.
+- generate_catchup organizes approved brief and project-state evidence for Sales, Executive, PM, Engineer, or New member audiences.
 
-## Tool Set
+## Trust boundary
 
-- `build_project_record`: creates a structured project summary from request and generated brief output.
-- `build_two_week_plan`: produces the first implementation sprint.
-- `build_risk_register`: captures major delivery risks and mitigations.
-- `build_stakeholder_map`: turns approved decision-maker context into stakeholder signals and validation questions.
-- `build_follow_up_email`: drafts a concise customer follow-up.
+The Strands agent does not hold S3 or DynamoDB permissions. It calls Gateway over IAM-authenticated MCP. Gateway can invoke only the project tool Lambda, and the Lambda verifies a short-lived signed scope token before building any tenant/client/project key.
 
-## Strands Usage
+Material writes require confirmWrite=true and an idempotency key. DynamoDB project state is authoritative even when conversational Memory is present.
 
-The Strands reference agent in `backend/bedrock_lambda/strands_agent.py` imports these functions as tools. That lets Phase 2 become more than a Q&A bot: it can create repeatable artifacts for sales, executives, PMs, engineers, and new team members.
-
-The local demo provider also returns these artifacts in `projectArtifacts`, so the front end can show working Phase 2 output before the AWS sandbox is deployed.
-
-## Demo Talking Point
-
-Bedrock handles generation and grounding. Strands turns the approved project context into tool-using workflows.
+The older helpers in backend/bedrock_lambda/project_tools.py remain part of the Lambda fallback and deterministic local response path. They are not the AgentCore data-access boundary.

@@ -1,5 +1,10 @@
 # PilarPrep IAM Controls
 
+> **Historical guest-path note.** The hardened design adds Cognito User Pool
+> client workspaces, JWT authorization, identity-derived tenancy, quotas, and
+> edge origin verification. Use `security-and-tenancy.md` and
+> `authentication-flow.md` as the current control descriptions.
+
 PilarPrep uses explicit IAM controls for the AWS model demo instead of relying on broad generated permissions or a browser API key.
 
 ## Public Demo Auth Boundary

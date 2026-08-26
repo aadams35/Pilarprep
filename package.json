@@ -1,7 +1,9 @@
 {
-  "name": "pillarprep-frontend",
+  "name": "pilarprep",
   "version": "0.1.0",
   "private": true,
+  "description": "AWS-native GenAI customer briefing, meeting intelligence, and project handoff workspace",
+  "repository": "https://github.com/aadams35/Pilarprep",
   "engines": {
     "node": ">=22.13.0"
   },
@@ -9,13 +11,20 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs",
     "eval:briefs": "npm run build && node evals/brief-quality.mjs",
     "lambda:test": "python -m unittest discover backend/bedrock_lambda/tests",
-    "verify:demo": "npm test && npm run eval:briefs && npm run lambda:test",
+    "agentcore:test": "python -m unittest discover backend/agentcore/tests",
+    "pipeline:test": "python -m unittest discover backend/jobs_pipeline/tests",
+    "test:e2e": "playwright test",
+    "agentcore:demo": "python backend/agentcore/local_demo.py",
+    "verify:demo": "npm test && npm run eval:briefs && npm run lambda:test && npm run agentcore:test && npm run pipeline:test && npm run test:e2e",
     "smoke:aws": "node scripts/smoke-aws-live.mjs",
+    "smoke:agentcore": "node scripts/smoke-agentcore-live.mjs",
+    "smoke:pipeline": "node scripts/smoke-jobs-pipeline-live.mjs",
+    "smoke:meeting": "node scripts/smoke-meeting-live.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate",
+    "db:generate": "drizzle-kit generate --config frontend/drizzle.config.ts",
     "build:aws-frontend": "vite build --config vite.static.config.ts --mode aws-static"
   },
   "dependencies": {
@@ -24,12 +33,13 @@
     "@smithy/protocol-http": "^5.5.16",
     "@smithy/signature-v4": "^5.6.12",
     "drizzle-orm": "0.45.2",
-    "next": "16.2.6",
+    "next": "16.3.3",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",

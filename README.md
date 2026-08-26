@@ -1,210 +1,160 @@
 # PilarPrep
 
-PilarPrep is an AWS-focused SA briefing generator for hackathon demos.
+[![CI](https://github.com/aadams35/Pilarprep/actions/workflows/ci.yml/badge.svg)](https://github.com/aadams35/Pilarprep/actions/workflows/ci.yml)
 
-The app has two loops:
+PilarPrep is an AWS-native GenAI workspace that turns scattered customer context into an actionable meeting brief, a role-aware pre-call handoff, and governed follow-on project context.
 
-1. Pre-brief refinement: generate, review, refine, and approve a customer-ready SA brief.
-2. Follow-on project model: automatically turn the final brief, decision-maker context, and meeting notes into a Project model for sales, executives, PMs, engineers, and new project members.
+[Live demo](https://pilarprep.app) | [Deployment guide](DEPLOYMENT.md) | [Architecture](ARCHITECTURE.md) | [Security](SECURITY.md)
 
-Live demos:
+> The public demo uses synthetic customer scenarios. Do not upload customer recordings, personal data, secrets, or confidential material.
 
-- AWS CloudFront static frontend: pilarprep.app
+## Why PilarPrep
 
-## Current Shape
+Sales and Solutions Architects often enter customer meetings with context split across notes, stakeholder profiles, technical assumptions, and business objectives. That creates duplicated preparation, inconsistent discovery, and weak handoffs after the call.
 
-- Frontend: React, Next-compatible Vinext app plus a static Vite build for AWS hosting
-- Hosted demo: private S3 static assets behind CloudFront
-- AWS auth: API Gateway IAM auth with short-lived Cognito Identity demo credentials, no API key in the browser
-- Backend: API Gateway HTTP API, Lambda, Amazon Bedrock, Bedrock Guardrails, S3 artifacts, DynamoDB project state
-- Demo provider: deterministic local generator in `lib/pillarprep/generator.ts`
-- Decision-maker context: manual/customer-approved profile notes, not automated LinkedIn scraping
-- Working Project model loop: role-based follow-on answers plus generated handoff artifacts
-- Local workspace persistence: browser saves the current demo workspace until reset
-- Prompt contract: `docs/prompt-contract.md`
-- Architecture notes: `docs/aws-infrastructure-design.md`
-- Demo architecture slide: `docs/pilarprep-architecture-slide.pptx`
-- AWS Lambda demo runbook: `docs/aws-lambda-demo-runbook.md`
-- Demo script: `docs/demo-script.md`
-- Demo-day checklist: `docs/demo-day-readiness-checklist.md`
-- Judge walkthrough: `docs/judge-walkthrough.md`
-- Presentation talk track: `docs/presentation-talk-track.md`
-- Project model tools: `docs/project-model-tools.md`
-- Brief quality eval: `npm run eval:briefs`
+PilarPrep creates one governed workflow:
 
-## Why Bedrock First
+1. Capture customer, meeting, stakeholder, company-value, and AWS priority context.
+2. Generate business, technical, executive, stakeholder, game-plan, and objection briefs.
+3. Refine one selected brief without changing unrelated sections.
+4. Approve the packet and prepare a role-aware pre-call handoff.
+5. Upload a synthetic meeting recording, transcribe it, and compare it with the approved packet.
+6. Require human review before meeting-derived changes become project truth.
+7. Produce a follow-on handoff and catch-up view for Sales, SAs, PMs, executives, delivery teams, and new project members.
 
-Amazon Bedrock is the core v1 choice because PilarPrep needs managed generation, role-aware refinement, guardrails, and a Knowledge Bases path for the Project model. It avoids custom model hosting while keeping the architecture AWS-native. The demo default is Amazon Nova Micro through Bedrock so there is no always-on model server cost.
+## Architecture
 
-Recommended production path:
+![PilarPrep AWS architecture](docs/PilarPrep-AWS-Architecture.png)
+
+The application is serverless and event-driven. A private S3 origin serves the React application through CloudFront. Browser requests use Cognito credentials and AWS Signature Version 4. API Gateway accepts scoped jobs, SQS buffers work, and a unified Lambda worker routes generation to Amazon Bedrock or governed handoff and catch-up actions to AgentCore. DynamoDB stores state and version locks; S3 stores approved artifacts and meeting evidence.
+
+### AWS services
+
+| Layer | AWS services | Responsibility |
+| --- | --- | --- |
+| Web | CloudFront, private S3, WAF | HTTPS delivery, origin protection, caching, and rate controls |
+| Identity | Cognito, IAM | Temporary guest credentials, authenticated workspaces, and least-privilege API access |
+| API and jobs | API Gateway, Lambda, SQS, DLQ | Validation, asynchronous processing, retries, and job status |
+| GenAI | Amazon Bedrock, Guardrails, AgentCore, Strands | Brief generation, governed tools, memory, handoff, and catch-up |
+| Retrieval | Bedrock Knowledge Bases, S3 Vectors | Grounded Blue Mesa evidence retrieval |
+| Data | DynamoDB, private S3 | Project state, idempotency, approval metadata, JSON, DOCX, and audio evidence |
+| Operations | CloudWatch, X-Ray, SNS, AWS Budgets | Logs, metrics, traces, alerts, and cost visibility |
+
+## Key capabilities
+
+- Customer-specific business, technical, and executive briefing
+- Ranked AWS Well-Architected priorities
+- Decision-maker and stakeholder influence profiles
+- Isolated per-tab refinement with contradiction checks
+- Bedrock model routing between Nova Pro, Nova Micro, and Claude Sonnet
+- Guardrailed prompts and validated structured responses
+- SQS-backed asynchronous processing with idempotency and a DLQ
+- AgentCore and Strands handoff and catch-up workflows
+- Agentic RAG grounded in approved synthetic evidence
+- Human-reviewed meeting intelligence using Amazon Transcribe
+- Latest packet retrieval plus versioned approved JSON and DOCX artifacts
+- IAM-scoped guest demo and Cognito user-pool workspace paths
+
+## Repository structure
 
 ```text
-React app
-  -> CloudFront + S3
-  -> Cognito Identity demo role
-  -> API Gateway IAM auth
-  -> Lambda
-  -> Amazon Bedrock
-  -> S3 approved brief artifacts
-  -> DynamoDB project state
-  -> Bedrock Knowledge Bases
-  -> Project model answers
+PilarPrep/
+|-- frontend/                 # React/Vite application and browser AWS clients
+|   |-- app/                  # Pages, workflow UI, and API adapter
+|   |-- lib/pillarprep/       # Domain types, signing, polling, and refinement logic
+|   |-- public/               # Static product and AWS service assets
+|   |-- static/               # AWS static-build entry point
+|   `-- README.md             # Frontend development notes
+|-- backend/                  # Python serverless and AgentCore services
+|   |-- generation/           # Shared brief generation boundary
+|   |-- jobs_pipeline/        # Jobs API, SQS worker, meeting and evidence flows
+|   |-- agentcore/            # Runtime, memory, gateway tools, and contracts
+|   |-- bedrock_lambda/       # Core resources and retained compatibility path
+|   `-- frontend_static/      # CloudFront and private S3 infrastructure
+|-- infrastructure/          # Stack inventory and deployment order
+|-- data/                     # Synthetic scenarios, RAG evidence, and eval rubrics
+|-- demo-assets/              # Synthetic audio used by the bounded demo
+|-- scripts/                  # Deployment, smoke-test, and data-preparation commands
+|-- tests/                    # Frontend unit and browser workflow tests
+|-- evals/                    # Brief quality evaluation harness
+|-- docs/                     # Architecture, security, operations, and presentation material
+|-- DEPLOYMENT.md             # Concise deployment entry point
+|-- ARCHITECTURE.md           # System design summary
+|-- SECURITY.md               # Security policy and demo boundaries
+`-- package.json              # Stable root commands for development and verification
 ```
 
-## Where Strands Fits
+The root commands remain stable even though the browser source now lives under `frontend/`.
 
-Strands is the optional agent layer for Phase 2. Use it when the Project model needs tool use, multi-step project workflows, role-aware implementation planning, or retrieval-backed follow-up actions.
+## Quick start
 
-Recommended split:
+### Prerequisites
 
-- Bedrock: brief generation, refinement, structured outputs, guardrails
-- Strands: follow-on agent orchestration for the Project model
-- SageMaker: out of scope for v1 unless the team decides to train, fine-tune, or host custom models
+- Node.js 22 or newer
+- Python 3.12 or newer
+- AWS CLI v2 and AWS SAM CLI for AWS deployment
+- An AWS profile that assumes a least-privilege deployment role
 
-## API Contract
+### Local application
 
-`POST /api/brief` locally or `POST /brief` through API Gateway.
-
-```json
-{
-  "mode": "prebrief",
-  "company": "Apex Mutual",
-  "industry": "Financial Services",
-  "meetingType": "Executive Briefing",
-  "companySize": "Enterprise",
-  "pillars": ["Security", "Reliability"],
-  "context": "Modernizing a customer portal with audit and migration risk.",
-  "decisionMakers": [
-    {
-      "name": "Lena Ortiz",
-      "title": "CIO",
-      "source": "Customer-approved profile notes",
-      "context": "Prior notes emphasize board visibility, customer trust, modernization governance, and avoiding a risky big-bang migration."
-    }
-  ],
-  "meetingNotes": "",
-  "feedback": ["Reduce AWS jargon"],
-  "role": "PM",
-  "prompt": "Create the first two-week plan."
-}
+```powershell
+npm ci
+npm run dev -- --host 127.0.0.1 --port 3002
 ```
 
-Response:
+Open `http://127.0.0.1:3002`.
 
-```json
-{
-  "provider": "bedrock",
-  "generatedAt": "2026-07-22T00:00:00.000Z",
-  "technical": [],
-  "executive": [],
-  "stakeholders": [],
-  "gameplan": [],
-  "objections": [],
-  "projectAnswer": "",
-  "projectArtifacts": {
-    "twoWeekPlan": [],
-    "riskRegister": [],
-    "stakeholderMap": [],
-    "followUpEmail": {
-      "subject": "",
-      "body": ""
-    }
-  },
-  "citations": [],
-  "metadata": {
-    "modelId": "us.amazon.nova-micro-v1:0",
-    "artifactKey": "clients/apex-mutual/brief/latest.json",
-    "docxArtifactKey": "clients/apex-mutual/brief/latest.docx",
-    "artifactRetention": "latest-only",
-    "projectId": "...",
-    "clientId": "...",
-    "stateKey": "..."
-  }
-}
+The local application can render deterministic development output. Hosted failures do not silently return demo content.
+
+## Verification
+
+```powershell
+npm run lint
+npm test
+npm run pipeline:test
+npm run agentcore:test
+npm run lambda:test
+npm run test:e2e
+npm run eval:briefs
 ```
 
-## Model And Memory Storage
+Run the complete gate with:
 
-PilarPrep does not store or host the foundation model. Amazon Bedrock manages the Amazon Nova Micro model and PilarPrep invokes it on demand through Lambda.
+```powershell
+npm run verify:demo
+```
 
-What PilarPrep stores:
+## AWS deployment
 
-- Prompt contract and fallback rules: versioned in the Lambda code and GitHub repo.
-- Generated brief artifacts: one latest JSON packet and one latest DOCX packet per project in S3.
-- Project state index: projectId, sortKey, company, meeting type, provider, and createdAt in DynamoDB.
-- Browser workspace: local draft state only, stored in the user's browser until reset.
+PilarPrep deploys as a small set of CloudFormation stacks so each ownership boundary can be changed and rolled back independently.
 
-Future Project model memory should use Bedrock Knowledge Bases over approved S3 artifacts and meeting notes. That is retrieval over project documents, not fine-tuning or custom model training.
-
-## Cost Posture
-
-The demo uses Amazon Bedrock on-demand inference with Amazon Nova Micro, so there is no always-on model endpoint. The backend stack also creates a daily AWS Budget guardrail, defaulting to `$1/day`. Normal hackathon demo usage should stay well under that as long as there are no automated refresh loops or public load tests.
-
-Avoid Provisioned Throughput, Nova Act, batch jobs, broad unauthenticated model access, or scheduled model calls until stronger quotas and alarms are added.
-
-## AWS Frontend
-
-The AWS-hosted frontend uses a static Vite build of the existing React UI. It is deployed to a private S3 bucket behind CloudFront. The browser can call the live model path without an API key by getting short-lived credentials from the Cognito Identity Pool demo role and SigV4-signing the API Gateway request.
-
-```bash
+```powershell
+.\scripts\deploy-aws-backend.ps1 -Region us-east-1
+.\scripts\deploy-jobs-pipeline.ps1 -Region us-east-1 -Profile pillarprep-deployer
+.\scripts\deploy-agentcore.ps1 -Region us-east-1 -Profile pillarprep-deployer
 .\scripts\deploy-aws-frontend.ps1 -Region us-east-1
 ```
 
-Current AWS frontend URL:
+Read [DEPLOYMENT.md](DEPLOYMENT.md) before deploying. Never deploy with AWS account root credentials.
 
-```text
-https://d2e0btay0ynyf.cloudfront.net
-```
+## Security model
 
-Static frontend infrastructure lives in `backend/frontend_static/template.yaml`. Resource naming and tagging standard: `docs/aws-resource-tags-and-names.md`.
+- Frontend S3 public access is blocked; CloudFront uses Origin Access Control.
+- Production traffic is HTTPS-only.
+- Browser API requests are IAM-authorized and signed with temporary credentials.
+- Server-side scope is derived from the caller, not trusted from browser tenant fields.
+- SQS messages contain routing and object pointers rather than full customer packets.
+- Private S3 stores artifacts and meeting audio with scoped access.
+- DynamoDB conditional writes protect versions, approvals, and idempotency.
+- Bedrock Guardrails and deterministic validation protect model inputs and outputs.
+- Meeting-derived changes require explicit human review.
 
-## AWS Backend
+See [SECURITY.md](SECURITY.md) and [docs/security-and-tenancy.md](docs/security-and-tenancy.md).
 
-The Lambda reference lives in `backend/bedrock_lambda/app.py`.
+## Documentation
 
-The CloudFormation/SAM-compatible template lives in `backend/bedrock_lambda/template.yaml`.
+Start with [docs/README.md](docs/README.md). It separates architecture, deployment, operations, security, GenAI design, and presentation material so new contributors do not have to search the entire repository.
 
-Deploy the backend first so the frontend deploy script can discover the API URL and Cognito Identity Pool ID:
+## Project status
 
-```bash
-.\scripts\deploy-aws-backend.ps1 -Region us-east-1 -AllowedOrigin https://d2e0btay0ynyf.cloudfront.net -PillarPrepApiKey "" -DailyBudgetLimitUsd 1
-```
-
-That script packages and deploys API Gateway, Lambda, Bedrock Guardrails, S3, DynamoDB, IAM controls, a Cognito Identity Pool demo role, a daily AWS Budget, CloudWatch alarms, and a CloudWatch dashboard. Full deployment steps are in `docs/aws-lambda-demo-runbook.md`, the IAM control summary is in `docs/aws-iam-controls.md`, and the current infrastructure map is in `docs/aws-infrastructure-design.md`.
-
-The backend stack outputs `BriefApiUrl`, `DemoIdentityPoolId`, `DashboardUrl`, `ArtifactBucketName`, and `ProjectStateTableName`. Live Bedrock responses include metadata with `artifactKey`, `docxArtifactKey`, `projectId`, and `stateKey` so the UI can show where the latest project packet was saved.
-
-For local no-key model testing, use these non-secret values:
-
-```bash
-PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
-PILLARPREP_BACKEND_AUTH_MODE=iam
-PILLARPREP_COGNITO_IDENTITY_POOL_ID=us-east-1:example
-VITE_PILLARPREP_STATIC_DEMO=true
-VITE_PILLARPREP_BACKEND_URL=https://example.execute-api.us-east-1.amazonaws.com/brief
-VITE_PILLARPREP_BACKEND_REGION=us-east-1
-VITE_PILLARPREP_COGNITO_IDENTITY_POOL_ID=us-east-1:example
-```
-
-For production, replace the public unauthenticated demo identity with real user auth, keep API Gateway IAM authorization, route users into authorized client workspaces, connect CloudWatch alarms to notifications, and tighten model quotas before broader sharing.
-
-Optional Strands reference:
-
-```text
-backend/bedrock_lambda/strands_agent.py
-```
-
-## Local Development
-
-```bash
-npm install
-npm run dev
-npm test
-npm run eval:briefs
-npm run lambda:test
-npm run smoke:aws
-```
-
-When the Cognito demo variables are present, AI model mode signs API Gateway requests with a limited IAM role. When backend settings are absent, the app falls back to the deterministic demo provider.
-
-The browser also stores the current workspace locally so the demo can survive refreshes. Use `Reset workspace` in the UI when you want to return to the default scenario.
+PilarPrep is a portfolio and demonstration project. The public environment is intentionally bounded, uses synthetic data, and is not a production system of record. Production recommendations are tracked in [docs/production-roadmap.md](docs/production-roadmap.md).

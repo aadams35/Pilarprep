@@ -1,32 +1,38 @@
 # Demo Day Readiness Checklist
 
-Use this before sharing the CloudFront URL or walking into the hackathon demo.
+Use this before publishing or presenting the AgentCore build.
 
-## Local Confidence
+## Local review gate
 
-- `npm run verify:demo` passes locally.
-- The app opens at `http://localhost:3002/` without layout overlap on the main flow.
-- `Generate brief + project model` works in fallback mode with no AWS credentials.
-- `Copy packet` copies a useful handoff summary after generation.
+- npm run verify:demo passes.
+- npm run lint passes.
+- Both CloudFormation templates validate.
+- npm run agentcore:demo prints a BlueMesa handoff followed by a new-member catch-up.
+- The cross-client router and tool tests pass.
+- git diff --check reports no whitespace errors.
+- No real customer, credential, LinkedIn, or private profile data is present.
 
-## AWS Confidence
+## AWS confidence
 
-- Backend stack is deployed in `us-east-1`.
-- Frontend stack is deployed to CloudFront and points at the latest backend outputs.
-- Bedrock model access is enabled for `us.amazon.nova-micro-v1:0`.
-- Unsigned API calls return `403 Forbidden`.
-- `npm run smoke:aws` passes.
-- Browser live mode returns `provider=bedrock` and includes `artifactKey`, `docxArtifactKey`, `projectId`, and `BRIEF#LATEST` metadata.
-- CloudWatch dashboard shows recent request and success metrics.
-- AWS Budget guardrail exists with the demo limit, defaulting to `1 USD/day`.
+- Bedrock access is enabled for Nova Pro and Nova Micro in us-east-1.
+- The brief stack is healthy before the separate AgentCore stack is deployed.
+- Unsigned calls to /brief and /agent are denied.
+- The public demo identity can select only BlueMesa Payments.
+- The S3 frontend and artifact buckets both block public access.
+- A live handoff returns provider=agentcore, a project version, trace ID, and latest DOCX URL.
+- A forced Runtime failure returns the existing Lambda fallback and preserves the approved brief.
+- CloudWatch shows sanitized router and tool events without brief text or credentials.
+- Budget and service alarms are visible.
 
-## Demo Flow
+## Demo flow
 
-- Start with `Apex Mutual` for the cleanest executive modernization story.
-- Use `Reduce AWS jargon` to show the refinement loop.
-- Use the Project model `PM` role to show implementation follow-through.
-- End on AWS value: managed model, no stored foundation model, IAM-secured API, Bedrock Guardrails, CloudWatch alarms, S3 artifacts, DynamoDB state, and Knowledge Bases/Strands as the Phase 2 expansion.
+- Use BlueMesa Payments.
+- Refine and approve one pre-brief.
+- Generate one confirmed AgentCore handoff with Nova Pro.
+- Generate a New member catch-up, then an Executive catch-up in the same project session.
+- Show the CloudWatch trace and explain the signed tenant/project boundary.
+- End with the two-loop architecture and fallback.
 
-## Fallback Plan
+## Fallback plan
 
-If Bedrock access or AWS networking misbehaves, switch to fallback mode and continue the same story. The deterministic provider still demonstrates the full product loop, including briefs, stakeholder context, project artifacts, and handoff packet copying.
+If AgentCore is unavailable, continue with the existing Lambda fallback. If AWS access is unavailable, run npm run agentcore:demo and use the same BlueMesa story. The rollback build command is documented in [AgentCore Deployment and Rollback](agentcore-deployment.md).

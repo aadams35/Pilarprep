@@ -1,134 +1,66 @@
 # PilarPrep AWS Infrastructure Design
 
-This is the current deployment target for the hackathon frontend and backend. The goal is a working AWS-native demo path first, then deeper production hardening.
+> **Historical pre-cutover design.** The active application uses one Jobs API,
+> one SQS queue, and one unified worker. Use
+> [Portfolio Architecture](portfolio-architecture.md) for the hardened target.
+> [Unified Jobs Architecture](unified-jobs-architecture.md) records the last
+> verified live baseline. Legacy APIs below are retained only for rollback and
+> are absent from the public frontend bundle.
 
-## Phase 1 AWS Stack
+This document summarizes the deployable stacks. The full request flow and security map are in [PilarPrep AgentCore Architecture](agentcore-architecture.md).
 
-```mermaid
-flowchart TD
-  USER[User Browser] --> CF[Amazon CloudFront]
-  CF --> S3FRONT[S3 Static Frontend Bucket]
-  S3FRONT --> UI[React PilarPrep Console]
-  UI --> COGNITO[Cognito Identity Pool]
-  COGNITO --> DEMOROLE[Limited Demo IAM Role]
-  UI -->|SigV4 signed request| API[API Gateway HTTP API IAM Auth]
-  DEMOROLE -->|execute-api:Invoke only| API
-  API --> LAMBDA[AWS Lambda Python Handler]
-  LAMBDA -->|Converse with guardrailConfig| BEDROCK[Amazon Bedrock Nova Micro]
-  LAMBDA --> SAFETY[Bedrock Guardrails]
-  SAFETY --> BEDROCK
-  BEDROCK --> LAMBDA
-  LAMBDA --> ARTIFACTS[S3 Brief Artifact Bucket]
-  LAMBDA --> STATE[DynamoDB Project State Table]
-  LAMBDA --> API
-  API --> UI
-  LAMBDA --> DASH[CloudWatch Logs Metrics Dashboard]
-  ALARMS[CloudWatch Alarms]
-  LAMBDA --> ALARMS
-  BUDGET[AWS Budget 1 USD Daily Guardrail] --> DASH
-```
+## Frontend stack
 
-## Current Frontend Mode
+- Private, encrypted, versioned S3 static-asset bucket
+- CloudFront distribution with HTTPS and Origin Access Control
+- S3 bucket policy allowing only the CloudFront distribution
+- Static React build configured with backend URLs at publish time
 
-The AWS-hosted frontend is deployed to S3 + CloudFront. It can run deterministic demo mode or live AI model mode. Live mode does not use an API key. The browser gets short-lived unauthenticated Cognito Identity credentials, assumes a limited demo IAM role, and SigV4-signs the API Gateway request.
+The S3 origin is not public. The CloudFront website is intentionally shareable for the hackathon.
 
-Current frontend URL:
+## Brief backend stack
 
-```text
-https://d2e0btay0ynyf.cloudfront.net
-```
+- API Gateway HTTP API with AWS IAM authorization on POST /brief
+- Cognito Identity Pool and a narrowly scoped public demo role
+- Python 3.12 request Lambda that validates, scopes, queues, and serves job status
+- Python 3.12 asynchronous packet worker with a separate least-privilege IAM role
+- DynamoDB job records with one-hour TTL and Cognito identity ownership checks
+- Amazon Bedrock Nova Pro or Nova Micro
+- Versioned Bedrock Guardrail
+- Private S3 latest brief JSON and DOCX
+- DynamoDB project-state and latest-record metadata
+- CloudWatch logs, metrics, alarms, and dashboard
+- Account-level daily AWS Budget warning
 
-## Request Flow With Models Enabled
+## AgentCore follow-on stack
 
-1. The user enters customer context, ranked Well-Architected pillar priorities, decision-maker notes, and meeting notes.
-2. The frontend gets short-lived demo credentials from Cognito Identity.
-3. The frontend signs `POST /brief` with SigV4.
-4. API Gateway checks IAM authorization and rejects unsigned requests.
-5. API Gateway invokes the Lambda handler.
-6. Lambda builds the Bedrock prompt contract and invokes the configured model.
-7. Lambda normalizes the model JSON and stores a latest-only JSON packet plus DOCX brief in S3.
-8. Lambda writes latest project state metadata to DynamoDB.
-9. The frontend receives technical brief, executive brief, stakeholder lens, game plan, objections, Project model answer, and Phase 2 artifacts.
+- API Gateway HTTP API with AWS IAM authorization on POST /agent
+- Router Lambda that derives identity, queues owner/session-bound jobs, and serves authenticated status polls
+- 180-second worker Lambda that signs project scope, invokes Runtime, and owns fallback
+- DynamoDB AgentCore job records with one-hour TTL and client/project/user/session isolation
+- AgentCore Runtime with the Strands project agent
+- AgentCore Memory with seven-day event expiry
+- IAM-authenticated AgentCore Gateway with five Lambda-backed tools
+- Tool Lambda with scoped S3, DynamoDB, Secrets Manager, logs, and X-Ray access
+- Separate IAM roles and resource policies for router, worker, Runtime, Gateway, and tools
+- CloudWatch dashboard and error alarms
 
-## Model And Storage Boundary
+The AgentCore stack reuses the existing private artifact bucket, DynamoDB table, Guardrail, demo role, and brief Lambda. It does not replace Loop 1.
 
-PilarPrep does not store a copy of the Bedrock foundation model. The configured model ID, currently `us.amazon.nova-micro-v1:0`, is passed to Bedrock at invocation time and AWS manages the model weights, serving layer, and model lifecycle.
+## Client and tenant model
 
-Stored by PilarPrep:
+For the public demo, Cognito issues short-lived credentials to a role that can invoke only the two PilarPrep API routes. The AgentCore router allows that identity to select only BlueMesa Payments.
 
-- Lambda code stores the prompt contract, schema instructions, structured fallback behavior, and the Bedrock guardrail configuration reference.
-- S3 stores the current generated brief as `latest.json` for app/project memory and `latest.docx` for human handoff. The Lambda deletes prior current objects in that client brief prefix before saving the latest pair.
-- DynamoDB stores the current project state record keyed by `projectId` and `BRIEF#LATEST`, with `clientId` included in metadata so follow-on work points at the newest approved brief packet.
-- The browser stores unsaved local workspace state for demo continuity.
+For a pilot, replace the public identity with Cognito User Pools or enterprise federation. Authenticated claims must identify the tenant and list authorized clients/projects. Users log into a client workspace; they do not log into a separate model.
 
-Future retrieval should add Bedrock Knowledge Bases over approved S3 artifacts. That creates searchable project memory without training, fine-tuning, or hosting a custom model.
+Every AgentCore data operation is partitioned by tenant, client, and project. DynamoDB is authoritative, S3 keeps only current artifacts, AgentCore Memory provides conversation continuity, and Bedrock performs inference without storing a per-customer model.
 
-## Deployed Resources
+## Deployment boundary
 
-The frontend stack deploys these resources:
+The stacks deploy independently:
 
-- `FrontendBucket`: private, encrypted, versioned S3 bucket for static React assets
-- `FrontendDistribution`: CloudFront distribution with HTTPS redirect and SPA fallback
-- `FrontendOriginAccessControl`: CloudFront OAC for private S3 access
-- `FrontendBucketPolicy`: grants read access only to the CloudFront distribution
+1. pillarprep-bedrock
+2. pillarprep-agentcore
+3. pillarprep-frontend
 
-The backend stack deploys these resources:
-
-- `BriefApi`: Amazon API Gateway HTTP API with IAM authorization on `POST /brief`
-- `DemoInvokeIdentityPool`: Cognito Identity Pool for public demo credentials
-- `DemoInvokeRole`: limited IAM role that can invoke only the brief route
-- `BriefFunction`: Python 3.12 AWS Lambda handler
-- `BriefSafetyGuardrail`: Bedrock Guardrail for harmful content and prompt-attack filtering
-- `BriefSafetyGuardrailVersion`: pinned guardrail version used by Lambda at invocation time
-- `BriefFunctionErrorAlarm`, `BriefFunctionThrottleAlarm`, `BriefFunctionDurationAlarm`: CloudWatch alarms for demo operations visibility
-- `BriefArtifactsBucket`: private, encrypted, versioned S3 bucket for generated brief artifacts
-- `ProjectStateTable`: DynamoDB table keyed by `projectId` and `sortKey`
-- `BriefFunctionRole`: explicit least-privilege Lambda role for logs, X-Ray, Bedrock invocation, S3 artifacts, and DynamoDB state
-- `DemoDailyBudget`: daily AWS Budget guardrail, default `$1/day`
-- `PillarPrepDashboard`: CloudWatch dashboard for requests, success, unauthorized requests, Lambda health, API Gateway, and recent logs
-
-## Resource Names And Tags
-
-The templates and deploy scripts use a shared tagging standard. Default tags include `Project=PilarPrep`, `Application=sa-briefing-generator`, `Environment=demo`, `Owner=austin-adams`, `CostCenter=hackathon`, `ManagedBy=cloudformation`, `Repository=aadams35/Pilarprep`, and `DataClassification=demo`.
-
-The `ResourcePrefix` parameter defaults to `pillarprep-demo` and drives safe display names such as `pillarprep-demo-brief-api`, `pillarprep-demo-brief-generator`, `pillarprep-demo-project-state`, `pillarprep-demo-demo-identities`, `pillarprep-demo-demo-api-invoke-role`, `pillarprep-demo-daily-demo-budget`, and `pillarprep-demo-cloudfront-web`.
-
-Full standard: `docs/aws-resource-tags-and-names.md`. IAM controls: `docs/aws-iam-controls.md`.
-
-## Client Login And Tenant Model
-
-Today the public hackathon demo uses an unauthenticated Cognito Identity Pool so anyone with the CloudFront URL can receive short-lived credentials that can invoke only `POST /brief`. That is useful for showing the demo without shipping an API key, but it is not the final client-login model.
-
-For a real customer or internal pilot, users should log in as themselves, then choose a client workspace they are authorized to access. The clean AWS path is Cognito User Pool for the hackathon/private pilot, or IAM Identity Center/SAML/OIDC for enterprise SSO. The login token should carry group or tenant claims such as `client:apex-mutual`, and Lambda should map those claims to allowed `clientId` values before reading or writing any project data.
-
-Once that is in place, every stored object and record is scoped by client. S3 keys become `clients/{clientId}/brief/latest.json` and `latest.docx`; DynamoDB partitioning can use `clientId#projectId` or separate tenant and project keys; the UI only shows client workspaces from the user's allowed list. The model is still Bedrock-managed, but each client can have its own prompt profile, approved artifacts, Knowledge Base, guardrail policy, and retrieval filters.
-
-Demo explanation: "You do not log into a model. You log into a client workspace. PilarPrep then loads that client's configuration, approved project memory, and safety policy before it calls Bedrock."
-## Current Demo Boundary
-
-Working now:
-
-- AWS CloudFront static frontend
-- Browser deterministic generator for no-model demos
-- CloudFront live model mode through Cognito Identity + API Gateway IAM auth
-- Local frontend demo on `http://localhost:3002/`
-- Local live route with Cognito/IAM when `.env.local` includes the demo identity pool
-- Local Lambda unit tests with mocked Bedrock
-- AWS CLI deployment script for S3 + CloudFront frontend hosting
-- AWS CLI deployment script for API Gateway, Lambda, S3, DynamoDB, Cognito Identity, IAM, AWS Budget, and CloudWatch dashboard
-
-Still to decide:
-
-- Whether to add a custom domain and ACM certificate
-- Whether to replace the public demo identity with Cognito User Pool, IAM Identity Center, or another real auth layer after the hackathon demo
-- Whether to add Bedrock Knowledge Bases and Strands for the full Project model follow-on loop
-
-## Later Hardening
-
-After the first demo works:
-
-- Wire CloudWatch alarms to SNS/email once the demo owner list is final
-- Replace the unauthenticated demo identity with real user auth before broader sharing
-- Add Bedrock Knowledge Bases for retrieval over approved project artifacts
-- Add Strands runtime for richer Project model tool orchestration
-- Add WAF rate-based rules or usage quotas if the public URL stays open
+This order preserves the existing brief path and makes AgentCore rollback a frontend configuration change plus deletion of only the isolated AgentCore stack. See [AgentCore Deployment and Rollback](agentcore-deployment.md).

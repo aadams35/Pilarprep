@@ -12,6 +12,11 @@
 
 # testing
 /coverage
+/test-results/
+
+# python
+__pycache__/
+*.py[cod]
 
 # next.js
 /.next/
@@ -42,3 +47,13 @@ next-env.d.ts
 /outputs/
 /work/
 /tsconfig.tsbuildinfo
+
+# local deployment bundle
+/pillarprep-live.tgz
+# generated review and build artifacts
+/artifacts/
+/frontend/.next/
+/frontend/.vinext/
+/frontend/out/
+/frontend/.wrangler/
+/frontend/tsconfig.tsbuildinfo

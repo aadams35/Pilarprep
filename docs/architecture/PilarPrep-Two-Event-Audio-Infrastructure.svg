@@ -1,0 +1,238 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2300" height="850" viewBox="0 0 2300 850" role="img" aria-labelledby="title desc">
+  <title id="title">PilarPrep secured AWS infrastructure flow</title>
+  <desc id="desc">PilarPrep frontend hosting, authentication, asynchronous jobs, malware-scanned meeting audio, mandatory transcript PII redaction, input and output safety gates, polling, retries, and private storage.</desc>
+  <defs>
+    <style>
+      text{font-family:Inter,"Segoe UI",Arial,sans-serif;fill:#17253a;letter-spacing:0}
+      .node{fill:#fff;stroke:#2788d3;stroke-width:2.2}
+      .compute{fill:#fffaf3;stroke:#ed8b19;stroke-width:2.2}
+      .ai{fill:#f4fff9;stroke:#22a76f;stroke-width:2.2}
+      .stage{fill:#f7fbff;stroke:#2788d3;stroke-width:2.2;stroke-dasharray:6 4}
+      .data{fill:#f7f4ff;stroke:#8b5cf6;stroke-width:2.2}
+      .artifact{fill:#f4fff9;stroke:#22b573;stroke-width:2.2}
+      .guardrail{fill:#ecfdf5;stroke:#17965f;stroke-width:1.8}
+      .security{fill:#fff5f5;stroke:#dc4b4b;stroke-width:2.2}
+      .securityFlow{fill:none;stroke:#dc4b4b;stroke-width:2.2;stroke-dasharray:7 6;marker-end:url(#arrowSecurity)}
+      .main{fill:none;stroke:#4d5968;stroke-width:2.4;marker-end:url(#arrow)}
+      .async{fill:none;stroke:#a87889;stroke-width:2.1;stroke-dasharray:7 6;marker-end:url(#arrowPink)}
+      .response{fill:none;stroke:#687386;stroke-width:2.1;stroke-dasharray:8 6;marker-end:url(#arrow)}
+      .state{fill:none;stroke:#7c3aed;stroke-width:2.3;stroke-dasharray:9 7;marker-end:url(#arrowPurple)}
+      .input{fill:none;stroke:#12a26d;stroke-width:2.3;stroke-dasharray:9 7;marker-end:url(#arrowGreen)}
+      .audio{fill:none;stroke:#b66a10;stroke-width:2.4;marker-end:url(#arrowOrange)}
+      .model{fill:none;stroke:#228b66;stroke-width:2.1;stroke-dasharray:5 5;marker-start:url(#arrowBi);marker-end:url(#arrowBi)}
+      .failure{fill:none;stroke:#bb7777;stroke-width:1.9;stroke-dasharray:6 6;marker-end:url(#arrowRed)}
+      .eventOneNode{fill:#eff6ff;stroke:#2563eb;stroke-width:2.2}
+      .eventTwoNode{fill:#ecfeff;stroke:#0f8a8a;stroke-width:2.2}
+      .eventOne{fill:none;stroke:#2563eb;stroke-width:2.5;marker-end:url(#arrowEventOne)}
+      .eventTwo{fill:none;stroke:#0f8a8a;stroke-width:2.5;marker-end:url(#arrowEventTwo)}
+      .label{font-size:13px;font-weight:700}
+      .small{font-size:11px;fill:#58677d}
+      .title{font-size:14px;font-weight:760}
+      .tiny{font-size:10px;fill:#58677d}
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8Z" fill="#4d5968"/></marker>
+    <marker id="arrowPink" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8Z" fill="#a87889"/></marker>
+    <marker id="arrowPurple" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8Z" fill="#7c3aed"/></marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8Z" fill="#12a26d"/></marker>
+    <marker id="arrowOrange" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8Z" fill="#b66a10"/></marker>
+    <marker id="arrowRed" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8Z" fill="#bb7777"/></marker>
+    <marker id="arrowBi" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto-start-reverse"><path d="M0 0L9 3.5L0 7Z" fill="#228b66"/></marker>
+    <marker id="arrowSecurity" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8Z" fill="#dc4b4b"/></marker>
+    <marker id="arrowEventOne" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8Z" fill="#2563eb"/></marker>
+    <marker id="arrowEventTwo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8Z" fill="#0f8a8a"/></marker>
+  </defs>
+
+  <rect width="2300" height="850" fill="#fff"/>
+  <text x="28" y="38" font-size="28" font-weight="760">PilarPrep Secured AWS Infrastructure</text>
+
+  <rect class="node" x="24" y="300" width="100" height="90" rx="7"/>
+  <text class="title" x="74" y="338" text-anchor="middle">User</text>
+  <text class="small" x="74" y="361" text-anchor="middle">Browser</text>
+  <rect class="node" x="175" y="300" width="115" height="90" rx="7"/>
+  <text class="title" x="232.5" y="330" text-anchor="middle">CloudFront</text>
+  <text class="title" x="232.5" y="349" text-anchor="middle">+ WAF</text>
+  <text class="small" x="232.5" y="372" text-anchor="middle">HTTPS delivery</text>
+  <rect class="node" x="370" y="290" width="150" height="110" rx="7"/>
+  <text class="title" x="445" y="328" text-anchor="middle">PilarPrep</text>
+  <text class="title" x="445" y="347" text-anchor="middle">React app</text>
+  <text class="small" x="445" y="373" text-anchor="middle">Runs in the browser</text>
+  <path class="data" d="M155 500V558C155 570 190 580 232.5 580S310 570 310 558V500Z"/>
+  <ellipse cx="232.5" cy="500" rx="77.5" ry="22" fill="#f7f4ff" stroke="#8b5cf6" stroke-width="2.2"/>
+  <text class="title" x="232.5" y="535" text-anchor="middle">Private frontend S3</text>
+  <text class="small" x="232.5" y="557" text-anchor="middle">React build origin</text>
+  <path class="main" d="M124 345H175"/>
+  <path class="main" d="M290 345H370"/>
+  <path class="main" d="M232.5 390V500"/>
+  <text class="label" x="149.5" y="317" text-anchor="middle">Open site</text>
+  <text class="label" x="330" y="317" text-anchor="middle">Deliver app</text>
+  <text class="label" x="247" y="447">Private origin</text>
+
+  <rect class="node" x="355" y="90" width="180" height="95" rx="7"/>
+  <text class="title" x="445" y="121" text-anchor="middle">Cognito authentication</text>
+  <text class="small" x="445" y="144" text-anchor="middle">Workspace JWT</text>
+  <text class="small" x="445" y="163" text-anchor="middle">or guest IAM credentials</text>
+  <path class="response" d="M410 290V185"/>
+  <path class="main" d="M480 185V290"/>
+  <text class="small" x="373" y="215">Sign in</text>
+  <text class="small" x="490" y="215">JWT / IAM</text>
+
+  <rect class="node" x="595" y="300" width="120" height="90" rx="7"/>
+  <text class="title" x="655" y="338" text-anchor="middle">API Gateway</text>
+  <text class="small" x="655" y="361" text-anchor="middle">Authorized routes</text>
+  <rect class="node" x="760" y="300" width="130" height="90" rx="7"/>
+  <text class="title" x="825" y="333" text-anchor="middle">Jobs API</text>
+  <text class="title" x="825" y="352" text-anchor="middle">Lambda</text>
+  <text class="small" x="825" y="373" text-anchor="middle">Validate + queue</text>
+  <path class="main" d="M520 325H595"/>
+  <path class="main" d="M715 325H760"/>
+  <path class="response" d="M760 365H715"/>
+  <path class="response" d="M595 365H520"/>
+  <text class="label" x="557" y="252" text-anchor="middle">Authenticated HTTPS</text>
+  <text class="small" x="557" y="270" text-anchor="middle">Create job or poll status</text>
+  <text class="label" x="557" y="420" text-anchor="middle">202 + job status</text>
+
+  <rect class="compute" x="940" y="300" width="115" height="90" rx="7"/>
+  <text class="title" x="997.5" y="338" text-anchor="middle">SQS queue</text>
+  <text class="small" x="997.5" y="361" text-anchor="middle">Durable jobs</text>
+  <rect class="compute" x="1100" y="300" width="125" height="90" rx="7"/>
+  <text class="title" x="1162.5" y="333" text-anchor="middle">AI Worker</text>
+  <text class="title" x="1162.5" y="352" text-anchor="middle">Lambda</text>
+  <text class="small" x="1162.5" y="373" text-anchor="middle">Start + route job</text>
+  <polygon points="1295,290 1345,345 1295,400 1245,345" fill="#fff" stroke="#ed8b19" stroke-width="2.2"/>
+  <text class="title" x="1295" y="340" text-anchor="middle">Route by</text>
+  <text class="title" x="1295" y="359" text-anchor="middle">action</text>
+  <path class="async" d="M890 345H940"/>
+  <path class="async" d="M1055 345H1100"/>
+  <path class="main" d="M1225 345H1245"/>
+
+  <rect class="security" x="1410" y="300" width="150" height="100" rx="7"/>
+  <text class="title" x="1485" y="333" text-anchor="middle">PII input gate</text>
+  <text class="small" x="1485" y="357" text-anchor="middle">Amazon Comprehend +</text>
+  <text class="small" x="1485" y="376" text-anchor="middle">ApplyGuardrail INPUT</text>
+  <text class="tiny" x="1485" y="393" text-anchor="middle">Required before AI</text>
+  <path class="securityFlow" d="M1345 345H1410"/>
+
+  <rect class="ai" x="1630" y="230" width="130" height="100" rx="7"/>
+  <text class="title" x="1695" y="269" text-anchor="middle">Amazon Bedrock</text>
+  <text class="small" x="1695" y="294" text-anchor="middle">Foundation model</text>
+  <rect class="guardrail" x="1633" y="196" width="124" height="28" rx="6"/>
+  <text class="tiny" x="1695" y="214" text-anchor="middle" font-weight="700">Bedrock Guardrails</text>
+  <rect class="ai" x="1630" y="410" width="165" height="105" rx="7"/>
+  <text class="title" x="1712.5" y="447" text-anchor="middle">AgentCore + Strands</text>
+  <text class="small" x="1712.5" y="471" text-anchor="middle">Orchestration + tools</text>
+  <text class="small" x="1712.5" y="490" text-anchor="middle">Handoff + catch-up</text>
+  <path class="securityFlow" d="M1560 330H1595V280H1630"/>
+  <text class="label" x="1590" y="254" fill="#b42323" text-anchor="middle">Generate / refine</text>
+  <path class="securityFlow" d="M1560 370H1595V462H1630"/>
+  <text class="label" x="1590" y="405" fill="#b42323" text-anchor="middle">Handoff / catch-up</text>
+  <path class="model" d="M1712.5 410V330"/>
+  <text class="small" x="1728" y="373">Uses Bedrock model</text>
+
+  <rect class="stage" x="1850" y="300" width="145" height="100" rx="7"/>
+  <text class="title" x="1922.5" y="335" text-anchor="middle">Output validation</text>
+  <text class="small" x="1922.5" y="359" text-anchor="middle">ApplyGuardrail OUTPUT</text>
+  <text class="small" x="1922.5" y="378" text-anchor="middle">Schema checks, then save</text>
+  <path class="main" d="M1760 280H1810V325H1850"/>
+  <path class="main" d="M1795 462H1810V365H1850"/>
+  <text class="label" x="1810" y="254" text-anchor="middle">Model result</text>
+  <path class="main" d="M1295 400V555H1922.5V400"/>
+  <text class="label" x="1380" y="545">Approve / evidence - no model call</text>
+
+  <path class="data" d="M2090 212V318C2090 330 2125 340 2170 340S2250 330 2250 318V212Z"/>
+  <ellipse cx="2170" cy="212" rx="80" ry="22" fill="#f7f4ff" stroke="#8b5cf6" stroke-width="2.2"/>
+  <text class="title" x="2170" y="252" text-anchor="middle">One DynamoDB table</text>
+  <text class="small" x="2170" y="277" text-anchor="middle">Jobs, clients, versions,</text>
+  <text class="small" x="2170" y="296" text-anchor="middle">approval + project state</text>
+  <path class="artifact" d="M2090 492V598C2090 610 2125 620 2170 620S2250 610 2250 598V492Z"/>
+  <ellipse cx="2170" cy="492" rx="80" ry="22" fill="#f4fff9" stroke="#22b573" stroke-width="2.2"/>
+  <text class="title" x="2170" y="526" text-anchor="middle">Private artifact + input</text>
+  <text class="small" x="2170" y="568" text-anchor="middle">Job input, latest JSON,</text>
+  <text class="small" x="2170" y="587" text-anchor="middle">DOCX + job results</text>
+  <path class="input" d="M850 300V78H2280V545H2250"/>
+  <text class="label" x="1320" y="68" fill="#087a52">Store encrypted input in private S3 and retain its key</text>
+  <path class="state" d="M800 300V120H2170V190"/>
+  <text class="label" x="1320" y="108" fill="#6d28d9">Create job + idempotency state</text>
+  <path class="main" d="M1995 325H2040V265H2090"/>
+  <path class="main" d="M1995 365H2040V545H2090"/>
+  <text class="label" x="2010" y="309">Save state</text>
+  <text class="label" x="2010" y="451">Save packet + result</text>
+
+  <rect class="compute" x="940" y="455" width="115" height="85" rx="7"/>
+  <text class="title" x="997.5" y="489" text-anchor="middle">Dead-letter</text>
+  <text class="title" x="997.5" y="508" text-anchor="middle">queue</text>
+  <text class="small" x="997.5" y="528" text-anchor="middle">Failed jobs</text>
+  <path class="failure" d="M997.5 390V455"/>
+  <text class="small" x="1010" y="429">After retries</text>
+
+  <path class="data" d="M355 672V738C355 750 391 760 437.5 760S520 750 520 738V672Z"/>
+  <ellipse cx="437.5" cy="672" rx="82.5" ry="22" fill="#f7f4ff" stroke="#8b5cf6" stroke-width="2.2"/>
+  <text class="title" x="437.5" y="705" text-anchor="middle">Private meeting-audio</text>
+  <text class="title" x="437.5" y="724" text-anchor="middle">S3 bucket</text>
+  <text class="small" x="437.5" y="746" text-anchor="middle">Uploads + redacted transcripts</text>
+  <path class="input" d="M437.5 400V650"/>
+  <text class="label" x="455" y="580">Authorized direct upload</text>
+  <text class="small" x="455" y="600">Upload URL issued by Jobs API</text>
+
+  <rect class="security" x="650" y="650" width="145" height="95" rx="7"/>
+  <text class="title" x="722.5" y="682" text-anchor="middle">GuardDuty</text>
+  <text class="small" x="722.5" y="706" text-anchor="middle">Malware Protection</text>
+  <text class="small" x="722.5" y="726" text-anchor="middle">Scan new object</text>
+
+  <rect class="eventOneNode" x="840" y="650" width="140" height="95" rx="7"/>
+  <text class="title" x="910" y="681" text-anchor="middle">Amazon EventBridge</text>
+  <text class="small" x="910" y="705" text-anchor="middle" fill="#1d4ed8" font-weight="700">Event 1</text>
+  <text class="small" x="910" y="726" text-anchor="middle">Scan result received</text>
+
+  <rect class="compute" x="1100" y="650" width="130" height="95" rx="7"/>
+  <text class="title" x="1165" y="686" text-anchor="middle">Amazon</text>
+  <text class="title" x="1165" y="705" text-anchor="middle">Transcribe</text>
+  <text class="small" x="1165" y="727" text-anchor="middle">PII-redacted transcript</text>
+
+  <rect class="eventTwoNode" x="1300" y="650" width="140" height="95" rx="7"/>
+  <text class="title" x="1370" y="681" text-anchor="middle">Amazon EventBridge</text>
+  <text class="small" x="1370" y="705" text-anchor="middle" fill="#0f766e" font-weight="700">Event 2</text>
+  <text class="small" x="1370" y="726" text-anchor="middle">Transcript ready</text>
+
+  <path class="securityFlow" d="M520 704H650"/>
+  <text class="label" x="585" y="684" fill="#b42323" text-anchor="middle">Scan upload</text>
+
+  <path class="eventOne" d="M795 697H840"/>
+  <text class="small" x="817.5" y="632" fill="#1d4ed8" text-anchor="middle" font-weight="700">1 · Malware scan result</text>
+  <path class="eventOne" d="M910 650V570H920V370H940"/>
+  <text class="small" x="930" y="556" fill="#1d4ed8" font-weight="700">Pass 1</text>
+  <text class="small" x="930" y="572" fill="#1d4ed8">Scan result to shared queue</text>
+
+  <path class="audio" d="M1162.5 390V650"/>
+  <text class="label" x="1177" y="576" fill="#95530a">Worker verifies clean tag + scope</text>
+  <text class="small" x="1177" y="594" fill="#95530a">Starts only for a waiting human request</text>
+  <path class="audio" d="M520 720V780H1070V697H1100"/>
+  <text class="small" x="800" y="770" fill="#95530a" text-anchor="middle" font-weight="700">Transcribe reads the clean audio object</text>
+
+  <path class="eventTwo" d="M1230 697H1300"/>
+  <text class="small" x="1265" y="632" fill="#0f766e" text-anchor="middle" font-weight="700">2 · Transcription complete</text>
+  <path class="eventTwo" d="M1370 650V620H1180C1172 620 1172 606 1164 606C1156 606 1156 620 1148 620H1080V370H1055"/>
+  <text class="small" x="1390" y="592" fill="#0f766e" font-weight="700">Pass 2</text>
+  <text class="small" x="1390" y="608" fill="#0f766e">Continue with transcript</text>
+
+  <line x1="30" y1="820" x2="74" y2="820" stroke="#4d5968" stroke-width="3"/>
+  <text class="small" x="84" y="824">Request / execution</text>
+  <line x1="230" y1="820" x2="274" y2="820" stroke="#a87889" stroke-width="2.1" stroke-dasharray="7 6"/>
+  <text class="small" x="284" y="824">Queued / continuation</text>
+  <line x1="455" y1="820" x2="499" y2="820" stroke="#7c3aed" stroke-width="3" stroke-dasharray="8 6"/>
+  <text class="small" x="509" y="824">State</text>
+  <line x1="590" y1="820" x2="634" y2="820" stroke="#12a26d" stroke-width="3" stroke-dasharray="8 6"/>
+  <text class="small" x="644" y="824">Private input / upload</text>
+  <line x1="815" y1="820" x2="859" y2="820" stroke="#b66a10" stroke-width="3"/>
+  <text class="small" x="869" y="824">Audio processing</text>
+  <line x1="1015" y1="820" x2="1059" y2="820" stroke="#228b66" stroke-width="2.1" stroke-dasharray="5 5"/>
+  <text class="small" x="1069" y="824">Model call</text>
+  <line x1="1205" y1="820" x2="1249" y2="820" stroke="#dc4b4b" stroke-width="2.2" stroke-dasharray="7 6"/>
+  <text class="small" x="1259" y="824">Security / PII screening</text>
+  <line x1="1490" y1="820" x2="1534" y2="820" stroke="#2563eb" stroke-width="2.5"/>
+  <text class="small" x="1544" y="824">Event 1: malware scan result</text>
+  <line x1="1785" y1="820" x2="1829" y2="820" stroke="#0f8a8a" stroke-width="2.5"/>
+  <text class="small" x="1839" y="824">Event 2: transcript ready</text>
+</svg>
+
+
+

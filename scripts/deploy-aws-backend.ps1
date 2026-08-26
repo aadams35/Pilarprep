@@ -2,12 +2,19 @@ param(
   [string]$StackName = "pillarprep-bedrock",
   [string]$Region = "us-east-1",
   [string]$AllowedOrigin = "https://d2e0btay0ynyf.cloudfront.net",
-  [string]$BedrockModelId = "us.amazon.nova-micro-v1:0",
-  [string]$BedrockFoundationModelId = "amazon.nova-micro-v1:0",
+  [string]$SecondaryAllowedOrigin = "https://pilarprep.app",
+  [string]$BedrockModelId = "us.amazon.nova-pro-v1:0",
+  [string]$BedrockAlternateModelId = "us.amazon.nova-micro-v1:0",
+  [string]$BedrockFoundationModelId = "amazon.nova-pro-v1:0",
+  [string]$BedrockAlternateFoundationModelId = "amazon.nova-micro-v1:0",
+  [string]$BedrockPremiumModelId = "global.anthropic.claude-sonnet-4-6",
+  [string]$BedrockPremiumFoundationModelId = "anthropic.claude-sonnet-4-6",
   [string]$PillarPrepApiKey = "",
   [string]$PermissionsBoundaryArn = "",
   [string]$DailyBudgetLimitUsd = "1",
   [string]$BudgetNotificationEmail = "",
+  [ValidateSet("true", "false")]
+  [string]$UseCustomerManagedKmsKey = "true",
   [string]$ResourcePrefix = "pillarprep-demo",
   [string]$ProjectName = "PilarPrep",
   [string]$EnvironmentName = "demo",
@@ -56,8 +63,12 @@ New-Item -ItemType Directory -Path $workDir -Force | Out-Null
 
 $identityJson = Invoke-Aws sts get-caller-identity --output json | ConvertFrom-Json
 $accountId = $identityJson.Account
+$identityArn = $identityJson.Arn
 if (-not $accountId) {
   throw "Could not determine AWS account. Run aws configure sso or aws configure first."
+}
+if ([string]$identityArn -match ":root$") {
+  throw "Refusing to deploy PilarPrep with AWS account root credentials. Configure or assume a least-privilege IAM deployment role, then retry."
 }
 
 $bucketName = "pillarprep-deploy-$accountId-$Region".ToLowerInvariant()
@@ -104,12 +115,18 @@ $parameterOverrides = @(
   "Owner=$Owner",
   "CostCenter=$CostCenter",
   "BedrockModelId=$BedrockModelId",
+  "BedrockAlternateModelId=$BedrockAlternateModelId",
+  "BedrockPremiumModelId=$BedrockPremiumModelId",
   "BedrockFoundationModelId=$BedrockFoundationModelId",
+  "BedrockAlternateFoundationModelId=$BedrockAlternateFoundationModelId",
+  "BedrockPremiumFoundationModelId=$BedrockPremiumFoundationModelId",
   "AllowedOrigin=$AllowedOrigin",
+  "SecondaryAllowedOrigin=$SecondaryAllowedOrigin",
   "PillarPrepApiKey=$PillarPrepApiKey",
   "PermissionsBoundaryArn=$PermissionsBoundaryArn",
   "DailyBudgetLimitUsd=$DailyBudgetLimitUsd",
-  "BudgetNotificationEmail=$BudgetNotificationEmail"
+  "BudgetNotificationEmail=$BudgetNotificationEmail",
+  "UseCustomerManagedKmsKey=$UseCustomerManagedKmsKey"
 )
 
 $stackTags = @(

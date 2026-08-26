@@ -3,17 +3,17 @@ import path from "node:path";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  root: "static",
+  root: "frontend/static",
   publicDir: "../public",
   envPrefix: ["VITE_"],
   plugins: [react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "."),
+      "@": path.resolve(__dirname, "frontend"),
     },
   },
   build: {
-    outDir: "../dist/aws-frontend",
+    outDir: "../../dist/aws-frontend",
     emptyOutDir: true,
   },
 });

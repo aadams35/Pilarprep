@@ -9,10 +9,17 @@ param(
   [string]$CostCenter = "hackathon",
   [string]$WebACLId = "",
   [string]$CloudFrontPriceClass = "",
+  [string]$CustomDomainName = "pilarprep.app",
+  [string]$AcmCertificateArn = "",
   [string]$BackendStackName = "pillarprep-bedrock",
-  [string]$BackendApiUrl = "",
+  [string]$JobsStackName = "pillarprep-jobs",
+  [string]$JobsApiUrl = "",
+  [string]$JobsApiOriginDomainName = "",
+  [string]$ApiOriginVerificationSecretArn = "",
   [string]$BackendRegion = "",
-  [string]$CognitoIdentityPoolId = ""
+  [string]$CognitoIdentityPoolId = "",
+  [string]$CognitoUserPoolClientId = "",
+  [string]$CognitoLoginDomain = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +37,16 @@ function Invoke-Aws {
   }
 }
 
+function Assert-HttpsUrl($Value, $Name, [bool]$Optional = $false) {
+  if ($Optional -and -not $Value) {
+    return
+  }
+  $parsed = $null
+  if (-not [Uri]::TryCreate($Value, [UriKind]::Absolute, [ref]$parsed) -or $parsed.Scheme -ne "https") {
+    throw "$Name must be an absolute HTTPS URL in an AWS frontend build."
+  }
+}
+
 Require-Command aws
 Require-Command npm.cmd
 
@@ -39,8 +56,12 @@ $distPath = Join-Path $repoRoot "dist\aws-frontend"
 
 $identityJson = Invoke-Aws sts get-caller-identity --output json | ConvertFrom-Json
 $accountId = $identityJson.Account
+$identityArn = $identityJson.Arn
 if (-not $accountId) {
   throw "Could not determine AWS account. Run aws configure sso or aws configure first."
+}
+if ([string]$identityArn -match ":root$") {
+  throw "Refusing to deploy PilarPrep with AWS account root credentials. Configure or assume a least-privilege IAM deployment role, then retry."
 }
 
 if (-not $BucketName) {
@@ -54,7 +75,9 @@ if (-not $BackendRegion) {
   $BackendRegion = $Region
 }
 
-if (-not $BackendApiUrl -or -not $CognitoIdentityPoolId) {
+Assert-HttpsUrl $JobsApiUrl "JobsApiUrl" $true
+
+if (-not $CognitoIdentityPoolId) {
   try {
     $backendOutputs = Invoke-Aws cloudformation describe-stacks `
       --stack-name $BackendStackName `
@@ -62,64 +85,109 @@ if (-not $BackendApiUrl -or -not $CognitoIdentityPoolId) {
       --query "Stacks[0].Outputs" `
       --output json | ConvertFrom-Json
 
-    if (-not $BackendApiUrl) {
-      $apiOutput = $backendOutputs | Where-Object { $_.OutputKey -eq "BriefApiUrl" } | Select-Object -First 1
-      $BackendApiUrl = $apiOutput.OutputValue
-    }
-
-    if (-not $CognitoIdentityPoolId) {
-      $identityOutput = $backendOutputs | Where-Object { $_.OutputKey -eq "DemoIdentityPoolId" } | Select-Object -First 1
-      $CognitoIdentityPoolId = $identityOutput.OutputValue
-    }
+    $identityOutput = $backendOutputs | Where-Object { $_.OutputKey -eq "DemoIdentityPoolId" } | Select-Object -First 1
+    $CognitoIdentityPoolId = $identityOutput.OutputValue
   } catch {
-    Write-Host "No backend IAM demo outputs detected. Static build will stay demo-only."
+    throw "Could not read the Cognito identity pool from stack $BackendStackName."
   }
 }
 
-$hostedIamEnabled = [bool]($BackendApiUrl -and $CognitoIdentityPoolId)
-if ($hostedIamEnabled) {
-  Write-Host "Building static frontend with IAM-signed model calls enabled..."
-} else {
-  Write-Host "Building static frontend with model calls disabled..."
+if (
+  -not $JobsApiUrl -or
+  -not $ApiOriginVerificationSecretArn -or
+  -not $CognitoUserPoolClientId -or
+  -not $CognitoLoginDomain
+) {
+  $jobsOutputs = Invoke-Aws cloudformation describe-stacks `
+    --stack-name $JobsStackName `
+    --region $BackendRegion `
+    --query "Stacks[0].Outputs" `
+    --output json | ConvertFrom-Json
+  if (-not $JobsApiUrl) {
+    $jobsApiOutput = $jobsOutputs | Where-Object { $_.OutputKey -eq "JobsApiUrl" } | Select-Object -First 1
+    $JobsApiUrl = $jobsApiOutput.OutputValue
+  }
+  if (-not $ApiOriginVerificationSecretArn) {
+    $originSecretOutput = $jobsOutputs | Where-Object { $_.OutputKey -eq "ApiOriginVerificationSecretArn" } | Select-Object -First 1
+    $ApiOriginVerificationSecretArn = $originSecretOutput.OutputValue
+  }
+  if (-not $CognitoUserPoolClientId) {
+    $clientOutput = $jobsOutputs | Where-Object { $_.OutputKey -eq "WorkspaceUserPoolClientId" } | Select-Object -First 1
+    $CognitoUserPoolClientId = $clientOutput.OutputValue
+  }
+  if (-not $CognitoLoginDomain) {
+    $domainOutput = $jobsOutputs | Where-Object { $_.OutputKey -eq "WorkspaceLoginDomain" } | Select-Object -First 1
+    $CognitoLoginDomain = $domainOutput.OutputValue
+  }
 }
 
-if (-not $WebACLId) {
-  try {
-    $existingDistributionId = Invoke-Aws cloudformation describe-stacks `
-      --stack-name $StackName `
-      --region $Region `
-      --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue | [0]" `
-      --output text
+if (-not $CognitoIdentityPoolId) {
+  throw "CognitoIdentityPoolId is required for the hosted IAM-signed Jobs API."
+}
+Assert-HttpsUrl $JobsApiUrl "JobsApiUrl"
+Assert-HttpsUrl $CognitoLoginDomain "CognitoLoginDomain" $true
+$CognitoLoginDomainName = ([Uri]$CognitoLoginDomain).Host
+if (-not $CognitoLoginDomainName) {
+  throw "CognitoLoginDomainName could not be derived from CognitoLoginDomain."
+}
+if (-not $JobsApiOriginDomainName) {
+  $JobsApiOriginDomainName = ([Uri]$JobsApiUrl).Host
+}
+if (-not $JobsApiOriginDomainName) {
+  throw "JobsApiOriginDomainName could not be derived from JobsApiUrl."
+}
+if (-not $ApiOriginVerificationSecretArn) {
+  throw "ApiOriginVerificationSecretArn is required. Deploy the Jobs stack before publishing the frontend."
+}
 
-    if ($existingDistributionId -and $existingDistributionId -ne "None") {
+Write-Host "Configuring the CloudFront-protected workspace API origin..."
+
+try {
+  $existingDistributionId = Invoke-Aws cloudformation describe-stacks `
+    --stack-name $StackName `
+    --region $Region `
+    --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue | [0]" `
+    --output text
+
+  if ($existingDistributionId -and $existingDistributionId -ne "None") {
+    if (-not $WebACLId) {
       $existingWebAcl = Invoke-Aws cloudfront get-distribution-config `
         --id $existingDistributionId `
         --query "DistributionConfig.WebACLId" `
         --output text
-
       if ($existingWebAcl -and $existingWebAcl -ne "None") {
         $WebACLId = $existingWebAcl
         Write-Host "Preserving CloudFront Web ACL attachment."
       }
     }
-  } catch {
-    Write-Host "No existing CloudFront Web ACL detected."
+
+    $existingConfig = Invoke-Aws cloudfront get-distribution-config `
+      --id $existingDistributionId `
+      --query "DistributionConfig" `
+      --output json | ConvertFrom-Json
+    if (-not $CustomDomainName -and $existingConfig.Aliases.Items.Count -gt 0) {
+      $CustomDomainName = [string]$existingConfig.Aliases.Items[0]
+    }
+    if (-not $AcmCertificateArn -and $existingConfig.ViewerCertificate.ACMCertificateArn) {
+      $AcmCertificateArn = [string]$existingConfig.ViewerCertificate.ACMCertificateArn
+    }
   }
+} catch {
+  Write-Host "No existing CloudFront distribution detected."
 }
 
-Push-Location $repoRoot
-try {
-  $env:VITE_PILLARPREP_STATIC_DEMO = "true"
-  $env:VITE_PILLARPREP_BACKEND_URL = if ($hostedIamEnabled) { $BackendApiUrl } else { "" }
-  $env:VITE_PILLARPREP_BACKEND_REGION = if ($hostedIamEnabled) { $BackendRegion } else { "" }
-  $env:VITE_PILLARPREP_COGNITO_IDENTITY_POOL_ID = if ($hostedIamEnabled) { $CognitoIdentityPoolId } else { "" }
-  npm.cmd run build:aws-frontend
-  if ($LASTEXITCODE -ne 0) {
-    throw "Frontend build failed."
+if ($WebACLId) {
+  $wafArguments = @{
+    WebAclArn = $WebACLId
+    Region = "us-east-1"
+    RateLimit = 100
   }
-} finally {
-  Pop-Location
+  if ($env:AWS_PROFILE) {
+    $wafArguments.Profile = $env:AWS_PROFILE
+  }
+  & (Join-Path $PSScriptRoot "ensure-demo-waf-rate-limit.ps1") @wafArguments
 }
+
 
 $parameterOverrides = @(
   "ResourcePrefix=$ResourcePrefix",
@@ -129,7 +197,12 @@ $parameterOverrides = @(
   "CostCenter=$CostCenter",
   "FrontendBucketName=$BucketName",
   "WebACLId=$WebACLId",
-  "CloudFrontPriceClass=$CloudFrontPriceClass"
+  "CloudFrontPriceClass=$CloudFrontPriceClass",
+  "CustomDomainName=$CustomDomainName",
+  "AcmCertificateArn=$AcmCertificateArn",
+  "JobsApiOriginDomainName=$JobsApiOriginDomainName",
+  "CognitoLoginDomainName=$CognitoLoginDomainName",
+  "ApiOriginVerificationSecretArn=$ApiOriginVerificationSecretArn"
 )
 
 $stackTags = @(
@@ -170,14 +243,35 @@ $outputs = Invoke-Aws cloudformation describe-stacks `
 $bucketOutput = $outputs | Where-Object { $_.OutputKey -eq "FrontendBucketName" } | Select-Object -First 1
 $distributionOutput = $outputs | Where-Object { $_.OutputKey -eq "CloudFrontDistributionId" } | Select-Object -First 1
 $urlOutput = $outputs | Where-Object { $_.OutputKey -eq "FrontendUrl" } | Select-Object -First 1
+$workspaceApiOutput = $outputs | Where-Object { $_.OutputKey -eq "WorkspaceApiUrl" } | Select-Object -First 1
 
-if (-not $bucketOutput.OutputValue -or -not $distributionOutput.OutputValue) {
-  throw "CloudFormation outputs did not include the frontend bucket and distribution ID."
+if (-not $bucketOutput.OutputValue -or -not $distributionOutput.OutputValue -or -not $workspaceApiOutput.OutputValue) {
+  throw "CloudFormation outputs did not include the frontend bucket, distribution ID, and workspace API URL."
 }
 
 $bucket = $bucketOutput.OutputValue
 $distributionId = $distributionOutput.OutputValue
 $url = $urlOutput.OutputValue
+$workspaceApiUrl = $workspaceApiOutput.OutputValue
+Assert-HttpsUrl $workspaceApiUrl "WorkspaceApiUrl"
+
+Write-Host "Building static frontend with separate guest and authenticated API routes..."
+Push-Location $repoRoot
+try {
+  $env:VITE_PILLARPREP_JOBS_API_URL = $JobsApiUrl
+  $env:VITE_PILLARPREP_WORKSPACE_API_URL = $workspaceApiUrl
+  $env:VITE_PILLARPREP_BACKEND_REGION = $BackendRegion
+  $env:VITE_PILLARPREP_COGNITO_IDENTITY_POOL_ID = $CognitoIdentityPoolId
+  $env:VITE_PILLARPREP_COGNITO_USER_POOL_CLIENT_ID = $CognitoUserPoolClientId
+  $env:VITE_PILLARPREP_COGNITO_LOGIN_DOMAIN = $CognitoLoginDomain
+  npm.cmd run build:aws-frontend
+  if ($LASTEXITCODE -ne 0) {
+    throw "Frontend build failed."
+  }
+} finally {
+  Pop-Location
+}
+
 
 Invoke-Aws s3 sync $distPath "s3://$bucket" `
   --delete `
@@ -198,3 +292,4 @@ Write-Host ""
 Write-Host "Frontend deployed: $url"
 Write-Host "CloudFront distribution: $distributionId"
 Write-Host "S3 bucket: $bucket"
+Write-Host "Authenticated workspace API: $workspaceApiUrl"

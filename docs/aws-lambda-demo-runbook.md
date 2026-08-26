@@ -1,5 +1,10 @@
 # AWS Lambda Demo Runbook
 
+> **Historical direct-Brief-API runbook.** The live application now uses the
+> unified Jobs API and SQS worker documented in
+> `docs/unified-jobs-architecture.md`. The commands below are retained only
+> for rollback analysis.
+
 Use this path when the team wants the shareable PilarPrep demo to run on AWS without putting an API key in the browser.
 
 ## Local Demo First

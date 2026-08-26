@@ -1,28 +1,27 @@
 # Hackathon Demo Script
 
-## 90-Second Flow
+The current 15-minute presentation is [BlueMesa AgentCore Demo Runbook](agentcore-demo-runbook.md).
 
-1. Pick `Apex Mutual`.
-2. Show that PilarPrep captures industry, meeting type, company size, ranked pillar priorities, known context, and approved decision-maker notes.
-3. Click `Generate brief + project model`.
-4. Open the generated technical brief and point out the AWS Well-Architected alignment and concrete discovery questions.
-5. Switch to the executive brief and point out the low-jargon business framing.
-6. Open the stakeholder lens and show how manually provided profile notes become tailored questions and validation points.
-7. Apply feedback such as `Reduce AWS jargon` or `Focus on security`, then regenerate to show the refinement loop.
-8. Approve the pre-brief.
-9. Open the Project model tab and show that the follow-on model was built from the approved brief, meeting context, and notes.
-10. Ask as `PM`: `Create the first two-week plan.`
-11. Point out the generated sprint plan, risk list, stakeholder map, and follow-up email artifacts.
-12. Click `Copy packet` to show the handoff artifact for sales, executives, PMs, engineers, or new team members.
-13. Close with the AWS story: Bedrock generates and refines, S3 stores artifacts, DynamoDB tracks state, Knowledge Bases ground follow-up, and Strands can orchestrate Project model tools.
+Release gate: [BlueMesa golden scenario scorecard](bluemesa-golden-scenario.md). Architecture narration: [two-minute explanation](architecture-two-minute-explanation.md).
 
-## One-Sentence Pitch
+## 90-second version
 
-PilarPrep turns SA meeting prep into a two-phase AWS-native workflow: first a refined customer and stakeholder pre-brief, then a living Project model for everyone responsible for follow-through.
+1. Select BlueMesa Payments and show customer context, ranked AWS pillars, company values, and approved stakeholder notes.
+2. Generate the technical and executive brief with Nova Pro.
+3. Apply one refinement and approve the brief.
+4. Add approved meeting outcomes and generate the AgentCore handoff.
+5. Show the two-week plan, risk register, stakeholder map, follow-up email, and latest DOCX.
+6. Open Catch-up, select New member, and generate a role-aware summary.
+7. Close on the architecture: Loop 1 uses Lambda and Bedrock; Loop 2 uses AgentCore Runtime, Memory, and five governed Gateway tools; DynamoDB and private S3 remain authoritative; the existing Lambda is the fallback.
 
-## Judge-Proof Points
+## One-sentence pitch
 
-- AWS-native path: CloudFront, S3, Cognito Identity, API Gateway IAM auth, Lambda, Bedrock, DynamoDB, CloudWatch, and S3 artifacts.
-- Cost posture: on-demand Nova Micro with a daily budget guardrail and no always-on model endpoint.
-- Security posture: no browser API key; the public demo role can invoke only the single brief route.
-- Business value: the output is not just a brief; it becomes reusable project memory and handoff material.
+PilarPrep turns reviewed customer discovery into both a meeting-ready brief and governed project continuity for sales, executives, delivery teams, and new team members.
+
+## Judge-proof points
+
+- Real problem: customer context is expensive to create and frequently lost at handoff.
+- Clear GenAI role: Nova generates audience-specific content; Strands orchestrates evidence reads and confirmed project updates.
+- Security: IAM APIs, identity-derived tenant scope, signed tool scope, private S3, and cross-client rejection tests.
+- Reliability: optimistic DynamoDB writes, idempotency, latest-only artifacts, CloudWatch traces, and Lambda fallback.
+- Cost: on-demand services, Micro rehearsal option, seven-day Memory, and no VPC/NAT or provisioned model endpoint.

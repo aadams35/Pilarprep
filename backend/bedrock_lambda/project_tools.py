@@ -106,6 +106,10 @@ def build_stakeholder_map(payload, generated):
             if isinstance(person, dict)
             else "Decision maker",
             "title": person.get("title", "") if isinstance(person, dict) else "",
+            "roleType": person.get("roleType", "decision-maker") if isinstance(person, dict) else "decision-maker",
+            "organizationalRole": person.get("organizationalRole", "") if isinstance(person, dict) else "",
+            "influence": person.get("influence", "") if isinstance(person, dict) else "",
+            "stance": person.get("stance", "") if isinstance(person, dict) else "",
             "source": person.get("source", "User-provided context")
             if isinstance(person, dict)
             else "User-provided context",
