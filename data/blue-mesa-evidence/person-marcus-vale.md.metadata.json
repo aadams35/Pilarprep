@@ -1,10 +1,10 @@
 {
   "metadataAttributes": {
     "scenarioId": "blue-mesa-payments",
-    "documentType": "stakeholder-profile",
+    "documentType": "decision-maker-profile",
     "version": 1,
     "approved": true,
     "visibility": "public-demo",
-    "sourceTitle": "Blue Mesa stakeholder profiles"
+    "sourceTitle": "Marcus Vale stakeholder profile"
   }
 }

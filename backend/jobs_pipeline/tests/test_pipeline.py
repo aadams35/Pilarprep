@@ -675,9 +675,14 @@ class InfrastructureSecurityTests(unittest.TestCase):
             list(corpus.glob("*.md")) +
             list(corpus.glob("*.txt"))
         )
-        self.assertEqual(len(documents), 11)
+        self.assertEqual(len(documents), 18)
 
         for document in documents:
+            self.assertLessEqual(
+                document.stat().st_size,
+                1600,
+                f"Evidence document is too large for S3 Vectors metadata: {document.name}",
+            )
             sidecar = Path(str(document) + ".metadata.json")
             self.assertTrue(sidecar.exists(), f"Missing metadata for {document.name}")
             metadata = json.loads(sidecar.read_text(encoding="utf-8"))[
