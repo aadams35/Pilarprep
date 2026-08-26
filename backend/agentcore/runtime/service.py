@@ -996,6 +996,22 @@ def handle_request(
             memory_factory=memory_factory,
         )
 
+    screened_context, input_safety = content_safety.screen_payload(
+        {
+            "focus": request["focus"],
+            "meetingNotes": request["meetingNotes"],
+        },
+        source="INPUT",
+        action=request["action"],
+        trace_id=request["traceId"],
+    )
+    if not isinstance(screened_context, Mapping):
+        raise ValueError("Agent input safety produced invalid user context")
+    request["focus"] = str(screened_context.get("focus") or "")
+    request["meetingNotes"] = str(
+        screened_context.get("meetingNotes") or ""
+    )
+
     base_arguments = _tool_arguments(request)
     tool_calls: list[str] = []
 
@@ -1007,7 +1023,7 @@ def handle_request(
         tool_calls.append("get_project_state")
         allowed_sources = _approved_source_labels(latest, state)
 
-        brief_request = request.get("briefRequest")
+        brief_request = latest.get("request")
         brief_request = (
             brief_request if isinstance(brief_request, Mapping) else {}
         )
@@ -1058,16 +1074,8 @@ def handle_request(
                 allowed_sources,
                 retrieved_evidence,
             )
-            screened_prompt, input_safety = content_safety.screen_payload(
-                model_prompt,
-                source="INPUT",
-                action=request["action"],
-                trace_id=request["traceId"],
-            )
-            if not isinstance(screened_prompt, str):
-                raise ValueError("Agent input safety produced an invalid prompt")
             raw_generated = reasoner(
-                screened_prompt,
+                model_prompt,
                 model_id,
                 session_manager,
             )

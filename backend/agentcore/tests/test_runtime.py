@@ -206,6 +206,26 @@ class RuntimeTests(unittest.TestCase):
             )
         )
 
+    def test_handoff_screens_only_user_context_before_prompt_assembly(self):
+        calls = []
+
+        def screen(value, *, source, **_kwargs):
+            calls.append((source, json.loads(json.dumps(value))))
+            return value, {"source": source, "policyResult": "passed"}
+
+        with patch.object(
+            runtime_service.content_safety,
+            "screen_payload",
+            side_effect=screen,
+        ):
+            result = self.invoke(HANDOFF_PAYLOAD)
+
+        self.assertEqual(result["provider"], "agentcore")
+        self.assertEqual(calls[0][0], "INPUT")
+        self.assertEqual(set(calls[0][1]), {"focus", "meetingNotes"})
+        self.assertNotIn("approvedBrief", calls[0][1])
+        self.assertEqual(calls[-1][0], "OUTPUT")
+
     def test_handoff_validator_defaults_optional_action_details_without_duplicate_next_steps(self):
         raw = json.loads(json.dumps(MODEL_RESULT))
         first_action = raw["projectArtifacts"]["nextSteps"]["immediateActions"][0]
