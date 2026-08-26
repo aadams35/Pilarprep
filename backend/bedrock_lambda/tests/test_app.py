@@ -16,6 +16,18 @@ if "boto3" not in sys.modules:
     fake_boto3.client = lambda *args, **kwargs: None
     sys.modules["boto3"] = fake_boto3
 
+    fake_botocore = types.ModuleType("botocore")
+    fake_botocore_config = types.ModuleType("botocore.config")
+
+    class FakeConfig:
+        def __init__(self, signature_version=None, **_kwargs):
+            self.signature_version = signature_version
+
+    fake_botocore_config.Config = FakeConfig
+    fake_botocore.config = fake_botocore_config
+    sys.modules["botocore"] = fake_botocore
+    sys.modules["botocore.config"] = fake_botocore_config
+
 import app
 
 
@@ -372,6 +384,7 @@ class LambdaHandlerTest(unittest.TestCase):
         generated = json.loads(MODEL_RESPONSE)
         put_objects = []
         presigned_requests = []
+        s3_client_configs = []
         delete_batches = []
         dynamodb_items = []
 
@@ -417,8 +430,9 @@ class LambdaHandlerTest(unittest.TestCase):
             def put_item(self, **kwargs):
                 dynamodb_items.append(kwargs)
 
-        def fake_client(service_name, **_kwargs):
+        def fake_client(service_name, **kwargs):
             if service_name == "s3":
+                s3_client_configs.append(kwargs.get("config"))
                 return FakeS3()
             if service_name == "dynamodb":
                 return FakeDynamoDB()
@@ -472,6 +486,7 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertEqual(presigned_requests[0]["operation"], "get_object")
         self.assertEqual(presigned_requests[0]["Params"]["Key"], "clients/apex-mutual/brief/latest.docx")
         self.assertEqual(presigned_requests[0]["ExpiresIn"], 3600)
+        self.assertEqual(s3_client_configs[0].signature_version, "s3v4")
         self.assertEqual(put_objects[0]["ContentType"], "application/json")
         stored_document = json.loads(put_objects[0]["Body"].decode("utf-8"))
         self.assertNotIn("previousBrief", stored_document["request"])

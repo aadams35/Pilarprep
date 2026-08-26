@@ -9,6 +9,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from xml.sax.saxutils import escape as xml_escape
 
 import boto3
+from botocore.config import Config
 
 
 DEFAULT_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-pro-v1:0")
@@ -2434,7 +2435,11 @@ def _store_project_artifacts(payload, generated):
 
     try:
         if ARTIFACT_BUCKET:
-            s3 = boto3.client("s3", region_name=REGION)
+            s3 = boto3.client(
+                "s3",
+                region_name=REGION,
+                config=Config(signature_version="s3v4"),
+            )
             json_result = s3.put_object(
                 Bucket=ARTIFACT_BUCKET,
                 Key=artifact_key,
