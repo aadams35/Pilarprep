@@ -3278,6 +3278,14 @@ class SecurityBoundaryTests(unittest.TestCase):
         self.assertIn("Tagging:\n          Status: ENABLED", pipeline)
         self.assertIn("GuardDutyScanResultRule:", pipeline)
         self.assertIn("TranscribeCompletionRule:", pipeline)
+        self.assertIn(
+            "              - Sid: InspectProtectedBucket\n"
+            "                Effect: Allow\n"
+            "                Action: s3:ListBucket\n"
+            "                Resource: !GetAtt MeetingEvidenceBucket.Arn\n"
+            "              - Sid: ScanOnlyMeetingUploads",
+            pipeline,
+        )
         self.assertIn("aws:SourceArn: !GetAtt GuardDutyScanResultRule.Arn", pipeline)
         self.assertIn("aws:SourceArn: !GetAtt TranscribeCompletionRule.Arn", pipeline)
         self.assertIn(
@@ -3286,6 +3294,13 @@ class SecurityBoundaryTests(unittest.TestCase):
         )
         self.assertIn("comprehend:DetectPiiEntities", pipeline)
         self.assertIn("comprehend:DetectPiiEntities", agentcore)
+        self.assertIn(
+            "  AgentLambdaSdkLayer:\n"
+            "    Type: AWS::Lambda::LayerVersion\n"
+            "    DeletionPolicy: Retain\n"
+            "    UpdateReplacePolicy: Retain",
+            agentcore,
+        )
         self.assertIn("PII_SCREENING_ENABLED: \"true\"", pipeline)
         self.assertIn("PII_SCREENING_ENABLED: \"true\"", agentcore)
         self.assertIn(r"backend\shared\content_safety.py", deploy_agent)

@@ -518,11 +518,6 @@ Resources:
                 Effect: Allow
                 Action: s3:ListBucket
                 Resource: !GetAtt MeetingEvidenceBucket.Arn
-                Condition:
-                  StringLike:
-                    s3:prefix:
-                      - audio/uploads/*
-                      - malware-protection-resource-validation-object
               - Sid: ScanOnlyMeetingUploads
                 Effect: Allow
                 Action:

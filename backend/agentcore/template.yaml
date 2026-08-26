@@ -144,6 +144,8 @@ Globals:
 Resources:
   AgentLambdaSdkLayer:
     Type: AWS::Lambda::LayerVersion
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LayerName: !Sub "${ResourcePrefix}-agent-sdk"
       Description: Pinned AWS SDK dependencies for AgentCore Router and Gateway tools.
