@@ -1113,6 +1113,8 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertTrue(body["metadata"]["contradictionValidationPassed"])
         self.assertEqual(body["metadata"]["appliedFeedback"][0]["category"], "Meeting execution")
         self.assertEqual(body["metadata"]["refinementLatencyMs"], 0)
+        self.assertIn("Previous brief version", body["citations"])
+        self.assertIn("Refinement feedback", body["citations"])
 
         docx_bytes = app._brief_docx_bytes(
             payload, body, {"projectId": "apex-mutual"}

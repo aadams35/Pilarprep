@@ -572,6 +572,7 @@ def _source_labels(payload):
         labels.append("Refinement feedback")
     refinement = _refinement_context(payload)
     if refinement["active"]:
+        labels.append("Previous brief version")
         for citation in refinement["previousBrief"].get("citations", []):
             if citation not in labels:
                 labels.append(citation)
@@ -1956,12 +1957,16 @@ def _preserve_unaffected_refinement_sections(generated, payload):
         if isinstance(item, dict) and item.get("section") != target
     ]
 
+    required_citations = ["Previous brief version"]
+    if _feedback_instructions(payload):
+        required_citations.append("Refinement feedback")
     generated["citations"] = list(
         dict.fromkeys(
             [
                 citation
                 for citation in (
-                    list(generated.get("citations", []))
+                    required_citations
+                    + list(generated.get("citations", []))
                     + list(previous.get("citations", []))
                 )
                 if citation in allowed
