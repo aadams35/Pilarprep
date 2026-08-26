@@ -131,6 +131,8 @@ def _redact_text(
     text: str,
     placeholders: dict[tuple[str, str], str],
     pii_types: set[str],
+    *,
+    block_high_risk: bool,
 ) -> tuple[str, int, int]:
     output: list[str] = []
     redactions = 0
@@ -157,7 +159,7 @@ def _redact_text(
                 continue
             if end > len(chunk):
                 raise ContentSafetyError("PII detector returned invalid offsets")
-            if pii_type in HIGH_RISK_PII_TYPES:
+            if block_high_risk and pii_type in HIGH_RISK_PII_TYPES:
                 raise HighRiskPiiViolation(
                     "High-risk sensitive information must be removed before processing"
                 )
@@ -190,12 +192,17 @@ def _sanitize(
     pii_types: set[str],
     text_sink: list[str],
     field_name: str = "",
+    *,
+    block_high_risk: bool,
 ) -> tuple[object, int, int]:
     if field_name in CONTROL_FIELDS:
         return value, 0, 0
     if isinstance(value, str):
         sanitized, redactions, chunks_processed = _redact_text(
-            value, placeholders, pii_types
+            value,
+            placeholders,
+            pii_types,
+            block_high_risk=block_high_risk,
         )
         if sanitized.strip():
             text_sink.append(sanitized)
@@ -206,7 +213,12 @@ def _sanitize(
         chunks_processed = 0
         for key, item in value.items():
             sanitized, count, chunk_count = _sanitize(
-                item, placeholders, pii_types, text_sink, str(key)
+                item,
+                placeholders,
+                pii_types,
+                text_sink,
+                str(key),
+                block_high_risk=block_high_risk,
             )
             result[key] = sanitized
             redactions += count
@@ -218,7 +230,11 @@ def _sanitize(
         chunks_processed = 0
         for item in value:
             sanitized, count, chunk_count = _sanitize(
-                item, placeholders, pii_types, text_sink
+                item,
+                placeholders,
+                pii_types,
+                text_sink,
+                block_high_risk=block_high_risk,
             )
             result_list.append(sanitized)
             redactions += count
@@ -277,7 +293,11 @@ def screen_payload(
     pii_types: set[str] = set()
     texts: list[str] = []
     sanitized, redactions, comprehend_chunks = _sanitize(
-        value, placeholders, pii_types, texts
+        value,
+        placeholders,
+        pii_types,
+        texts,
+        block_high_risk=normalized_source == "INPUT",
     )
     guardrail_chunks = _apply_guardrail(texts, normalized_source)
     return sanitized, {

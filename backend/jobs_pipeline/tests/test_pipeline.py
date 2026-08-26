@@ -2825,6 +2825,58 @@ class ContentSafetyTests(unittest.TestCase):
                 action="brief.generate",
             )
 
+    def test_high_risk_model_output_is_redacted_before_guardrail(self):
+        text = "Generated account reference 123456789."
+        calls = []
+
+        class Comprehend:
+            def detect_pii_entities(self, **_kwargs):
+                return {
+                    "Entities": [
+                        {
+                            "Type": "BANK_ACCOUNT_NUMBER",
+                            "BeginOffset": text.index("123456789"),
+                            "EndOffset": text.index("123456789") + len("123456789"),
+                            "Score": 0.99,
+                        }
+                    ]
+                }
+
+        class Guardrail:
+            def apply_guardrail(self, **kwargs):
+                calls.append(kwargs)
+                return {"action": "NONE"}
+
+        clients = {"comprehend": Comprehend(), "bedrock-runtime": Guardrail()}
+        with (
+            patch.dict(
+                content_safety.os.environ,
+                {
+                    "PII_SCREENING_ENABLED": "true",
+                    "BEDROCK_GUARDRAIL_ID": "guardrail-1",
+                    "BEDROCK_GUARDRAIL_VERSION": "1",
+                },
+                clear=False,
+            ),
+            patch.object(
+                content_safety,
+                "aws_client",
+                side_effect=lambda name: clients[name],
+            ),
+        ):
+            screened, diagnostics = content_safety.screen_payload(
+                {"brief": text},
+                source="OUTPUT",
+                action="brief.refine",
+            )
+
+        self.assertNotIn("123456789", screened["brief"])
+        self.assertIn("[PII:BANK_ACCOUNT_NUMBER:001]", screened["brief"])
+        self.assertEqual(diagnostics["piiTypes"], ["BANK_ACCOUNT_NUMBER"])
+        self.assertEqual(diagnostics["redactionCount"], 1)
+        self.assertNotIn("123456789", calls[0]["content"][0]["text"]["text"])
+
+
     def test_output_guardrail_intervention_is_fail_closed(self):
         class Comprehend:
             def detect_pii_entities(self, **_kwargs):
