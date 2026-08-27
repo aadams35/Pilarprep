@@ -1273,6 +1273,79 @@ class JobsApiTests(unittest.TestCase):
 
 
 class WorkerTests(unittest.TestCase):
+    def test_legacy_blue_mesa_direction_is_normalized_before_safety_screening(self):
+        generated = {
+            "provider": "bedrock",
+            "metadata": {"fallbackUsed": False},
+        }
+        screened_inputs = []
+
+        def screen(value, *, source, **_kwargs):
+            if source == "INPUT":
+                screened_inputs.append(json.loads(json.dumps(value)))
+            return value, {"policyResult": "passed"}
+
+        brief_module = types.SimpleNamespace(
+            _validate_brief_payload=lambda _payload: None,
+            _resolve_model_id=lambda _payload: "us.amazon.nova-pro-v1:0",
+            _generate_brief=lambda _payload: generated,
+        )
+        with (
+            patch.object(worker, "_brief_module", return_value=brief_module),
+            patch.object(worker, "_screen_ai_payload", side_effect=screen),
+            patch.object(worker, "_set_job_phase"),
+            patch.object(worker, "_write_brief_draft", return_value=generated),
+            patch.object(worker, "metric") as metric,
+        ):
+            worker._run_brief(
+                BLUE_SCOPE,
+                {
+                    "action": "brief.generate",
+                    "inputVersion": "input-legacy-blue-mesa",
+                    "input": {
+                        "company": "BlueMesa Payments",
+                        "additionalDirection": (
+                            worker.LEGACY_BLUE_MESA_ADDITIONAL_DIRECTION
+                        ),
+                    },
+                },
+                "job-legacy-blue-mesa",
+            )
+
+        self.assertEqual(len(screened_inputs), 1)
+        self.assertEqual(
+            screened_inputs[0]["additionalDirection"],
+            worker.CURRENT_BLUE_MESA_ADDITIONAL_DIRECTION,
+        )
+        metric.assert_any_call(
+            "LegacyDemoContextNormalized", Action="brief.generate"
+        )
+
+    def test_legacy_demo_direction_is_not_rewritten_for_another_client(self):
+        normalized = worker._normalize_legacy_demo_context(
+            SCOPE,
+            {
+                "company": "Custom Customer",
+                "additionalDirection": worker.LEGACY_BLUE_MESA_ADDITIONAL_DIRECTION,
+            },
+            action="brief.generate",
+        )
+
+        self.assertEqual(
+            normalized["additionalDirection"],
+            worker.LEGACY_BLUE_MESA_ADDITIONAL_DIRECTION,
+        )
+
+    def test_edited_blue_mesa_direction_is_not_rewritten(self):
+        edited = f"{worker.LEGACY_BLUE_MESA_ADDITIONAL_DIRECTION} Add a custom fact."
+        normalized = worker._normalize_legacy_demo_context(
+            BLUE_SCOPE,
+            {"additionalDirection": edited},
+            action="brief.refine",
+        )
+
+        self.assertEqual(normalized["additionalDirection"], edited)
+
     def test_job_claim_lease_exceeds_the_ten_minute_worker_timeout(self):
         captured = {}
 

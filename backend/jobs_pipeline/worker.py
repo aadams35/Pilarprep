@@ -54,9 +54,41 @@ _BRIEF_APP: Any | None = None
 _MEETING_APP: Any | None = None
 _EVIDENCE_APP: Any | None = None
 
+LEGACY_BLUE_MESA_ADDITIONAL_DIRECTION = (
+    "Treat BlueMesa as an existing AWS customer. Make payroll integration, "
+    "mixed API and encrypted-file interfaces, idempotency, reconciliation, "
+    "data privacy, retention, partner certification, cutover, and recovery "
+    "evidence explicit. The existing ledger replacement is out of scope."
+)
+CURRENT_BLUE_MESA_ADDITIONAL_DIRECTION = (
+    "BlueMesa is an existing AWS customer. The engagement focuses on payroll "
+    "integration across mixed API and encrypted-file interfaces, including "
+    "idempotency, reconciliation, data privacy, retention, partner "
+    "certification, cutover, and recovery evidence. Replacing the existing "
+    "ledger is outside scope."
+)
+
 
 class NonRetryableJobError(ValueError):
     """User-correctable job conflict that should not be retried by SQS."""
+
+
+def _normalize_legacy_demo_context(
+    scope: Mapping[str, str],
+    payload: Mapping[str, Any],
+    *,
+    action: str,
+) -> dict[str, Any]:
+    normalized = dict(payload)
+    if (
+        scope.get("clientId") == "bluemesa-payments"
+        and scope.get("projectId") == "bluemesa-payments"
+        and normalized.get("additionalDirection")
+        == LEGACY_BLUE_MESA_ADDITIONAL_DIRECTION
+    ):
+        normalized["additionalDirection"] = CURRENT_BLUE_MESA_ADDITIONAL_DIRECTION
+        metric("LegacyDemoContextNormalized", Action=action)
+    return normalized
 
 
 def _elapsed_since_iso_ms(value: object) -> int | None:
@@ -682,6 +714,7 @@ def _run_brief(
             "_pipelineManagedPersistence": True,
         }
     )
+    payload = _normalize_legacy_demo_context(scope, payload, action=action)
     latest: dict[str, Any] = {}
     authoritative_previous: dict[str, Any] | None = None
     if action == "brief.refine":

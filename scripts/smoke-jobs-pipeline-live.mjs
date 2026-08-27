@@ -17,6 +17,8 @@ const briefOnly = process.env.PILLARPREP_SMOKE_BRIEF_ONLY === "true";
 const smokeModelPreference =
   process.env.PILLARPREP_SMOKE_MODEL ?? "nova-pro";
 const customScenario = process.env.PILLARPREP_SMOKE_CUSTOM === "true";
+const legacyBlueMesaDirection =
+  process.env.PILLARPREP_SMOKE_LEGACY_BLUE_MESA === "true";
 const audienceRefinements =
   process.env.PILLARPREP_SMOKE_AUDIENCE_REFINEMENTS === "true";
 const rotateIdentityBeforeRefinement =
@@ -448,6 +450,16 @@ const presetOverrides = {
 
 if (!customScenario && presetOverrides[clientId]) {
   Object.assign(briefInput, presetOverrides[clientId]);
+}
+
+if (legacyBlueMesaDirection) {
+  if (clientId !== "bluemesa-payments" || customScenario) {
+    throw new Error(
+      "PILLARPREP_SMOKE_LEGACY_BLUE_MESA requires the BlueMesa preset."
+    );
+  }
+  briefInput.additionalDirection =
+    "Treat BlueMesa as an existing AWS customer. Make payroll integration, mixed API and encrypted-file interfaces, idempotency, reconciliation, data privacy, retention, partner certification, cutover, and recovery evidence explicit. The existing ledger replacement is out of scope.";
 }
 
 if (customScenario) {
