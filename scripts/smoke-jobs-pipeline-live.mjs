@@ -378,6 +378,8 @@ const briefInput = {
     "Earn customer trust at every interaction, make shopping effortless, protect revenue during peak demand, experiment with evidence, and spend with discipline. Changes must improve customer experience without making launches slower or increasing operational risk.",
   companyValuesUrl:
     "https://www.peakcart.example/about/values",
+  additionalDirection:
+    "PeakCart is already on AWS. The engagement focuses on holiday traffic readiness, checkout latency, payment resilience, event replay, cost-per-order guardrails, and bounded production-readiness evidence.",
   meetingNotes:
     "Emma Chen wants an executive-ready decision that ties technical changes to checkout conversion, campaign launch confidence, and protected holiday revenue. Luis Ramirez needs load-test baselines, observability ownership, rollback criteria, event-replay validation, dependency limits, and a clear RTO/RPO position before approving production changes. Finance will support a short pilot if the team defines a measurable cost-per-order guardrail and separates immediate peak-readiness work from longer-term platform modernization.",
   decisionMakers: [
@@ -428,6 +430,8 @@ const presetOverrides = {
       "BlueMesa Payments already runs on AWS and needs a governed payroll-partner integration with clear reliability, reconciliation, security, and ownership gates.",
     companyValues:
       "Merchant trust, rigorous compliance, low-drama change management, and faster delivery when customer impact stays protected.",
+    additionalDirection:
+      "BlueMesa is an existing AWS customer. The engagement focuses on payroll integration across mixed API and encrypted-file interfaces, including idempotency, reconciliation, data privacy, retention, partner certification, cutover, and recovery evidence. Replacing the existing ledger is outside scope.",
   },
   "northstar-health": {
     company: "Northstar Health",
@@ -456,6 +460,8 @@ if (customScenario) {
     companyValues:
       "Protect employee trust, make payroll changes auditable, deliver integrations incrementally, and assign accountable owners before production launch.",
     companyValuesUrl: "https://harborline.example/company/values",
+    additionalDirection:
+      "The customer is already on AWS. The brief must cover payroll integration, encrypted-file exchange, reconciliation ownership, privacy controls, cutover planning, failure recovery, and measurable acceptance gates.",
     meetingNotes:
       "The buyer wants a bounded payroll integration decision, the technical lead needs evidence for idempotency and reconciliation, and operations needs a clear escalation path for missed or duplicated payroll events.",
     decisionMakers: [

@@ -132,7 +132,7 @@
     ],
     "companyValues": "Merchant trust, rigorous compliance, low-drama change management, and faster delivery only when customer impact stays protected.",
     "companyValuesUrl": "https://www.bluemesa-payments.example/company/values",
-    "additionalDirection": "Treat BlueMesa as an existing AWS customer. Make payroll integration, mixed API and encrypted-file interfaces, idempotency, reconciliation, data privacy, retention, partner certification, cutover, and recovery evidence explicit. The existing ledger replacement is out of scope.",
+    "additionalDirection": "BlueMesa is an existing AWS customer. The engagement focuses on payroll integration across mixed API and encrypted-file interfaces, including idempotency, reconciliation, data privacy, retention, partner certification, cutover, and recovery evidence. Replacing the existing ledger is outside scope.",
     "context": "BlueMesa Payments is a regulated payment processor serving regional banks and payroll platforms. Its production payment APIs already run on Amazon EKS, operational data is stored in Amazon RDS for PostgreSQL, payment events move through Amazon MSK, and evidence archives use Amazon S3. BlueMesa wants to add governed payroll-partner onboarding through real-time APIs and encrypted batch files without replacing its ledger. The initiative must improve partner onboarding while preserving settlement accuracy, reconciliation ownership, privileged-access evidence, and availability during payroll windows.",
     "decisionMakers": [
       {

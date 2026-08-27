@@ -124,6 +124,81 @@ test.beforeEach(async ({ page }) => {
   await mockCognito(page);
 });
 
+test("stale Blue Mesa demo direction is migrated before generation", async ({ page }) => {
+  const legacyDirection =
+    "Treat BlueMesa as an existing AWS customer. Make payroll integration, mixed API and encrypted-file interfaces, idempotency, reconciliation, data privacy, retention, partner certification, cutover, and recovery evidence explicit. The existing ledger replacement is out of scope.";
+  let submittedDirection = "";
+
+  await page.addInitScript(
+    ({ storageKey, direction }) => {
+      window.localStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          scenarioId: "bluemesa",
+          additionalDirection: direction,
+        })
+      );
+    },
+    {
+      storageKey: "pillarprep.workspace.v2",
+      direction: legacyDirection,
+    }
+  );
+  await page.route("https://test.execute-api.us-east-1.amazonaws.com/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === "GET" && path === "/clients") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ clients: [] }),
+      });
+      return;
+    }
+    if (route.request().method() === "POST") {
+      const request = route.request().postDataJSON() as {
+        input?: { additionalDirection?: string };
+      };
+      submittedDirection = request.input?.additionalDirection ?? "";
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({
+          jobId: "job-migrated-demo",
+          clientId: "bluemesa-payments",
+          projectId: "bluemesa-payments",
+          status: "queued",
+          pollAfterMs: 10,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        jobId: "job-migrated-demo",
+        clientId: "bluemesa-payments",
+        projectId: "bluemesa-payments",
+        status: "complete",
+        result: {
+          ...completedBrief,
+          metadata: {
+            ...completedBrief.metadata,
+            clientId: "bluemesa-payments",
+            projectId: "bluemesa-payments",
+          },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Generate AI prebrief/i }).click();
+  await expect.poll(() => submittedDirection).toContain("BlueMesa is an existing AWS customer");
+  expect(submittedDirection).not.toContain("Treat BlueMesa");
+  expect(submittedDirection).toContain("payroll integration");
+});
+
 test("live job keeps the workspace responsive with an in-app clock", async ({ page }) => {
   let postCount = 0;
   let pollCount = 0;
@@ -283,7 +358,8 @@ test("failed generation replaces the empty state with an actionable error", asyn
         clientId: "bluemesa-payments",
         projectId: "bluemesa-payments",
         status: "failed",
-        error: "The content did not pass PilarPrep's AI safety policy.",
+        error:
+          "PilarPrep could not process part of the supplied content. Describe customer facts and desired outcomes without instructions to ignore, override, or reveal AI behavior.",
       }),
     });
   });
@@ -294,7 +370,7 @@ test("failed generation replaces the empty state with an actionable error", asyn
 
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("Brief generation could not complete");
-  await expect(alert).toContainText("The content did not pass PilarPrep's AI safety policy.");
+  await expect(alert).toContainText("Describe customer facts and desired outcomes");
   await expect(alert).toHaveCSS("background-color", "rgb(255, 247, 245)");
   await expect(alert).toHaveCSS("border-color", "rgb(231, 180, 172)");
   await expect(page.getByText("No brief generated yet")).toHaveCount(0);

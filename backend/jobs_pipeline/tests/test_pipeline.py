@@ -2949,6 +2949,26 @@ class MeetingWorkflowTests(unittest.TestCase):
 
 
 class ContentSafetyTests(unittest.TestCase):
+    def test_guardrail_intervention_returns_actionable_custom_input_guidance(self):
+        with (
+            patch.object(
+                content_safety,
+                "screen_payload",
+                side_effect=content_safety.GuardrailIntervention("blocked"),
+            ),
+            patch.object(worker, "metric"),
+            self.assertRaises(worker.NonRetryableJobError) as raised,
+        ):
+            worker._screen_ai_payload(
+                {"additionalDirection": "customer context"},
+                source="INPUT",
+                action="brief.generate",
+                trace_id="trace-safety-guidance",
+            )
+
+        self.assertIn("Describe customer facts and desired outcomes", str(raised.exception))
+        self.assertIn("without instructions to ignore, override, or reveal", str(raised.exception))
+
     def setUp(self):
         content_safety.clear_client_cache()
 

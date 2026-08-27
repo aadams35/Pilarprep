@@ -93,7 +93,9 @@ def _screen_ai_payload(
     except content_safety.GuardrailIntervention as exc:
         metric(f"{source.title()}GuardrailInterventions", Action=action)
         raise NonRetryableJobError(
-            "The content did not pass PilarPrep's AI safety policy."
+            "PilarPrep could not process part of the supplied content. Describe "
+            "customer facts and desired outcomes without instructions to ignore, "
+            "override, or reveal AI behavior."
         ) from exc
     except content_safety.ContentSafetyConfigurationError as exc:
         metric("ContentSafetyConfigurationErrors", Action=action, Source=source)

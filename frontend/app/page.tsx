@@ -649,6 +649,8 @@ function normalizeFeedback(items: unknown) {
 const defaultRole: AudienceRole = "PM";
 const workspaceStorageKey = "pillarprep.workspace.v2";
 const legacyWorkspaceStorageKey = "pillarprep.workspace.v1";
+const legacyBlueMesaAdditionalDirection =
+  "Treat BlueMesa as an existing AWS customer. Make payroll integration, mixed API and encrypted-file interfaces, idempotency, reconciliation, data privacy, retention, partner certification, cutover, and recovery evidence explicit. The existing ledger replacement is out of scope.";
 const hostedJobsUrl = (import.meta.env.VITE_PILLARPREP_JOBS_API_URL ?? "").trim();
 const hostedWorkspaceUrl = (
   import.meta.env.VITE_PILLARPREP_WORKSPACE_API_URL ?? hostedJobsUrl
@@ -1143,6 +1145,18 @@ export default function Home() {
         refinementTargets.includes(saved.activeTab as BriefTab)
           ? (saved.activeTab as BriefTab)
           : "businessCase";
+      const savedScenario =
+        scenarios.find((scenario) => scenario.id === savedScenarioId) ??
+        activeScenario;
+      const savedAdditionalDirection =
+        typeof saved.additionalDirection === "string"
+          ? saved.additionalDirection
+          : savedScenario.additionalDirection;
+      const restoredAdditionalDirection =
+        savedScenarioId === "bluemesa" &&
+        savedAdditionalDirection.trim() === legacyBlueMesaAdditionalDirection
+          ? savedScenario.additionalDirection
+          : savedAdditionalDirection;
 
       setScenarioId(savedScenarioId);
       setCompany(typeof saved.company === "string" ? saved.company : company);
@@ -1165,7 +1179,7 @@ export default function Home() {
       setContext(typeof saved.context === "string" ? saved.context : context);
       setCompanyValues(typeof saved.companyValues === "string" ? saved.companyValues : activeScenario.companyValues);
       setCompanyValuesUrl(typeof saved.companyValuesUrl === "string" ? saved.companyValuesUrl : activeScenario.companyValuesUrl);
-      setAdditionalDirection(typeof saved.additionalDirection === "string" ? saved.additionalDirection : activeScenario.additionalDirection);
+      setAdditionalDirection(restoredAdditionalDirection);
       setDecisionMakers(
         Array.isArray(saved.decisionMakers)
           ? saved.decisionMakers
@@ -5946,7 +5960,6 @@ const industryFocus = useMemo(() => {
     </main>
   );
 }
-
 
 
 

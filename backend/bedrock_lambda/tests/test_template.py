@@ -1,9 +1,11 @@
+import json
 import re
 import unittest
 from pathlib import Path
 
 
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "template.yaml"
+DEMO_SCENARIOS_PATH = Path(__file__).resolve().parents[3] / "data" / "demo-scenarios.json"
 
 
 class TemplateSecurityTests(unittest.TestCase):
@@ -28,6 +30,32 @@ class TemplateSecurityTests(unittest.TestCase):
                 self.assertIn(action, policy)
             self.assertIn("Resource: !GetAtt DataEncryptionKey.Arn", policy)
             self.assertNotIn('Resource: "*"', policy)
+
+    def test_prompt_attack_filter_keeps_strict_input_protection(self):
+        template = TEMPLATE_PATH.read_text(encoding="utf-8")
+        prompt_attack = re.search(
+            r"- Type: PROMPT_ATTACK\s+InputStrength: (?P<input>\w+)\s+OutputStrength: (?P<output>\w+)",
+            template,
+        )
+
+        self.assertIsNotNone(prompt_attack)
+        self.assertEqual(prompt_attack.group("input"), "HIGH")
+        self.assertEqual(prompt_attack.group("output"), "NONE")
+        for policy_type in ("HATE", "INSULTS", "SEXUAL", "VIOLENCE", "MISCONDUCT"):
+            self.assertRegex(
+                template,
+                rf"- Type: {policy_type}\s+InputStrength: MEDIUM\s+OutputStrength: MEDIUM",
+            )
+
+    def test_blue_mesa_direction_is_factual_customer_context(self):
+        scenarios = json.loads(DEMO_SCENARIOS_PATH.read_text(encoding="utf-8"))
+        blue_mesa = next(item for item in scenarios if item["id"] == "bluemesa")
+        direction = blue_mesa["additionalDirection"]
+
+        self.assertIn("existing AWS customer", direction)
+        self.assertIn("payroll integration", direction)
+        self.assertNotIn("Treat BlueMesa", direction)
+        self.assertNotIn("Make payroll", direction)
 
 
 if __name__ == "__main__":

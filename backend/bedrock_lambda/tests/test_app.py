@@ -692,6 +692,18 @@ class LambdaHandlerTest(unittest.TestCase):
             app._validate_brief_payload(payload),
         )
 
+    def test_accepts_factual_custom_scenario_direction(self):
+        payload = {
+            **VALID_PAYLOAD,
+            "additionalDirection": (
+                "The customer already runs on AWS. The engagement focuses on "
+                "payroll integration, encrypted file exchange, reconciliation, "
+                "privacy, cutover planning, and recovery evidence."
+            ),
+        }
+
+        self.assertEqual(app._validate_brief_payload(payload), "")
+
     def test_prompt_parts_separate_trusted_instructions_from_customer_json(self):
         trusted_prompt, request_json = app._build_prompt_parts(VALID_PAYLOAD)
         customer_data = json.loads(request_json)
