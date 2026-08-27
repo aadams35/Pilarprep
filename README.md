@@ -145,6 +145,8 @@ Read [DEPLOYMENT.md](DEPLOYMENT.md) before deploying. Never deploy with AWS acco
 - Server-side scope is derived from the caller, not trusted from browser tenant fields.
 - SQS messages contain routing and object pointers rather than full customer packets.
 - Private S3 stores artifacts and meeting audio with scoped access.
+- GuardDuty Malware Protection scans quarantined meeting audio before Transcribe can read it.
+- Transcribe preserves names and speaker context in short-lived private transcripts; Bedrock Guardrails screen transcript content before AI analysis.
 - DynamoDB conditional writes protect versions, approvals, and idempotency.
 - Bedrock Guardrails and deterministic validation protect model inputs and outputs.
 - Meeting-derived changes require explicit human review.

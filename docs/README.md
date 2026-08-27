@@ -29,6 +29,7 @@ Use this page as the documentation directory rather than scanning every file.
 - `authentication-flow.md`
 - `threat-model.md`
 - `data-lifecycle.md`
+- `secured-meeting-audio-deployment-runbook.md`
 - `aws-iam-controls.md`
 
 ## Deployment and operations

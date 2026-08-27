@@ -26,9 +26,13 @@ Browser
 ## Meeting intelligence path
 
 ```text
-Synthetic Blue Mesa audio
-  -> private presigned S3 upload
-  -> Amazon Transcribe
+Authorized synthetic Blue Mesa audio
+  -> private S3 quarantine upload
+  -> GuardDuty malware scan
+  -> EventBridge + shared SQS queue
+  -> Amazon Transcribe full private transcript
+  -> EventBridge + shared SQS queue
+  -> Bedrock Guardrails content-safety check
   -> agentic comparison with approved brief and RAG evidence
   -> proposed changes
   -> human accept/edit/reject review

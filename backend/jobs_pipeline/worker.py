@@ -53,6 +53,7 @@ _SCOPE_SECRET: str | None = None
 _BRIEF_APP: Any | None = None
 _MEETING_APP: Any | None = None
 _EVIDENCE_APP: Any | None = None
+_HANDOFF_TOOLS_APP: Any | None = None
 
 LEGACY_BLUE_MESA_ADDITIONAL_DIRECTION = (
     "Treat BlueMesa as an existing AWS customer. Make payroll integration, "
@@ -169,6 +170,15 @@ def _evidence_module():
 
         _EVIDENCE_APP = evidence
     return _EVIDENCE_APP
+
+
+def _handoff_tools_module():
+    global _HANDOFF_TOOLS_APP
+    if _HANDOFF_TOOLS_APP is None:
+        from agentcore.tools import app
+
+        _HANDOFF_TOOLS_APP = app
+    return _HANDOFF_TOOLS_APP
 
 
 
@@ -1796,12 +1806,197 @@ def _run_meeting_analysis(
     ) from error
 
 
+def _latest_handoff_packet(
+    scope: Mapping[str, str],
+    approved_document: Mapping[str, Any],
+    approved_version: int,
+) -> dict[str, Any]:
+    item = deserialize_item(
+        aws_client("dynamodb")
+        .get_item(
+            TableName=PROJECT_TABLE,
+            Key={
+                "projectId": {"S": project_partition_key(scope)},
+                "sortKey": {"S": "HANDOFF#LATEST"},
+            },
+            ConsistentRead=True,
+        )
+        .get("Item")
+    )
+    artifact_key = str(item.get("artifactKey") or "")
+    expected_prefix = f"{project_artifact_prefix(scope)}/handoff/"
+    if (
+        artifact_key.startswith(expected_prefix)
+        and int(item.get("sourceBriefVersion") or 0) == approved_version
+    ):
+        stored = json.loads(
+            aws_client("s3")
+            .get_object(Bucket=ARTIFACT_BUCKET, Key=artifact_key)["Body"]
+            .read()
+            .decode("utf-8")
+        )
+        packet = stored.get("packet") if isinstance(stored, Mapping) else None
+        if isinstance(packet, Mapping):
+            return dict(packet)
+    approved = approved_document.get("response")
+    if not isinstance(approved, Mapping):
+        raise ValueError("The approved brief cannot seed the meeting handoff")
+    return dict(approved)
+
+
+def _record_latest_handoff(
+    scope: Mapping[str, str],
+    latest: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    *,
+    assembly: str,
+) -> None:
+    timestamp = now_iso()
+    aws_client("dynamodb").put_item(
+        TableName=PROJECT_TABLE,
+        Item={
+            "projectId": {"S": project_partition_key(scope)},
+            "sortKey": {"S": "HANDOFF#LATEST"},
+            "entityType": {"S": "HANDOFF_LATEST"},
+            "company": {"S": str(latest.get("company") or "")},
+            "artifactKey": {"S": str(metadata.get("artifactKey") or "")},
+            "docxArtifactKey": {
+                "S": str(metadata.get("docxArtifactKey") or "")
+            },
+            "updatedAt": {"S": timestamp},
+            "sourceBriefVersion": {
+                "N": str(latest.get("approvedPacketVersion") or 0)
+            },
+            "provider": {"S": "agentcore"},
+            "assembly": {"S": assembly},
+        },
+    )
+    _upsert_client_directory(
+        scope,
+        handoff={
+            "updatedAt": timestamp,
+            "artifactKey": metadata.get("artifactKey"),
+        },
+    )
+
+
+def _promote_approved_meeting(
+    scope: Mapping[str, str],
+    document: Mapping[str, Any],
+    latest: Mapping[str, Any],
+    approved_document: Mapping[str, Any],
+    proposal: Mapping[str, Any],
+    accepted: list[dict[str, Any]],
+) -> dict[str, Any]:
+    from jobs_pipeline import handoff_promotion
+
+    trace_id = stable_identifier(
+        "meeting-approval",
+        [
+            scope["tenantId"],
+            scope["clientId"],
+            scope["projectId"],
+            str(document.get("idempotencyKey") or ""),
+        ],
+        32,
+    )
+    screened, input_safety = _screen_ai_payload(
+        accepted,
+        source="INPUT",
+        action="meeting.approve",
+        trace_id=trace_id,
+    )
+    if not isinstance(screened, list) or not all(
+        isinstance(item, Mapping) for item in screened
+    ):
+        raise NonRetryableJobError("The reviewed meeting updates are invalid")
+    screened_accepted = [dict(item) for item in screened]
+    approved_version = int(latest.get("approvedPacketVersion") or 0)
+    base_packet = _latest_handoff_packet(
+        scope, approved_document, approved_version
+    )
+    packet = handoff_promotion.promote_handoff(
+        base_packet,
+        proposal,
+        screened_accepted,
+        company=str(latest.get("company") or scope["clientId"]),
+        packet_version=approved_version,
+    )
+    tools = _handoff_tools_module()
+    current_state = tools.get_project_state(scope)
+    artifacts = packet.get("projectArtifacts")
+    if not isinstance(artifacts, Mapping):
+        raise ValueError("The promoted handoff has no project artifacts")
+    update = handoff_promotion.project_update(
+        current_state,
+        screened_accepted,
+        artifacts,
+        meeting_id=str(proposal.get("meetingId") or "customer-meeting"),
+    )
+    idempotency = stable_identifier(
+        "meeting-promotion",
+        [str(document.get("idempotencyKey") or "")],
+        48,
+    )
+    saved_state = tools.save_project_update(
+        scope,
+        update,
+        expected_version=int(current_state.get("version") or 0),
+        idempotency_key=idempotency,
+        confirm_write=True,
+    )
+    metadata_value = packet.get("metadata")
+    metadata = (
+        dict(metadata_value) if isinstance(metadata_value, Mapping) else {}
+    )
+    metadata.update(
+        {
+            "stateKey": saved_state.get("stateKey", "PROJECT#STATE"),
+            "projectVersion": int(saved_state.get("version") or 0),
+            "toolCalls": [
+                "get_latest_brief",
+                "get_project_state",
+                "promote_human_approved_meeting",
+                "save_project_update",
+                "create_handoff_packet",
+            ],
+            "safety": {"input": input_safety},
+        }
+    )
+    packet["metadata"] = metadata
+    artifact = tools.create_handoff_packet(
+        scope,
+        packet,
+        audience="Solutions Architect",
+        idempotency_key=idempotency,
+        confirm_write=True,
+    )
+    metadata.update(
+        {
+            "artifactKey": artifact.get("artifactKey"),
+            "docxArtifactKey": artifact.get("docxArtifactKey"),
+            "docxDownloadUrl": artifact.get("docxDownloadUrl"),
+            "artifactRetention": artifact.get(
+                "artifactRetention", "latest-only"
+            ),
+        }
+    )
+    packet["metadata"] = metadata
+    _record_latest_handoff(
+        scope,
+        latest,
+        metadata,
+        assembly="human-approved-meeting-promotion",
+    )
+    return packet
+
+
 def _approve_meeting(
     scope: Mapping[str, str],
     document: Mapping[str, Any],
 ) -> dict[str, Any]:
     meeting = _meeting_module()
-    latest, _approved_document_value = _approved_document(
+    latest, approved_document = _approved_document(
         scope, require_current=True
     )
     current_version = int(latest.get("approvedPacketVersion") or 0)
@@ -1810,18 +2005,14 @@ def _approve_meeting(
         document,
         current_approved_version=current_version,
     )
-    handoff_document = {
-        **dict(document),
-        "action": "handoff.generate",
-        "input": {
-            "audienceRole": "Solutions Architect",
-            "focus": "Build the implementation handoff from approved meeting evidence.",
-            "meetingNotes": meeting.approved_meeting_notes(proposal, accepted),
-            "modelPreference": "nova-pro",
-            "expectedApprovedPacketVersion": current_version,
-        },
-    }
-    handoff = _run_agent(scope, handoff_document)
+    handoff = _promote_approved_meeting(
+        scope,
+        document,
+        latest,
+        approved_document,
+        proposal,
+        accepted,
+    )
     return meeting.finalize_approval(
         scope,
         document,

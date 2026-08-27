@@ -92,6 +92,7 @@ export async function pollPipelineJob<TResult = BriefResponse>(
   options: {
     signal?: AbortSignal;
     onStatus?: (status: PipelineJobStatus["status"]) => void;
+    onProgress?: (status: PipelineJobStatus) => void;
   } = {}
 ) {
   const controller = new AbortController();
@@ -106,6 +107,7 @@ export async function pollPipelineJob<TResult = BriefResponse>(
   options.signal?.addEventListener("abort", relayAbort, { once: true });
   const timeout = setTimeout(() => controller.abort(timeoutError), timeoutMs);
   let pollAfterMs = accepted.pollAfterMs;
+  let consecutiveFetchFailures = 0;
   options.onStatus?.(accepted.status);
 
   const abortReason = () =>
@@ -138,11 +140,24 @@ export async function pollPipelineJob<TResult = BriefResponse>(
     while (!controller.signal.aborted) {
       const waitMs = Math.max(750, Math.min(pollAfterMs, 5000));
       await abortableWait(waitMs);
-      const status = parsePipelineStatus(
-        await fetchStatus(controller.signal),
-        accepted
-      );
+      let rawStatus: unknown;
+      try {
+        rawStatus = await fetchStatus(controller.signal);
+        consecutiveFetchFailures = 0;
+      } catch (error) {
+        if (controller.signal.aborted) {
+          throw abortReason();
+        }
+        consecutiveFetchFailures += 1;
+        if (consecutiveFetchFailures > 3) {
+          throw error;
+        }
+        pollAfterMs = Math.min(4_000, 750 * 2 ** consecutiveFetchFailures);
+        continue;
+      }
+      const status = parsePipelineStatus(rawStatus, accepted);
       options.onStatus?.(status.status);
+      options.onProgress?.(status);
       if (
         status.status === "queued" ||
         status.status === "running" ||

@@ -36,7 +36,7 @@ type MeetingIntelligenceProps = {
   isProcessing: boolean;
   isApproving: boolean;
   audio: MeetingAudioSelection;
-  onUploadAudio: (file: File) => void;
+  onUploadAudio: (file: File, consentAcknowledged: boolean) => void;
   onRemoveAudio: () => void;
   onProcess: () => void;
   onDecision: (decision: MeetingReviewDecision) => void;
@@ -64,11 +64,11 @@ function ProcessingClock({ label }: { label: string }) {
 }
 
 function statusLabel(status: PipelineJobState | null, approving: boolean) {
-  if (approving) return "Applying approved changes and building the handoff...";
+  if (approving) return "Promoting approved changes into the handoff...";
   if (status === "queued" || status === "running") return "Meeting queued securely in AWS...";
-  if (status === "waiting_for_scan") return "Waiting for the audio security scan...";
-  if (status === "transcribing") return "Transcribing with PII redaction...";
-  if (status === "screening") return "Screening the redacted transcript...";
+  if (status === "waiting_for_scan") return "Waiting for the malware scan...";
+  if (status === "transcribing") return "Creating the full private transcript...";
+  if (status === "screening") return "Checking transcript content safety...";
   if (status === "analyzing") return "Comparing the meeting with the approved brief...";
   if (status === "review-ready") return "Meeting review is ready.";
   return "Processing the meeting...";
@@ -76,10 +76,10 @@ function statusLabel(status: PipelineJobState | null, approving: boolean) {
 
 function audioStatusLabel(status: MeetingAudioStatus) {
   if (status === "uploading") return "Uploading securely...";
-  if (status === "scanning") return "Scanning for threats...";
+  if (status === "scanning") return "Scanning for malware...";
   if (status === "ready") return "Ready to process";
   if (status === "blocked") return "Upload blocked";
-  if (status === "scan_failed") return "Security scan failed";
+  if (status === "scan_failed") return "Malware scan failed";
   return "Upload failed";
 }
 
@@ -105,9 +105,16 @@ export function MeetingIntelligence({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isDraggingAudio, setIsDraggingAudio] = useState(false);
   const [durationSeconds, setDurationSeconds] = useState(0);
+  const [consentAcknowledged, setConsentAcknowledged] = useState(false);
+  const [consentError, setConsentError] = useState("");
 
   function selectAudio(file: File | undefined) {
     if (!file) return;
+    if (!consentAcknowledged) {
+      setConsentError("Confirm recording authorization before choosing audio.");
+      return;
+    }
+    setConsentError("");
     const objectUrl = URL.createObjectURL(file);
     const probe = new Audio();
     probe.preload = "metadata";
@@ -117,7 +124,7 @@ export function MeetingIntelligence({
     };
     probe.onerror = () => URL.revokeObjectURL(objectUrl);
     probe.src = objectUrl;
-    onUploadAudio(file);
+    onUploadAudio(file, true);
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -141,6 +148,31 @@ export function MeetingIntelligence({
   ).length;
   const canProcess = isBlueMesa && isApproved && isHosted && audioReady && !isProcessing && !isApproving;
   const canApprove = allReviewed && acceptedCount > 0 && !isProcessing && !isApproving;
+  let activeWorkflowStep = 1;
+  if (audio.status === "scanning" || status === "waiting_for_scan") {
+    activeWorkflowStep = 2;
+  } else if (status === "transcribing" || (audioReady && !result)) {
+    activeWorkflowStep = 3;
+  } else if (status === "screening") {
+    activeWorkflowStep = 4;
+  } else if (status === "analyzing") {
+    activeWorkflowStep = 5;
+  } else if (status === "approved") {
+    activeWorkflowStep = 7;
+  } else if (result && !allReviewed) {
+    activeWorkflowStep = 6;
+  } else if (isApproving || (result && allReviewed)) {
+    activeWorkflowStep = 7;
+  }
+  const workflowSteps = [
+    "Private audio upload",
+    "Malware scan",
+    "Full transcript",
+    "Content safety",
+    "AI comparison",
+    "Human review",
+    "Next-step handoff",
+  ];
 
   return (
     <section
@@ -163,23 +195,26 @@ export function MeetingIntelligence({
         </div>
         <div className="meeting-demo-badge">
           <strong>Synthetic demo</strong>
-          <span>No customer recording or personal data</span>
+          <span>Names and speaker context remain in private storage</span>
         </div>
       </header>
 
-      <div className="meeting-intelligence-flow" aria-label="Meeting intelligence workflow">
-        <span><b>1</b> Private audio upload</span>
-        <i aria-hidden="true">to</i>
-        <span><b>2</b> Security scan</span>
-        <i aria-hidden="true">to</i>
-        <span><b>3</b> PII-redacted transcript</span>
-        <i aria-hidden="true">to</i>
-        <span><b>4</b> Agentic comparison</span>
-        <i aria-hidden="true">to</i>
-        <span><b>5</b> Human review</span>
-        <i aria-hidden="true">to</i>
-        <span><b>6</b> Next-step handoff</span>
-      </div>
+      <ol className="meeting-intelligence-flow" aria-label="Meeting intelligence workflow">
+        {workflowSteps.map((label, index) => {
+          const step = index + 1;
+          const state = step < activeWorkflowStep ? "complete" : step === activeWorkflowStep ? "active" : "pending";
+          return (
+            <li
+              className={`meeting-flow-step meeting-flow-step-${state}`}
+              key={label}
+              aria-current={state === "active" ? "step" : undefined}
+            >
+              <b>{step}</b>
+              <span>{label}</span>
+            </li>
+          );
+        })}
+      </ol>
 
       {!isBlueMesa ? (
         <div className="meeting-gate-note">
@@ -195,8 +230,25 @@ export function MeetingIntelligence({
         </div>
       ) : null}
 
+      <label className="meeting-upload-consent">
+        <input
+          type="checkbox"
+          checked={consentAcknowledged}
+          disabled={audio.status !== "empty"}
+          onChange={(event) => {
+            setConsentAcknowledged(event.target.checked);
+            setConsentError("");
+          }}
+        />
+        <span>
+          Only upload recordings you are authorized to process. Meeting audio and names are retained temporarily to create the transcript, analysis, and handoff.
+        </span>
+      </label>
+      {consentError ? <div className="meeting-consent-error" role="alert">{consentError}</div> : null}
+
       <div
         className={`meeting-audio-upload ${isDraggingAudio ? "meeting-audio-upload-dragging" : ""}`}
+        aria-disabled={!consentAcknowledged}
         onDragEnter={(event) => { event.preventDefault(); setIsDraggingAudio(true); }}
         onDragOver={(event) => event.preventDefault()}
         onDragLeave={() => setIsDraggingAudio(false)}
@@ -217,7 +269,7 @@ export function MeetingIntelligence({
             </div>
             <button
               type="button"
-              disabled={!isBlueMesa || !isApproved || !isHosted}
+              disabled={!isBlueMesa || !isApproved || !isHosted || !consentAcknowledged}
               onClick={() => inputRef.current?.click()}
             >
               Choose audio

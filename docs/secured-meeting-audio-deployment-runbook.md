@@ -1,6 +1,6 @@
 # PilarPrep Secured Meeting Audio Deployment Runbook
 
-Status: implemented and verified locally on 2026-08-26. Not deployed, committed, or pushed.
+Status: implementation updated and verified locally on 2026-08-27. AWS deployment and live verification are pending.
 
 Region: us-east-1
 
@@ -23,30 +23,29 @@ The original meeting path accepted an authorized upload, created a meeting job, 
 The original implementation had four material gaps:
 
 1. Uploaded audio could reach Transcribe without an independent malware verdict.
-2. Transcribe PII redaction was controlled by request input, so a client could attempt to disable it.
-3. Content-bearing AI actions did not all pass through one reusable PII and Guardrail gate.
+2. The meeting path redacted names even though stakeholder identity and ownership context are required by the product.
+3. Content-bearing AI actions did not all pass through one reusable Guardrail gate.
 4. Output safety checks were not uniformly enforced immediately before persistence.
 
-There was also no explicit user-visible scan lifecycle and no Event 1 path for GuardDuty scan results.
+There was also no explicit recording-authorization acknowledgement, user-visible malware-scan lifecycle, or Event 1 path for GuardDuty scan results.
 
 ## 3. Final Target Architecture
 
 The secured meeting path is:
 
-1. An authenticated browser requests a scoped upload form.
+1. An authenticated browser explicitly confirms recording authorization and requests a scoped upload form.
 2. Audio is uploaded to audio/uploads/ in the private meeting-audio bucket.
 3. GuardDuty Malware Protection for S3 scans only that prefix and writes the managed GuardDutyMalwareScanStatus tag.
 4. EventBridge Event 1 sends the scan result to the existing SQS queue.
 5. The AI worker verifies account, bucket, prefix, upload record, scope, version, ETag, event identity, and object tag.
 6. A clean scan starts Transcribe only when a matching authorized process request exists. Otherwise it records clean and waits.
-7. Transcribe creates only a PII-redacted transcript.
+7. Transcribe creates a complete private transcript with names, speaker labels, titles, timestamps, and meeting context preserved.
 8. EventBridge Event 2 sends Transcribe completion to the same queue.
-9. The worker validates the continuation and reads only the expected redacted transcript.
-10. Amazon Comprehend detects remaining PII and replaces permitted values with stable typed placeholders.
-11. Bedrock ApplyGuardrail with source INPUT evaluates the sanitized content.
-12. Bedrock or AgentCore/Strands performs analysis.
-13. Bedrock ApplyGuardrail with source OUTPUT runs before schema, business validation, and persistence.
-14. Only accepted results update DynamoDB and private S3.
+9. The worker validates the continuation and reads only the expected scoped full transcript.
+10. Bedrock ApplyGuardrail with source INPUT evaluates transcript content without rewriting it or treating ordinary names as unsafe.
+11. Bedrock or AgentCore/Strands performs analysis.
+12. Bedrock ApplyGuardrail with source OUTPUT runs before schema, business validation, and persistence.
+13. Only accepted results update DynamoDB and private S3.
 
 Architecture artifacts:
 
@@ -113,30 +112,25 @@ The pipeline fails closed for threats, unsupported or skipped scans, access deni
 
 The existing TranscribeCompletionRule is retained. Both EventBridge rules target the same SQS queue, where the worker identifies the event shape before routing it.
 
-Every meeting transcription now forces this server-side configuration:
+Meeting transcription deliberately omits Amazon Transcribe ContentRedaction. The output key is generated server-side under the scoped full-transcript prefix. The worker accepts only that expected object and verifies the Transcribe job, output key, tenant scope, approved packet version, and continuation record.
 
-    ContentRedaction:
-      RedactionType: PII
-      RedactionOutput: redacted
-      PiiEntityTypes:
-        - ALL
+Names, titles, speaker labels, timestamps, company names, stakeholder relationships, and ownership assignments remain available to the meeting comparison and handoff. They remain protected customer data and are never placed in queue messages, URLs, application logs, metrics, or DynamoDB job bodies.
 
-The browser cannot disable redaction. The worker accepts only the expected redacted transcript object and verifies the Transcribe job, output key, tenant scope, approved packet version, and continuation record.
-
-## 7. PII Input And Output Controls
+## 7. Transcript Content Safety And Output Controls
 
 backend/shared/content_safety.py is the common safety boundary for Lambda and AgentCore.
 
-Input sequence:
+Meeting input sequence:
 
 1. Validate identity, tenant, client, project, session, and action scope.
 2. Normalize content without logging it.
 3. Chunk deterministically for service limits.
-4. Call Amazon Comprehend DetectPiiEntities.
-5. Replace permitted PII with stable placeholders such as [PII:EMAIL:001].
-6. Block high-risk values such as credentials, AWS access keys, card secrets, bank details, PINs, and SSNs.
-7. Call Bedrock ApplyGuardrail with source INPUT.
-8. Send only accepted, sanitized content to Bedrock, AgentCore, Strands, tools, or retrieval.
+4. Preserve the complete private transcript, including names and stakeholder context.
+5. Call Bedrock ApplyGuardrail with source INPUT to evaluate harmful or inappropriate content.
+6. Stop downstream generation when the Guardrail intervenes; retain the original private transcript only for its configured short lifecycle.
+7. Send only accepted transcript context to AgentCore, Strands, tools, or retrieval.
+
+Non-meeting brief and custom-scenario actions retain their existing validation, prompt-injection checks, and configured PII policy. Disabling meeting redaction does not weaken those controls.
 
 Output sequence:
 
@@ -146,7 +140,7 @@ Output sequence:
 4. Preserve the prior valid packet when validation fails.
 5. Store only minimal status metadata, never rejected content.
 
-The gate fails closed when enabled but not configured with a Guardrail ID and version.
+The content-safety gate fails closed when enabled but not configured with a Guardrail ID and version. DynamoDB records only the safety decision and non-sensitive diagnostics.
 
 ## 8. DynamoDB State Transitions
 
@@ -164,7 +158,7 @@ Meeting job lifecycle:
     queued -> transcribing -> screening -> analyzing -> complete
     any active state -> failed
 
-Temporary records cover upload identity and scope, bucket/key/version/ETag, waiting process intent, GuardDuty event idempotency, Transcribe continuation, screening and validation outcomes, retry classification, and TTL.
+Temporary records cover upload identity and scope, recording-authorization acknowledgement, bucket/key/version/ETag, waiting process intent, GuardDuty event idempotency, Transcribe continuation, content-safety and validation outcomes, retry classification, and TTL. Transcript bodies are not stored in these records.
 
 Conditional writes prevent duplicate EventBridge or SQS deliveries from starting multiple transcription jobs, repeating analysis, overwriting a newer packet, or creating duplicate artifacts.
 
@@ -176,7 +170,7 @@ Conditional writes prevent duplicate EventBridge or SQS deliveries from starting
 - EventBridge can send only from the two named rules to the named queue, restricted by source ARN and account.
 - The worker can read uploaded audio only when GuardDutyMalwareScanStatus is NO_THREATS_FOUND.
 - The trusted synthetic Blue Mesa prefix has a separate read permission.
-- Worker and AgentCore roles can call Comprehend DetectPiiEntities and the configured Bedrock Guardrail.
+- Worker and AgentCore roles can call the configured Bedrock Guardrail. Existing Comprehend permissions remain available only for non-meeting actions whose configured policy requires PII screening.
 - Customer content remains in private S3 and scoped DynamoDB records.
 - Customer content, prompts, transcripts, PII, and rejected output are excluded from application logs.
 
@@ -186,11 +180,11 @@ Completed locally:
 
 | Verification | Result |
 | --- | --- |
-| Jobs pipeline unit and contract tests | 91 passed |
-| AgentCore tests | 68 passed, 1 skipped |
-| Bedrock Lambda tests | 56 passed |
-| Frontend/Node tests | 41 passed |
-| Playwright browser workflows | 7 passed |
+| Jobs pipeline unit and contract tests | 110 passed |
+| AgentCore tests | 77 passed, 1 skipped |
+| Bedrock Lambda tests | 60 passed |
+| Frontend/Node tests | 42 passed |
+| Playwright browser workflows | 11 passed |
 | Production dependency audit | 0 vulnerabilities |
 | TypeScript type checking | Passed |
 | ESLint | Passed |
@@ -212,8 +206,7 @@ New or increased charges can come from:
 - S3: upload, tag, transcript, artifact, and lifecycle requests/storage.
 - EventBridge and SQS: two event transitions and queue requests, plus retries.
 - Lambda: Event 1 and Event 2 worker execution.
-- Amazon Transcribe: audio duration plus PII-redaction usage.
-- Amazon Comprehend: text units evaluated for remaining PII.
+- Amazon Transcribe: audio duration for the complete transcript.
 - Bedrock Guardrails: text units for configured INPUT and OUTPUT safeguards.
 - Bedrock or AgentCore model inference: tokens processed for analysis.
 
@@ -309,8 +302,9 @@ Application:
 - [ ] Blue Mesa remains the only scenario with meeting audio.
 - [ ] Upload shows Scanning for threats.
 - [ ] Process during scanning shows Waiting for scan and does not start Transcribe early.
-- [ ] A clean upload advances through Transcribing, Screening transcript, Analyzing meeting, and Complete.
-- [ ] No unredacted transcript object is created or consumed.
+- [ ] A clean upload advances through Transcribing, Checking content safety, Analyzing meeting, and Complete.
+- [ ] The complete transcript preserves expected synthetic names, speaker labels, and timestamps.
+- [ ] No transcript body appears in SQS, DynamoDB job records, metrics, logs, or error messages.
 - [ ] A blocked or failed object never reaches Transcribe and reveals no internal finding details.
 - [ ] Duplicate Event 1 and Event 2 deliveries do not repeat work.
 - [ ] Existing unverified uploads are rejected and require re-upload.
@@ -324,10 +318,10 @@ Automated live checks:
 
 Operations:
 
-- [ ] CloudWatch shows Event 1, transcription start, Event 2, PII, Guardrail, and end-to-end latency metrics without customer text.
+- [ ] CloudWatch shows Event 1, transcription start, Event 2, Guardrail, and end-to-end latency metrics without customer text.
 - [ ] Queue age and DLQ depth return to zero.
 - [ ] DynamoDB records show upload, waiting-job, continuation, and terminal states.
-- [ ] Private S3 contains only the expected upload, redacted transcript, and accepted artifacts.
+- [ ] Private S3 contains only the expected upload, expiring full transcript, and accepted artifacts.
 
 ## 15. Architecture Artifacts
 

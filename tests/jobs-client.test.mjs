@@ -86,6 +86,34 @@ test("meeting polling continues through transcription and analysis to human revi
   assert.equal(result.proposalId, "proposal-0001");
 });
 
+test("polling recovers from brief transient status-request failures", async () => {
+  let calls = 0;
+  const progress = [];
+  const result = await pollPipelineJob(
+    accepted,
+    async () => {
+      calls += 1;
+      if (calls <= 2) {
+        throw new TypeError("Failed to fetch");
+      }
+      return {
+        ...accepted,
+        action: "handoff.generate",
+        status: "complete",
+        retryCount: 1,
+        result: { provider: "agentcore" },
+      };
+    },
+    async () => {},
+    1_000,
+    { onProgress: (status) => progress.push(status.retryCount) }
+  );
+
+  assert.equal(calls, 3);
+  assert.deepEqual(progress, [1]);
+  assert.equal(result.provider, "agentcore");
+});
+
 test("external cancellation stops polling before another request starts", async () => {
   const controller = new AbortController();
   let fetchCalls = 0;

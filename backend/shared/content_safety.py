@@ -53,6 +53,15 @@ CONTROL_FIELDS = {
     "userId",
 }
 _CLIENTS: dict[str, Any] = {}
+PRIVATE_MEETING_ACTIONS = {
+    "meeting.process",
+    "meeting.approve",
+    "analyze_meeting",
+}
+
+
+def preserves_private_meeting_context(action: str) -> bool:
+    return action in PRIVATE_MEETING_ACTIONS
 
 
 class ContentSafetyError(RuntimeError):
@@ -89,6 +98,13 @@ def aws_client(service_name: str) -> Any:
 
 
 def enabled() -> bool:
+    configured = os.getenv("CONTENT_SAFETY_ENABLED")
+    if configured is None:
+        configured = os.getenv("PII_SCREENING_ENABLED", "false")
+    return configured.strip().lower() == "true"
+
+
+def pii_screening_enabled() -> bool:
     return os.getenv("PII_SCREENING_ENABLED", "false").strip().lower() == "true"
 
 
@@ -358,7 +374,7 @@ def screen_payload(
     action: str,
     trace_id: str = "",
 ) -> tuple[object, dict[str, object]]:
-    del action, trace_id
+    del trace_id
     normalized_source = source.strip().upper()
     if normalized_source not in {"INPUT", "OUTPUT"}:
         raise ValueError("Content-safety source must be INPUT or OUTPUT")
@@ -368,6 +384,7 @@ def screen_payload(
             "policyResult": "disabled",
             "redactionCount": 0,
             "piiTypes": [],
+            "piiMode": "disabled",
             "comprehendChunks": 0,
             "guardrailChunks": 0,
         }
@@ -375,19 +392,34 @@ def screen_payload(
     placeholders: dict[tuple[str, str], str] = {}
     pii_types: set[str] = set()
     texts: list[str] = []
-    sanitized, redactions, comprehend_chunks = _sanitize(
-        value,
-        placeholders,
-        pii_types,
-        texts,
-        block_high_risk=normalized_source == "INPUT",
-    )
+    if preserves_private_meeting_context(action):
+        sanitized = value
+        redactions = 0
+        comprehend_chunks = 0
+        texts.extend(text for _path, text in _text_leaves(value) if text.strip())
+        pii_mode = "preserved-private-context"
+    elif pii_screening_enabled():
+        sanitized, redactions, comprehend_chunks = _sanitize(
+            value,
+            placeholders,
+            pii_types,
+            texts,
+            block_high_risk=normalized_source == "INPUT",
+        )
+        pii_mode = "redacted"
+    else:
+        sanitized = value
+        redactions = 0
+        comprehend_chunks = 0
+        texts.extend(text for _path, text in _text_leaves(value) if text.strip())
+        pii_mode = "disabled"
     guardrail_chunks = _apply_guardrail(texts, normalized_source)
     return sanitized, {
         "source": normalized_source,
         "policyResult": "passed",
         "redactionCount": redactions,
         "piiTypes": sorted(pii_types),
+        "piiMode": pii_mode,
         "comprehendChunks": comprehend_chunks,
         "guardrailChunks": guardrail_chunks,
     }

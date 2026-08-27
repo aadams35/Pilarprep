@@ -544,7 +544,7 @@ def validate_job_request(payload: object) -> dict[str, Any]:
                 "meeting.process requires a positive "
                 "input.expectedApprovedPacketVersion"
             )
-        request["enablePiiRedaction"] = True
+        request.pop("enablePiiRedaction", None)
     elif action == "meeting.approve":
         scenario_id = require_identifier(
             request.get("scenarioId"), "input.scenarioId"

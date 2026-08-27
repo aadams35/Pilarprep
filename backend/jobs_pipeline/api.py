@@ -720,6 +720,10 @@ def _create_meeting_audio_upload(event: Mapping[str, Any]) -> dict[str, Any]:
     scope = derive_scope(event, payload)
     scenario_id = require_identifier(payload.get("scenarioId"), "scenarioId")
     assert_public_demo_scope(scope, scenario_id)
+    if payload.get("consentAcknowledged") is not True:
+        raise ValueError(
+            "Confirm that you are authorized to process this recording"
+        )
     meeting_id = require_identifier(payload.get("meetingId"), "meetingId")
     file_name = require_string(payload.get("fileName"), "fileName", maximum=180)
     content_type = require_string(payload.get("contentType"), "contentType", maximum=100).lower()
@@ -760,6 +764,9 @@ def _create_meeting_audio_upload(event: Mapping[str, Any]) -> dict[str, Any]:
             "mediaFormat": {"S": allowed[extension][1]},
             "expectedSizeBytes": {"N": str(size_bytes)},
             "status": {"S": "pending_scan"},
+            "consentAcknowledged": {"BOOL": True},
+            "consentVersion": {"S": "2026-08-27"},
+            "consentedAt": {"S": timestamp},
             "createdAt": {"S": timestamp},
             "updatedAt": {"S": timestamp},
             "expiresAt": {"N": str(now_epoch() + MEETING_AUDIO_UPLOAD_TTL_SECONDS)},
@@ -802,6 +809,7 @@ def _create_meeting_audio_upload(event: Mapping[str, Any]) -> dict[str, Any]:
             "contentType": content_type,
             "scenarioId": SCENARIO_ID,
             "status": "pending_scan",
+            "consentVersion": "2026-08-27",
         },
     )
 

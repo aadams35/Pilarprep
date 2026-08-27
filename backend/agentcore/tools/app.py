@@ -12,14 +12,28 @@ from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-from common.contracts import empty_project_state, normalize_project_update, require_string
-from common.identifiers import (
-    project_artifact_prefix,
-    project_partition_key,
-    require_identifier,
-)
-from common.security import assert_event_scope, verify_scope_token
-from tools.docx import handoff_docx_bytes
+try:
+    from common.contracts import empty_project_state, normalize_project_update, require_string
+    from common.identifiers import (
+        project_artifact_prefix,
+        project_partition_key,
+        require_identifier,
+    )
+    from common.security import assert_event_scope, verify_scope_token
+    from tools.docx import handoff_docx_bytes
+except ModuleNotFoundError:
+    from agentcore.common.contracts import (
+        empty_project_state,
+        normalize_project_update,
+        require_string,
+    )
+    from agentcore.common.identifiers import (
+        project_artifact_prefix,
+        project_partition_key,
+        require_identifier,
+    )
+    from agentcore.common.security import assert_event_scope, verify_scope_token
+    from agentcore.tools.docx import handoff_docx_bytes
 
 
 LOGGER = logging.getLogger(__name__)

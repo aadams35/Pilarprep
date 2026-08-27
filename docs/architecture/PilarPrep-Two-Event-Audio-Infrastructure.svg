@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="2300" height="850" viewBox="0 0 2300 850" role="img" aria-labelledby="title desc">
   <title id="title">PilarPrep secured AWS infrastructure flow</title>
-  <desc id="desc">PilarPrep frontend hosting, authentication, asynchronous jobs, malware-scanned meeting audio, mandatory transcript PII redaction, input and output safety gates, polling, retries, and private storage.</desc>
+  <desc id="desc">PilarPrep frontend hosting, authentication, asynchronous jobs, malware-scanned meeting audio, full private transcripts, input and output content-safety gates, polling, retries, and private storage.</desc>
   <defs>
     <style>
       text{font-family:Inter,"Segoe UI",Arial,sans-serif;fill:#17253a;letter-spacing:0}
@@ -106,9 +106,9 @@
   <path class="main" d="M1225 345H1245"/>
 
   <rect class="security" x="1410" y="300" width="150" height="100" rx="7"/>
-  <text class="title" x="1485" y="333" text-anchor="middle">PII input gate</text>
-  <text class="small" x="1485" y="357" text-anchor="middle">Amazon Comprehend +</text>
-  <text class="small" x="1485" y="376" text-anchor="middle">ApplyGuardrail INPUT</text>
+  <text class="title" x="1485" y="333" text-anchor="middle">Content safety gate</text>
+  <text class="small" x="1485" y="357" text-anchor="middle">Bedrock Guardrails</text>
+  <text class="small" x="1485" y="376" text-anchor="middle">INPUT screening</text>
   <text class="tiny" x="1485" y="393" text-anchor="middle">Required before AI</text>
   <path class="securityFlow" d="M1345 345H1410"/>
 
@@ -168,7 +168,7 @@
   <ellipse cx="437.5" cy="672" rx="82.5" ry="22" fill="#f7f4ff" stroke="#8b5cf6" stroke-width="2.2"/>
   <text class="title" x="437.5" y="705" text-anchor="middle">Private meeting-audio</text>
   <text class="title" x="437.5" y="724" text-anchor="middle">S3 bucket</text>
-  <text class="small" x="437.5" y="746" text-anchor="middle">Uploads + redacted transcripts</text>
+  <text class="small" x="437.5" y="746" text-anchor="middle">Uploads + full transcripts</text>
   <path class="input" d="M437.5 400V650"/>
   <text class="label" x="455" y="580">Authorized direct upload</text>
   <text class="small" x="455" y="600">Upload URL issued by Jobs API</text>
@@ -186,7 +186,7 @@
   <rect class="compute" x="1100" y="650" width="130" height="95" rx="7"/>
   <text class="title" x="1165" y="686" text-anchor="middle">Amazon</text>
   <text class="title" x="1165" y="705" text-anchor="middle">Transcribe</text>
-  <text class="small" x="1165" y="727" text-anchor="middle">PII-redacted transcript</text>
+  <text class="small" x="1165" y="727" text-anchor="middle">Full private transcript</text>
 
   <rect class="eventTwoNode" x="1300" y="650" width="140" height="95" rx="7"/>
   <text class="title" x="1370" y="681" text-anchor="middle">Amazon EventBridge</text>
@@ -227,7 +227,7 @@
   <line x1="1015" y1="820" x2="1059" y2="820" stroke="#228b66" stroke-width="2.1" stroke-dasharray="5 5"/>
   <text class="small" x="1069" y="824">Model call</text>
   <line x1="1205" y1="820" x2="1249" y2="820" stroke="#dc4b4b" stroke-width="2.2" stroke-dasharray="7 6"/>
-  <text class="small" x="1259" y="824">Security / PII screening</text>
+  <text class="small" x="1259" y="824">Malware / content safety</text>
   <line x1="1490" y1="820" x2="1534" y2="820" stroke="#2563eb" stroke-width="2.5"/>
   <text class="small" x="1544" y="824">Event 1: malware scan result</text>
   <line x1="1785" y1="820" x2="1829" y2="820" stroke="#0f8a8a" stroke-width="2.5"/>

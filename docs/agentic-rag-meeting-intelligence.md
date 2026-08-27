@@ -22,16 +22,18 @@ The feature preserves that architecture. It adds a bounded meeting workflow rath
 
 1. Curate one synthetic Blue Mesa corpus with strict metadata.
 2. Create a private Bedrock Knowledge Base backed by S3 Vectors.
-3. Generate one prepared synthetic MP3 and store it at a fixed private key.
-4. Start an asynchronous Amazon Transcribe job from the existing worker.
-5. Resume the exact job through EventBridge and the same SQS queue.
-6. Retrieve only approved Blue Mesa evidence with bounded tools.
-7. Use Nova Pro to compare the transcript with the approved brief.
-8. validate timestamps, transcript evidence, payroll scope, and the existing-AWS correction.
-9. Persist proposed changes without mutating approved state.
-10. Require human accept, edit, or reject decisions.
-11. Apply accepted changes with an optimistic DynamoDB transaction.
-12. Generate the handoff only after approval and keep catch-up read-only.
+3. Require recording authorization before issuing a scoped direct-upload form.
+4. Store audio in a private quarantine prefix and require a clean GuardDuty malware verdict.
+5. Start an asynchronous Amazon Transcribe job without PII redaction.
+6. Resume the exact job through EventBridge and the same SQS queue.
+7. Apply Bedrock Guardrails to the full private transcript before AI analysis.
+8. Retrieve only approved Blue Mesa evidence with bounded tools.
+9. Use Nova Pro to compare the transcript with the approved brief.
+10. Validate timestamps, transcript evidence, payroll scope, and the existing-AWS correction.
+11. Persist proposed changes without mutating approved state.
+12. Require human accept, edit, or reject decisions.
+13. Apply accepted changes with an optimistic DynamoDB transaction.
+14. Generate the handoff only after approval and keep catch-up read-only.
 
 ## 3. Files Changed
 
@@ -156,25 +158,36 @@ sequenceDiagram
     participant DDB as DynamoDB
     participant Q as SQS
     participant W as AI Worker
+    participant GD as GuardDuty Malware Protection
     participant T as Amazon Transcribe
     participant EB as EventBridge
+    participant GR as Bedrock Guardrails
     participant AC as AgentCore + Strands
     participant S3 as Private S3
 
-    User->>UI: Process synthetic meeting
-    UI->>API: POST meeting.process with fixed scenario/audio/version
+    User->>UI: Confirm authorization and choose synthetic audio
+    UI->>API: Request scoped upload
+    API-->>UI: Short-lived private upload form
+    UI->>S3: Upload to quarantine prefix
+    S3-->>GD: New upload
+    GD-->>EB: Malware scan result
+    EB->>Q: Send scan event
+    UI->>API: POST meeting.process with upload/version
     API->>DDB: Create scoped queued job
     API->>S3: Store validated input
     API->>Q: Send job and S3 pointer
     Q->>W: Deliver job
+    W->>DDB: Verify clean scan, scope, and waiting request
     W->>T: Start batch transcription with speakers
     W->>DDB: Store stable continuation and phase
-    T->>S3: Write private transcript
+    T->>S3: Write full private transcript
     T-->>EB: COMPLETED or FAILED
     EB->>Q: Send completion event
     Q->>W: Deliver continuation
     W->>DDB: Claim continuation lease
     W->>S3: Read transcript and approved packet
+    W->>GR: Screen transcript content
+    GR-->>W: Accept or block
     W->>AC: Analyze with bounded RAG and Nova Pro
     AC-->>W: Structured proposed changes
     W->>S3: Save proposed artifact
@@ -184,7 +197,7 @@ sequenceDiagram
 
 Stable values carried through the continuation are scenarioId, meetingId, jobId, sessionId, traceId, inputVersion, and expected approved packet version. Conditional continuation claims suppress duplicate analysis.
 
-The prepared MP3 is a durable demo asset. Transcribe output and temporary continuation records expire. Public visitors cannot upload or select an arbitrary audio key.
+The prepared MP3 is a durable synthetic demo asset. User uploads and full Transcribe output expire. Only a scoped IAM-authenticated Blue Mesa workflow can obtain upload authorization; callers cannot select an arbitrary bucket or object key.
 
 ## 8. Meeting-Analysis Schema
 

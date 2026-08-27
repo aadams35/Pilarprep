@@ -1119,7 +1119,7 @@ Resources:
                 Condition:
                   StringEquals:
                     s3:ExistingObjectTag/GuardDutyMalwareScanStatus: NO_THREATS_FOUND
-              - Sid: ReadWriteOnlyRedactedMeetingTranscripts
+              - Sid: ReadWriteOnlyPrivateMeetingTranscripts
                 Effect: Allow
                 Action:
                   - s3:GetObject
@@ -1428,6 +1428,7 @@ Resources:
           AGENT_RUNTIME_READ_TIMEOUT_SECONDS: "300"
           MAX_RECEIVE_COUNT: "3"
           RETRY_VISIBILITY_SECONDS: "5"
+          CONTENT_SAFETY_ENABLED: "true"
           PII_SCREENING_ENABLED: "true"
           EXPECTED_AWS_ACCOUNT_ID: !Ref AWS::AccountId
           BRIEF_PROMPT_VERSION: "2026-08-21.1"
@@ -1839,7 +1840,7 @@ Resources:
     Properties:
       AlarmActions: [!Ref OperationsAlertTopic]
       AlarmName: !Sub "${ResourcePrefix}-meeting-audio-security-outcomes"
-      AlarmDescription: A meeting upload was blocked, skipped, or failed security scanning.
+      AlarmDescription: A meeting upload was blocked, skipped, or failed malware scanning.
       Metrics:
         - Id: blocked
           ReturnData: false
@@ -2330,7 +2331,7 @@ Outputs:
     Description: SNS topic receiving actionable PilarPrep queue and worker alarms.
     Value: !Ref OperationsAlertTopic
   MeetingEvidenceBucketName:
-    Description: Private bucket for synthetic audio, redacted transcripts, and approved RAG evidence.
+    Description: Private bucket for malware-scanned audio, expiring full transcripts, and approved RAG evidence.
     Value: !Ref MeetingEvidenceBucket
   MeetingAudioMalwareProtectionPlanId:
     Description: GuardDuty Malware Protection plan scoped to the meeting upload quarantine prefix.

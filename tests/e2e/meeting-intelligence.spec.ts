@@ -195,6 +195,9 @@ test("meeting intelligence stays readable through transcription and human review
       return;
     }
     if (route.request().method() === "POST" && path === "/meeting-audio/uploads") {
+      expect(route.request().postDataJSON()).toMatchObject({
+        consentAcknowledged: true,
+      });
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -263,13 +266,18 @@ test("meeting intelligence stays readable through transcription and human review
   const workspace = page.locator(".meeting-intelligence");
   await expect(workspace).toBeVisible();
   await expect(workspace.getByText("Synthetic demo", { exact: true })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "Choose audio" })).toBeDisabled();
+  await workspace.getByRole("checkbox").check();
+  await expect(workspace.getByRole("button", { name: "Choose audio" })).toBeEnabled();
+  await expect(workspace.getByText("Full transcript", { exact: true })).toBeVisible();
+  await expect(workspace.getByText("Content safety", { exact: true })).toBeVisible();
 
   await workspace.locator('input[type="file"]').setInputFiles({
     name: "PilarPrep-Blue-Mesa-Discovery-Meeting.mp3",
     mimeType: "audio/mpeg",
     buffer: Buffer.from("synthetic meeting audio"),
   });
-  await expect(workspace.getByText("Scanning for threats", { exact: false })).toBeVisible();
+  await expect(workspace.getByText("Scanning for malware", { exact: false })).toBeVisible();
   await expect(workspace.getByText("MB · Ready to process", { exact: false })).toBeVisible();
 
   await page.getByRole("button", { name: "Process meeting audio" }).click();

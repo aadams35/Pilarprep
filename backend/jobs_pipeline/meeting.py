@@ -429,7 +429,7 @@ def _resolve_audio_upload(
             )
         if status == "scan_failed":
             raise MeetingConflictError(
-                "The audio security scan could not complete. Remove it and upload again."
+                "The audio malware scan could not complete. Remove it and upload again."
             )
         if status not in {"clean", "processing"}:
             raise MeetingConflictError(
@@ -806,7 +806,7 @@ def fail_waiting_scan_process(scan_result: Mapping[str, Any]) -> None:
     message = (
         "This audio upload was blocked. Remove it and upload a new file."
         if outcome == "blocked"
-        else "The audio security scan could not complete. Remove it and upload again."
+        else "The audio malware scan could not complete. Remove it and upload again."
     )
     try:
         aws_client("dynamodb").update_item(
@@ -917,16 +917,8 @@ def _status_job(
     )
 
 
-def _transcript_output_keys(
-    job_name: str, pii_redaction: bool
-) -> tuple[str, str]:
-    requested = f"{TRANSCRIPT_PREFIX}{job_name}.json"
-    expected = (
-        f"{TRANSCRIPT_PREFIX}redacted-{job_name}.json"
-        if pii_redaction
-        else requested
-    )
-    return requested, expected
+def _transcript_output_key(job_name: str) -> str:
+    return f"{TRANSCRIPT_PREFIX}full-{job_name}.json"
 
 
 def start_transcription(
@@ -978,10 +970,7 @@ def start_transcription(
         audio_key = safe_audio_key(inputs.get("audioKey"))
         media_format = "mp3"
     job_name = f"pillarprep-{job_id}"
-    pii_redaction = True
-    requested_output_key, expected_output_key = _transcript_output_keys(
-        job_name, pii_redaction
-    )
+    output_key = _transcript_output_key(job_name)
     timestamp = now_iso()
     continuation = {
         **_continuation_key(job_name),
@@ -997,8 +986,8 @@ def start_transcription(
         "audioKey": {"S": audio_key},
         "audioUploadId": {"S": audio_upload_id},
         "mediaFormat": {"S": media_format},
-        "outputKey": {"S": expected_output_key},
-        "piiRedaction": {"BOOL": True},
+        "outputKey": {"S": output_key},
+        "transcriptMode": {"S": "full-private"},
         "requestedAt": {"S": str(document.get("createdAt") or timestamp)},
         "expectedApprovedPacketVersion": {"N": str(expected_version)},
         "tenantId": {"S": scope["tenantId"]},
@@ -1033,7 +1022,7 @@ def start_transcription(
             )
         },
         "OutputBucketName": MEETING_EVIDENCE_BUCKET,
-        "OutputKey": requested_output_key,
+        "OutputKey": output_key,
         "Settings": {
             "ShowSpeakerLabels": True,
             "MaxSpeakerLabels": 4,
@@ -1041,13 +1030,8 @@ def start_transcription(
         "Tags": [
             {"Key": "Project", "Value": "PilarPrep"},
             {"Key": "ScenarioId", "Value": SCENARIO_ID},
-            {"Key": "DataClassification", "Value": "synthetic-demo"},
+            {"Key": "DataClassification", "Value": "private-meeting"},
         ],
-    }
-    request["ContentRedaction"] = {
-        "RedactionType": "PII",
-        "RedactionOutput": "redacted",
-        "PiiEntityTypes": ["ALL"],
     }
     try:
         aws_client("transcribe").start_transcription_job(**request)
@@ -1215,10 +1199,11 @@ def fail_continuation(
 def read_transcript(continuation: Mapping[str, Any]) -> dict[str, Any]:
     output_key = str(continuation.get("outputKey") or "")
     if (
-        continuation.get("piiRedaction") is not True
-        or not output_key.startswith(TRANSCRIPT_PREFIX + "redacted-")
+        continuation.get("transcriptMode") != "full-private"
+        or not output_key.startswith(TRANSCRIPT_PREFIX + "full-pillarprep-")
+        or not output_key.endswith(".json")
     ):
-        raise PermissionError("Only the redacted transcript may be processed")
+        raise PermissionError("Only a scoped private transcript may be processed")
     raw = (
         aws_client("s3")
         .get_object(Bucket=MEETING_EVIDENCE_BUCKET, Key=output_key)["Body"]
@@ -1277,11 +1262,18 @@ def persist_proposal(
         "traceId": continuation.get("traceId"),
     }
     prefix = f"{project_artifact_prefix(scope)}/meeting/{meeting_id}"
-    transcript_key = f"{prefix}/transcript/latest.json"
+    transcript_key = (
+        "transcripts/private/{}/{}/{}/{}/latest.json".format(
+            scope["tenantId"],
+            scope["clientId"],
+            scope["projectId"],
+            meeting_id,
+        )
+    )
     proposal_key = f"{prefix}/proposal/latest.json"
     s3 = aws_client("s3")
     s3.put_object(
-        Bucket=ARTIFACT_BUCKET,
+        Bucket=MEETING_EVIDENCE_BUCKET,
         Key=transcript_key,
         Body=json.dumps(transcript, separators=(",", ":")).encode("utf-8"),
         ContentType="application/json",
@@ -1327,6 +1319,7 @@ def persist_proposal(
         "metadata": {
             "proposalArtifactKey": proposal_key,
             "transcriptArtifactKey": transcript_key,
+            "transcriptStorage": "private-meeting-evidence",
             "traceId": continuation.get("traceId"),
             "retrieval": proposal["retrieval"],
             "model": proposal["model"],

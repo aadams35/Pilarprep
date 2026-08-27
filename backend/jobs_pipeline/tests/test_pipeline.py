@@ -86,7 +86,15 @@ sys.modules.setdefault("botocore", fake_botocore)
 sys.modules.setdefault("botocore.exceptions", fake_exceptions)
 sys.modules.setdefault("botocore.config", fake_config)
 
-from jobs_pipeline import api, common, evidence, meeting, meeting_contracts, worker  # noqa: E402
+from jobs_pipeline import (  # noqa: E402
+    api,
+    common,
+    evidence,
+    handoff_promotion,
+    meeting,
+    meeting_contracts,
+    worker,
+)
 from shared import content_safety  # noqa: E402
 
 
@@ -1216,6 +1224,7 @@ class JobsApiTests(unittest.TestCase):
             "fileName": "blue-mesa-call.mp3",
             "contentType": "audio/mpeg",
             "sizeBytes": 4096,
+            "consentAcknowledged": True,
         }
         event = iam_event(
             path="/meeting-audio/uploads", body=payload
@@ -1238,6 +1247,31 @@ class JobsApiTests(unittest.TestCase):
         self.assertTrue(key.startswith("audio/uploads/"))
         self.assertNotIn("audioKey", body)
         self.assertEqual(calls["items"][0]["Item"]["ownerId"]["S"], BLUE_SCOPE["userId"])
+        self.assertTrue(
+            calls["items"][0]["Item"]["consentAcknowledged"]["BOOL"]
+        )
+        self.assertEqual(body["consentVersion"], "2026-08-27")
+
+    def test_meeting_audio_upload_requires_recording_authorization(self):
+        payload = {
+            "clientId": BLUE_SCOPE["clientId"],
+            "projectId": BLUE_SCOPE["projectId"],
+            "sessionId": BLUE_SCOPE["sessionId"],
+            "scenarioId": meeting_contracts.SCENARIO_ID,
+            "meetingId": meeting_contracts.DEFAULT_MEETING_ID,
+            "fileName": "blue-mesa-call.mp3",
+            "contentType": "audio/mpeg",
+            "sizeBytes": 4096,
+        }
+        with (
+            patch.object(api, "PROJECT_TABLE", "project-state"),
+            patch.object(api, "MEETING_EVIDENCE_BUCKET", "private-meeting-audio"),
+            patch.object(api, "derive_scope", return_value=BLUE_SCOPE),
+            self.assertRaisesRegex(ValueError, "authorized to process"),
+        ):
+            api._create_meeting_audio_upload(
+                iam_event(path="/meeting-audio/uploads", body=payload)
+            )
 
 
     def test_custom_scenario_meeting_audio_is_denied_without_server_error(self):
@@ -1843,6 +1877,76 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(set(screened_inputs[0]), {"document", "transcript"})
         self.assertNotIn("approvedDocument", screened_inputs[0])
 
+    def test_meeting_guardrail_block_stops_analysis_and_persistence(self):
+        continuation = {
+            **BLUE_SCOPE,
+            "projectScopeId": BLUE_SCOPE["projectId"],
+            "jobId": "job-meeting-blocked",
+            "inputKey": "jobs/meeting/input.json",
+            "inputVersion": "input-0001",
+            "expectedApprovedPacketVersion": 4,
+            "traceId": "trace-meeting-blocked",
+        }
+        failures = []
+        fake_meeting = types.SimpleNamespace(
+            claim_continuation=lambda _job_name: continuation,
+            continuation_scope=lambda _item: BLUE_SCOPE,
+            set_job_phase=lambda *_args, **_kwargs: None,
+            read_transcript=lambda _item: {
+                "text": "Transcript content that the configured policy blocks.",
+                "durationSeconds": 60,
+                "speakerCount": 1,
+                "segments": [],
+            },
+            persist_proposal=lambda *_args, **_kwargs: self.fail(
+                "Blocked content must not persist a proposal"
+            ),
+            fail_continuation=lambda *_args, **_kwargs: failures.append(True),
+            MeetingConflictError=meeting_contracts.MeetingConflictError,
+        )
+        event = {
+            "source": "aws.transcribe",
+            "detail-type": "Transcribe Job State Change",
+            "detail": {
+                "TranscriptionJobName": "pillarprep-job-meeting-blocked",
+                "TranscriptionJobStatus": "COMPLETED",
+            },
+        }
+        record = {
+            "body": json.dumps(event),
+            "attributes": {"ApproximateReceiveCount": "1"},
+        }
+        with (
+            patch.object(worker, "_meeting_module", return_value=fake_meeting),
+            patch.object(
+                worker,
+                "_load_input",
+                return_value={"action": "meeting.process", "input": {}},
+            ),
+            patch.object(
+                worker,
+                "_approved_document",
+                return_value=(
+                    {"approvedPacketVersion": 4},
+                    {"response": {"technical": ["approved"]}},
+                ),
+            ),
+            patch.object(
+                worker,
+                "_screen_ai_payload",
+                side_effect=worker.NonRetryableJobError(
+                    "Content safety check blocked the transcript"
+                ),
+            ),
+            patch.object(worker, "_run_meeting_analysis") as analyze,
+            patch.object(worker, "_store_result") as store_result,
+        ):
+            worker._process_record(record)
+
+        analyze.assert_not_called()
+        store_result.assert_not_called()
+        self.assertEqual(failures, [True])
+
     def test_refinement_content_validation_failure_is_non_retryable(self):
         brief_module = types.SimpleNamespace(
             _validate_brief_payload=lambda _payload: None,
@@ -2392,12 +2496,12 @@ class MeetingWorkflowTests(unittest.TestCase):
                 "meetingId": meeting_contracts.DEFAULT_MEETING_ID,
                 "audioKey": meeting_contracts.DEFAULT_AUDIO_KEY,
                 "expectedApprovedPacketVersion": 4,
-                "enablePiiRedaction": True,
+                "enablePiiRedaction": False,
             },
         }
         validated = common.validate_job_request(request)
         self.assertEqual(validated["input"]["expectedApprovedPacketVersion"], 4)
-        self.assertTrue(validated["input"]["enablePiiRedaction"])
+        self.assertNotIn("enablePiiRedaction", validated["input"])
 
         request["input"]["scenarioId"] = "another-scenario"
         with self.assertRaises(common.AuthorizationError):
@@ -2424,24 +2528,13 @@ class MeetingWorkflowTests(unittest.TestCase):
             {"N": "12.5"},
         )
 
-    def test_transcribe_pii_redaction_uses_the_redacted_output_object(self):
-        requested, expected = meeting._transcript_output_keys(
-            "pillarprep-job-123", True
-        )
+    def test_transcribe_uses_a_scoped_full_private_output_object(self):
         self.assertEqual(
-            requested,
-            "transcripts/public-demo/blue-mesa-payments/pillarprep-job-123.json",
-        )
-        self.assertEqual(
-            expected,
-            "transcripts/public-demo/blue-mesa-payments/redacted-pillarprep-job-123.json",
-        )
-        self.assertEqual(
-            meeting._transcript_output_keys("pillarprep-job-123", False),
-            (requested, requested),
+            meeting._transcript_output_key("pillarprep-job-123"),
+            "transcripts/public-demo/blue-mesa-payments/full-pillarprep-job-123.json",
         )
 
-    def test_start_transcription_persists_action_and_redacted_pointer(self):
+    def test_start_transcription_persists_full_private_pointer(self):
         captured = {}
 
         class FakeS3:
@@ -2466,7 +2559,6 @@ class MeetingWorkflowTests(unittest.TestCase):
                 "scenarioId": "blue-mesa-payments",
                 "meetingId": "blue-mesa-discovery",
                 "expectedApprovedPacketVersion": 4,
-                "enablePiiRedaction": True,
             }
         }
         with (
@@ -2490,25 +2582,163 @@ class MeetingWorkflowTests(unittest.TestCase):
 
         continuation = captured["continuation"]
         self.assertEqual(continuation["action"]["S"], "meeting.process")
-        self.assertTrue(
-            continuation["outputKey"]["S"].endswith(
-                "/redacted-pillarprep-job-123.json"
-            )
+        self.assertEqual(
+            continuation["transcriptMode"]["S"], "full-private"
         )
         self.assertTrue(
             captured["request"]["OutputKey"].endswith(
-                "/pillarprep-job-123.json"
+                "/full-pillarprep-job-123.json"
             )
         )
+        self.assertNotIn("ContentRedaction", captured["request"])
 
-        self.assertEqual(
-            captured["request"]["ContentRedaction"],
-            {
-                "RedactionType": "PII",
-                "RedactionOutput": "redacted",
-                "PiiEntityTypes": ["ALL"],
+    def test_human_review_promotes_agent_analysis_without_second_model_call(self):
+        base = {
+            "provider": "agentcore",
+            "projectAnswer": "Pre-call handoff",
+            "projectArtifacts": {
+                "twoWeekPlan": [
+                    {
+                        "title": "Days 1-2",
+                        "detail": "Validate the integration.",
+                        "owner": "SA",
+                        "status": "Open",
+                    }
+                ],
+                "riskRegister": [
+                    {
+                        "title": "Availability",
+                        "detail": "Validate RTO.",
+                        "owner": "SA",
+                        "status": "Open",
+                    }
+                ],
+                "stakeholderMap": [
+                    {
+                        "title": "Dev Malik",
+                        "detail": "Technical sponsor.",
+                        "owner": "AE",
+                        "status": "Engage",
+                    }
+                ],
+                "followUpEmail": {
+                    "subject": "Pre-call",
+                    "body": "Prepare for the customer call.",
+                },
+                "nextSteps": {
+                    "immediateActions": [],
+                    "openQuestions": ["What is the target RTO?"],
+                    "nextMeeting": {
+                        "purpose": "Discovery",
+                        "timing": "Week 2",
+                        "attendees": ["Dev Malik"],
+                    },
+                    "customerSummary": "Blue Mesa needs payroll integration.",
+                    "internalNotes": "Validate the integration boundary.",
+                },
             },
+            "citations": ["Latest approved PilarPrep brief"],
+            "evidence": [],
+            "metadata": {"approvedPacketVersion": 4},
+        }
+        proposal = {
+            "meetingId": "blue-mesa-discovery",
+            "analysis": {
+                "meetingSummary": (
+                    "Blue Mesa confirmed payroll partner integration on AWS."
+                ),
+                "proposedHandoffSummary": (
+                    "Validate interfaces and reach the partner-certification gate."
+                ),
+            },
+        }
+        accepted = [
+            {
+                "category": "actions",
+                "proposedUpdate": (
+                    "Dev will provide the current integration diagram."
+                ),
+                "speaker": "Dev Malik",
+                "timestampStart": 64,
+                "owner": "Dev Malik",
+                "targetDate": "Tuesday",
+                "dependency": "Current account inventory",
+            }
+        ]
+        promoted = handoff_promotion.promote_handoff(
+            base,
+            proposal,
+            accepted,
+            company="BlueMesa Payments",
+            packet_version=4,
         )
+
+        self.assertEqual(promoted["provider"], "agentcore")
+        self.assertFalse(promoted["metadata"]["modelInvokedForApproval"])
+        self.assertEqual(
+            promoted["metadata"]["handoffAssembly"],
+            "human-approved-meeting-promotion",
+        )
+        self.assertIn("Dev will provide", promoted["projectAnswer"])
+        self.assertEqual(
+            promoted["projectArtifacts"]["nextSteps"][
+                "immediateActions"
+            ][0]["owner"],
+            "Dev Malik",
+        )
+
+    def test_meeting_approval_does_not_invoke_agentcore_again(self):
+        proposal = {
+            "proposalId": "proposal-fast",
+            "meetingId": "blue-mesa-discovery",
+            "analysis": {"meetingSummary": "Approved meeting summary"},
+        }
+        accepted = [
+            {"id": "action-one", "proposedUpdate": "Provide evidence"}
+        ]
+        handoff = {
+            "provider": "agentcore",
+            "projectAnswer": "Promoted handoff",
+            "metadata": {"modelInvokedForApproval": False},
+        }
+        with (
+            patch.object(
+                worker,
+                "_approved_document",
+                return_value=(
+                    {"approvedPacketVersion": 4},
+                    {"response": {"projectAnswer": "Approved"}},
+                ),
+            ),
+            patch.object(
+                meeting,
+                "review_proposal",
+                return_value=(proposal, accepted, []),
+            ),
+            patch.object(
+                worker,
+                "_promote_approved_meeting",
+                return_value=handoff,
+            ) as promote,
+            patch.object(
+                meeting,
+                "finalize_approval",
+                return_value=handoff,
+            ),
+            patch.object(
+                worker,
+                "_run_agent",
+                side_effect=AssertionError("second model call is forbidden"),
+            ),
+        ):
+            result = worker._approve_meeting(
+                BLUE_SCOPE,
+                {"idempotencyKey": "meeting-fast-path"},
+            )
+
+        self.assertEqual(result["projectAnswer"], "Promoted handoff")
+        promote.assert_called_once()
+
     def test_analysis_requires_payroll_and_preserves_existing_aws_state(self):
         transcript = {
             "text": (
@@ -3109,6 +3339,56 @@ class ContentSafetyTests(unittest.TestCase):
             "alice@example.com", calls[0]["content"][0]["text"]["text"]
         )
 
+    def test_private_meeting_preserves_context_and_still_applies_guardrail(self):
+        text = "Dev Malik can be reached at dev@example.com."
+        guardrail_calls = []
+
+        class Comprehend:
+            def detect_pii_entities(self, **_kwargs):
+                raise AssertionError("Meeting context must not use PII redaction")
+
+        class Guardrail:
+            def apply_guardrail(self, **kwargs):
+                guardrail_calls.append(kwargs)
+                return {"action": "NONE"}
+
+        clients = {
+            "comprehend": Comprehend(),
+            "bedrock-runtime": Guardrail(),
+        }
+        with (
+            patch.dict(
+                content_safety.os.environ,
+                {
+                    "PII_SCREENING_ENABLED": "true",
+                    "BEDROCK_GUARDRAIL_ID": "guardrail-1",
+                    "BEDROCK_GUARDRAIL_VERSION": "1",
+                },
+                clear=False,
+            ),
+            patch.object(
+                content_safety,
+                "aws_client",
+                side_effect=lambda name: clients[name],
+            ),
+        ):
+            screened, diagnostics = content_safety.screen_payload(
+                {"notes": text},
+                source="INPUT",
+                action="meeting.process",
+                trace_id="trace-meeting-names",
+            )
+
+        self.assertIn("Dev Malik", screened["notes"])
+        self.assertIn("dev@example.com", screened["notes"])
+        self.assertEqual(diagnostics["redactionCount"], 0)
+        self.assertEqual(diagnostics["piiMode"], "preserved-private-context")
+        self.assertEqual(diagnostics["comprehendChunks"], 0)
+        self.assertIn(
+            text,
+            guardrail_calls[0]["content"][0]["text"]["text"],
+        )
+
     def test_structured_payload_is_screened_in_bounded_batches(self):
         sections = [
             {
@@ -3580,7 +3860,7 @@ class AudioSecurityTests(unittest.TestCase):
             )
         self.assertEqual(len(calls), 1)
 
-    def test_client_cannot_disable_transcribe_pii_redaction(self):
+    def test_client_cannot_override_server_transcript_policy(self):
         request = {
             "action": "meeting.process",
             "clientId": BLUE_SCOPE["clientId"],
@@ -3596,14 +3876,14 @@ class AudioSecurityTests(unittest.TestCase):
             },
         }
         validated = common.validate_job_request(request)
-        self.assertTrue(validated["input"]["enablePiiRedaction"])
+        self.assertNotIn("enablePiiRedaction", validated["input"])
 
-    def test_unredacted_transcript_pointer_is_rejected_before_s3_read(self):
+    def test_legacy_or_unscoped_transcript_pointer_is_rejected_before_s3_read(self):
         with self.assertRaises(PermissionError):
             meeting.read_transcript(
                 {
-                    "piiRedaction": False,
-                    "outputKey": meeting.TRANSCRIPT_PREFIX + "pillarprep-job.json",
+                    "transcriptMode": "full-private",
+                    "outputKey": meeting.TRANSCRIPT_PREFIX + "redacted-pillarprep-job.json",
                 }
             )
 
@@ -3834,6 +4114,8 @@ class SecurityBoundaryTests(unittest.TestCase):
         )
         self.assertIn("PII_SCREENING_ENABLED: \"true\"", pipeline)
         self.assertIn("PII_SCREENING_ENABLED: \"true\"", agentcore)
+        self.assertIn("CONTENT_SAFETY_ENABLED: \"true\"", pipeline)
+        self.assertIn("CONTENT_SAFETY_ENABLED: \"true\"", agentcore)
         self.assertIn(r"backend\shared\content_safety.py", deploy_agent)
         self.assertGreaterEqual(worker_source.count("_screen_ai_payload("), 8)
         self.assertIn("content_safety.screen_payload(", agent_service)

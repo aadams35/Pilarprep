@@ -391,6 +391,7 @@ const uploadTarget = await signedJson(
     fileName: "blue-mesa-discovery.mp3",
     contentType: "audio/mpeg",
     sizeBytes: audioBytes.byteLength,
+    consentAcknowledged: true,
   },
   "Blue Mesa meeting audio upload target"
 );
@@ -435,7 +436,6 @@ const meeting = await runJob(
       meetingId: "blue-mesa-discovery",
       audioUploadId: uploadTarget.body.uploadId,
       expectedApprovedPacketVersion: packetVersion,
-      enablePiiRedaction: true,
       modelPreference: "nova-pro",
     },
   },
@@ -444,6 +444,7 @@ const meeting = await runJob(
 );
 const review = meeting.result;
 assertLiveProvider(review, "agentcore-strands", "Blue Mesa meeting processing");
+const transcriptText = JSON.stringify(review.transcript);
 if (
   review.scenarioId !== "blue-mesa-payments" ||
   !review.transcript?.segments?.length ||
@@ -456,6 +457,24 @@ if (
   !review.reviewItems?.length
 ) {
   throw new Error("Meeting review is missing speaker, timestamp, or proposal data.");
+}
+if (
+  !transcriptText.includes("Dev Malik") ||
+  !transcriptText.includes("Rachel Kim")
+) {
+  throw new Error(
+    "The full private transcript did not preserve the expected synthetic participant names."
+  );
+}
+const transcriptSafety = review.metadata?.safety?.transcriptInput;
+if (
+  transcriptSafety?.policyResult !== "passed" ||
+  transcriptSafety?.piiMode !== "preserved-private-context" ||
+  !(transcriptSafety?.guardrailChunks > 0)
+) {
+  throw new Error(
+    "The meeting transcript did not pass the expected non-redacting Guardrail path."
+  );
 }
 const analysisText = JSON.stringify(review.analysis).toLowerCase();
 if (
@@ -593,6 +612,8 @@ console.table({
   meetingJobId: meeting.jobId,
   meetingStates: meeting.statuses.join(" -> "),
   transcriptSegments: review.transcript.segments.length,
+  transcriptNamesPreserved: "yes",
+  transcriptGuardrail: transcriptSafety.policyResult,
   reviewItems: review.reviewItems.length,
   acceptedChanges: meetingApproval.result.meetingApproval.acceptedCount,
   rejectedChanges: meetingApproval.result.meetingApproval.rejectedCount,

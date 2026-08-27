@@ -79,6 +79,7 @@ import type {
   PipelineJobAction,
   PipelineJobRequest,
   PipelineJobState,
+  PipelineJobStatus,
   ProjectArtifactItem,
   RefinementTarget,
 } from "@/lib/pillarprep/types";
@@ -2674,6 +2675,7 @@ const industryFocus = useMemo(() => {
     options: {
       signal?: AbortSignal;
       onStatus?: (status: PipelineJobState) => void;
+      onProgress?: (status: PipelineJobStatus) => void;
       timeoutMs?: number;
     } = {}
   ) {
@@ -3238,6 +3240,16 @@ const industryFocus = useMemo(() => {
           signal: controller.signal,
           onStatus: (status) =>
             setPrecallHandoffStatus(status === "queued" ? "queued" : "preparing"),
+          onProgress: (progress) => {
+            setPrecallHandoffStatus(
+              progress.status === "queued" ? "queued" : "preparing"
+            );
+            setPrecallHandoffError(
+              progress.retryCount > 0
+                ? "AgentCore hit a temporary issue. AWS is retrying this handoff automatically."
+                : ""
+            );
+          },
         }
       );
       const handoff = normalizeBriefResponse(raw, "agentcore");
@@ -3383,6 +3395,23 @@ const industryFocus = useMemo(() => {
   function refreshProjectModel() {
     setSelectedLifecycleStage("sa-ready");
     setActivePage("project");
+    const automaticJobId = generatedBrief?.metadata?.precallHandoffJobId || "";
+    const automaticSourceVersion =
+      generatedBrief?.metadata?.precallHandoffSourceVersion ||
+      generatedBrief?.metadata?.approvedPacketVersion ||
+      briefVersion;
+    if (
+      automaticJobId &&
+      (precallHandoffStatus === "queued" ||
+        precallHandoffStatus === "preparing")
+    ) {
+      void monitorAutomaticHandoff(
+        automaticJobId,
+        company,
+        automaticSourceVersion
+      );
+      return;
+    }
     void requestBrief("project");
   }
 
@@ -3441,20 +3470,20 @@ const industryFocus = useMemo(() => {
         signal
       );
       if (typeof response !== "object" || response === null) {
-        throw new Error("The audio security scan returned an invalid status.");
+        throw new Error("The audio malware scan returned an invalid status.");
       }
       const status = (response as Record<string, unknown>).status;
       if (status === "pending_scan") continue;
       if (status === "clean" || status === "processing") return "clean";
       if (status === "blocked" || status === "scan_failed") return status;
-      throw new Error("The audio security scan returned an unknown status.");
+      throw new Error("The audio malware scan returned an unknown status.");
     }
     throw new Error(
-      "The audio security scan is taking longer than expected. Remove the file and try again."
+      "The audio malware scan is taking longer than expected. Remove the file and try again."
     );
   }
 
-  async function uploadMeetingAudio(file: File) {
+  async function uploadMeetingAudio(file: File, consentAcknowledged: boolean) {
     const extension = file.name.split(".").pop()?.toLowerCase() || "";
     const contentTypes: Record<string, string> = {
       mp3: "audio/mpeg",
@@ -3495,6 +3524,7 @@ const industryFocus = useMemo(() => {
           fileName: file.name,
           contentType: contentTypes[extension],
           sizeBytes: file.size,
+          consentAcknowledged,
         }
       );
       if (
@@ -3520,7 +3550,7 @@ const industryFocus = useMemo(() => {
       }
       setMeetingAudioUploadId(record.uploadId);
       setMeetingAudio({ fileName: file.name, sizeBytes: file.size, status: "scanning" });
-      setMeetingNotice("Audio uploaded securely. The security scan is running.");
+      setMeetingNotice("Audio uploaded securely. The malware scan is running.");
       const scanStatus = await waitForMeetingAudioScan(
         record.uploadId,
         clientId,
@@ -3530,7 +3560,7 @@ const industryFocus = useMemo(() => {
       );
       if (scanStatus === "clean") {
         setMeetingAudio({ fileName: file.name, sizeBytes: file.size, status: "ready" });
-        setMeetingNotice("Security scan complete. The audio is ready to process.");
+        setMeetingNotice("Malware scan complete. The audio is ready to process.");
       } else if (scanStatus === "blocked") {
         setMeetingAudio({ fileName: file.name, sizeBytes: file.size, status: "blocked" });
         setMeetingNotice("");
@@ -3538,7 +3568,7 @@ const industryFocus = useMemo(() => {
       } else {
         setMeetingAudio({ fileName: file.name, sizeBytes: file.size, status: "scan_failed" });
         setMeetingNotice("");
-        setMeetingError("The audio security scan could not complete. Remove it and upload again.");
+        setMeetingError("The audio malware scan could not complete. Remove it and upload again.");
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -5479,7 +5509,9 @@ const industryFocus = useMemo(() => {
             isProcessing={isMeetingProcessing}
             isApproving={isMeetingApproving}
             audio={meetingAudio}
-            onUploadAudio={(file) => void uploadMeetingAudio(file)}
+            onUploadAudio={(file, consentAcknowledged) =>
+              void uploadMeetingAudio(file, consentAcknowledged)
+            }
             onRemoveAudio={removeMeetingAudio}
             onProcess={() => void processSyntheticMeeting()}
             onDecision={setMeetingDecision}
@@ -5524,9 +5556,9 @@ const industryFocus = useMemo(() => {
                       ? "The shared handoff is ready for the call team."
                       : precallHandoffStatus === "failed"
                         ? precallHandoffError || "The automatic handoff could not be prepared."
-                        : precallHandoffStatus === "stale"
+                      : precallHandoffStatus === "stale"
                           ? "Approve the latest brief version to prepare a current handoff."
-                          : "You can keep working while AgentCore builds the handoff."}
+                          : precallHandoffError || "You can keep working while AgentCore builds the handoff."}
                   </span>
                 </div>
               ) : null}
@@ -5960,8 +5992,4 @@ const industryFocus = useMemo(() => {
     </main>
   );
 }
-
-
-
-
 

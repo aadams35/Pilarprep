@@ -850,6 +850,7 @@ Resources:
         BEDROCK_PREMIUM_MODEL_ID: !Ref BedrockPremiumModelId
         BEDROCK_GUARDRAIL_ID: !If [HasBedrockGuardrail, !Ref BedrockGuardrailId, !Ref "AWS::NoValue"]
         BEDROCK_GUARDRAIL_VERSION: !If [HasBedrockGuardrail, !Ref BedrockGuardrailVersion, !Ref "AWS::NoValue"]
+        CONTENT_SAFETY_ENABLED: "true"
         PII_SCREENING_ENABLED: "true"
         KNOWLEDGE_BASE_ID: !If
           - HasKnowledgeBase
