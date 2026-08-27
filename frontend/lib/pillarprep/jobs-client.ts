@@ -68,6 +68,8 @@ export function parsePipelineStatus(
   if (
     value.status !== "queued" &&
     value.status !== "running" &&
+    value.status !== "validating" &&
+    value.status !== "saving" &&
     value.status !== "waiting_for_scan" &&
     value.status !== "transcribing" &&
     value.status !== "screening" &&
@@ -144,6 +146,8 @@ export async function pollPipelineJob<TResult = BriefResponse>(
       if (
         status.status === "queued" ||
         status.status === "running" ||
+        status.status === "validating" ||
+        status.status === "saving" ||
         status.status === "waiting_for_scan" ||
         status.status === "transcribing" ||
         status.status === "screening" ||

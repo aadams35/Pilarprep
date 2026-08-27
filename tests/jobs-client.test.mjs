@@ -18,7 +18,7 @@ const accepted = {
 };
 
 test("pipeline polling is serialized and reports truthful states", async () => {
-  const states = ["queued", "running", "complete"];
+  const states = ["queued", "running", "validating", "saving", "complete"];
   const observed = [];
   let activeFetches = 0;
   let maximumActiveFetches = 0;
@@ -45,7 +45,7 @@ test("pipeline polling is serialized and reports truthful states", async () => {
   );
 
   assert.equal(maximumActiveFetches, 1);
-  assert.deepEqual(observed, ["queued", "queued", "running", "complete"]);
+  assert.deepEqual(observed, ["queued", "queued", "running", "validating", "saving", "complete"]);
   assert.equal(result.provider, "bedrock");
 });
 

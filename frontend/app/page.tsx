@@ -90,6 +90,10 @@ type PeopleView = PersonRoleType;
 type GenerationMode = "demo" | "live";
 type GenerationStageMode = "prebrief" | "project";
 type PrecallHandoffStatus = "idle" | "queued" | "preparing" | "ready" | "failed" | "stale";
+type ActivePipelineStatus = Extract<
+  PipelineJobState,
+  "queued" | "running" | "validating" | "saving"
+>;
 type LiveModelPreference = Exclude<ModelPreference, "default">;
 type ConsolePage = "setup" | "brief" | "project" | "library" | "evidence";
 type CatchupFilter = "all" | "approved" | "handoff";
@@ -173,7 +177,7 @@ const scenarios: Scenario[] = [
       "BlueMesa Payments is a regulated payment processor serving regional banks and payroll platforms. Its production payment APIs already run on Amazon EKS, operational data is stored in Amazon RDS for PostgreSQL, payment events move through Amazon MSK, and evidence archives use Amazon S3. BlueMesa wants to add governed payroll-partner onboarding through real-time APIs and encrypted batch files without replacing its ledger. The initiative must improve partner onboarding while preserving settlement accuracy, reconciliation ownership, privileged-access evidence, and availability during payroll windows.",
     companyValues: "Merchant trust, auditable operations, predictable settlement, accountable ownership, and faster partner onboarding without weakening payment or payroll data protection.",
     companyValuesUrl: "https://www.bluemesa-payments.example/company/values",
-    additionalDirection: "Treat BlueMesa as an existing AWS customer. Make payroll integration, mixed API and encrypted-file interfaces, idempotency, reconciliation, data privacy, retention, partner certification, cutover, and recovery evidence explicit. The existing ledger replacement is out of scope.",
+    additionalDirection: "BlueMesa is an existing AWS customer. The meeting scope includes payroll integration, mixed API and encrypted-file interfaces, idempotency, reconciliation, data privacy, retention, partner certification, cutover, and recovery evidence. Existing ledger replacement remains outside scope.",
     decisionMakers: [
       {
         name: "Ariana Cole",
@@ -769,6 +773,17 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function activePipelineStatus(
+  status: PipelineJobState
+): ActivePipelineStatus | null {
+  return status === "queued" ||
+    status === "running" ||
+    status === "validating" ||
+    status === "saving"
+    ? status
+    : null;
+}
+
 function ProcessingIndicator({
   label,
   tone = "light",
@@ -960,7 +975,7 @@ export default function Home() {
   const [projectAnswerKey, setProjectAnswerKey] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStageMode, setGenerationStageMode] = useState<GenerationStageMode>("prebrief");
-  const [pipelineJobStatus, setPipelineJobStatus] = useState<"queued" | "running" | null>(null);
+  const [pipelineJobStatus, setPipelineJobStatus] = useState<ActivePipelineStatus | null>(null);
   const [generationError, setGenerationError] = useState("");
   const [generationNotice, setGenerationNotice] = useState("");
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
@@ -1022,7 +1037,7 @@ export default function Home() {
   const [catchupError, setCatchupError] = useState("");
   const [catchupSource, setCatchupSource] = useState("");
   const [isCatchupGenerating, setIsCatchupGenerating] = useState(false);
-  const [catchupJobStatus, setCatchupJobStatus] = useState<"queued" | "running" | null>(null);
+  const [catchupJobStatus, setCatchupJobStatus] = useState<ActivePipelineStatus | null>(null);
   const [meetingResult, setMeetingResult] = useState<MeetingProcessResult | null>(null);
   const [meetingAudio, setMeetingAudio] = useState<MeetingAudioSelection>({
     fileName: "",
@@ -1607,23 +1622,37 @@ const industryFocus = useMemo(() => {
   const activeGenerationStageLabel =
     pipelineJobStatus === "queued"
       ? "Queued securely in AWS"
-      : refiningTarget
-        ? `Regenerating ${briefTabLabel(refiningTarget)} with Bedrock`
-        : generationStageMode === "project"
-          ? "Building the team handoff with AgentCore"
-          : "Generating the customer packet with Bedrock";
+      : pipelineJobStatus === "validating"
+        ? "Checking packet quality and safety"
+        : pipelineJobStatus === "saving"
+          ? "Saving the latest customer packet"
+          : refiningTarget
+            ? `Regenerating ${briefTabLabel(refiningTarget)} with Bedrock`
+            : generationStageMode === "project"
+              ? "Building the team handoff with AgentCore"
+              : "Generating the customer packet with Bedrock";
 
   const activeProcessingLabel =
     pipelineJobStatus === "queued"
       ? "Queued securely in AWS..."
-      : refiningTarget
-        ? `Applying feedback to ${briefTabLabel(refiningTarget)}...`
-        : generationStageMode === "project"
-          ? "Building handoff..."
-          : "Generating brief...";
+      : pipelineJobStatus === "validating"
+        ? "Checking quality and safety..."
+        : pipelineJobStatus === "saving"
+          ? "Saving packet..."
+          : refiningTarget
+            ? `Applying feedback to ${briefTabLabel(refiningTarget)}...`
+            : generationStageMode === "project"
+              ? "Building handoff..."
+              : "Generating brief...";
 
   const catchupProcessingLabel =
-    catchupJobStatus === "queued" ? "Catch-up queued..." : "Preparing catch-up...";
+    catchupJobStatus === "queued"
+      ? "Catch-up queued..."
+      : catchupJobStatus === "validating"
+        ? "Checking catch-up quality..."
+        : catchupJobStatus === "saving"
+          ? "Saving catch-up..."
+          : "Preparing catch-up...";
 
   function claimSources(section: BriefTab | "projectAnswer", itemIndex: number) {
     return (
@@ -3028,9 +3057,7 @@ const industryFocus = useMemo(() => {
             {
               signal: controller.signal,
               onStatus: (status) =>
-                setPipelineJobStatus(
-                  status === "queued" || status === "running" ? status : null
-                ),
+                setPipelineJobStatus(activePipelineStatus(status)),
             }
           );
           setGenerationMode("live");
@@ -3196,7 +3223,7 @@ const industryFocus = useMemo(() => {
         {
           signal: controller.signal,
           onStatus: (status) =>
-            setPrecallHandoffStatus(status === "running" ? "preparing" : "queued"),
+            setPrecallHandoffStatus(status === "queued" ? "queued" : "preparing"),
         }
       );
       const handoff = normalizeBriefResponse(raw, "agentcore");
@@ -3282,9 +3309,7 @@ const industryFocus = useMemo(() => {
           {
             signal: controller.signal,
             onStatus: (status) =>
-              setPipelineJobStatus(
-                status === "queued" || status === "running" ? status : null
-              ),
+              setPipelineJobStatus(activePipelineStatus(status)),
           }
         );
         setGeneratedBrief(approvedBrief);
@@ -3764,9 +3789,7 @@ const industryFocus = useMemo(() => {
           {
             signal: controller.signal,
             onStatus: (status) =>
-              setCatchupJobStatus(
-                status === "queued" || status === "running" ? status : null
-              ),
+              setCatchupJobStatus(activePipelineStatus(status)),
           }
         );
       } else {
@@ -5109,9 +5132,37 @@ const industryFocus = useMemo(() => {
                           );
                         })
                       ) : (
-                        <div className="brief-empty-state">
-                          <strong>{isGenerating ? activeGenerationStageLabel : "No brief generated yet"}</strong>
-                          <p>{isGenerating ? "The completed packet will appear here automatically." : "Return to Customer Context and generate the first packet."}</p>
+                        <div
+                          className={cx(
+                            "brief-empty-state",
+                            generationError && "brief-empty-state-error"
+                          )}
+                          role={generationError ? "alert" : "status"}
+                          aria-live={generationError ? "assertive" : "polite"}
+                        >
+                          <strong>
+                            {isGenerating
+                              ? activeGenerationStageLabel
+                              : generationError
+                                ? "Brief generation could not complete"
+                                : "No brief generated yet"}
+                          </strong>
+                          <p>
+                            {isGenerating
+                              ? "The completed packet will appear here automatically."
+                              : generationError
+                                ? generationError
+                                : "Return to Customer Context and generate the first packet."}
+                          </p>
+                          {generationError ? (
+                            <button
+                              className="small-action primary-small-action"
+                              type="button"
+                              onClick={() => navigateToPage("setup")}
+                            >
+                              Review inputs
+                            </button>
+                          ) : null}
                         </div>
                       )}
                       {reviewMode === "changes"

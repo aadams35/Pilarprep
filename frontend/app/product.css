@@ -337,6 +337,13 @@ textarea:focus-visible {
   font-weight: 850;
 }
 
+.workspace-context-action button {
+  width: 15.5rem;
+  flex: 0 0 15.5rem;
+  justify-content: center;
+  white-space: nowrap;
+}
+
 .workspace-context-action button:hover,
 .page-title-actions button:hover {
   background: #0d5d84;
@@ -979,6 +986,7 @@ textarea:focus-visible {
 .architecture-zone-label small { margin-top: 0.18rem; color: var(--pp-muted); font-size: 0.66rem; line-height: 1.35; }
 .architecture-services { display: grid; gap: 0.5rem; padding-top: 0.7rem; }
 .architecture-service { display: grid; grid-template-columns: 36px minmax(0, 1fr); min-height: 70px; align-items: start; gap: 0.65rem; border: 1px solid var(--pp-line); border-radius: 7px; background: #fff; padding: 0.65rem; }
+
 .architecture-service-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 7px; background: #e8eef5; color: #33445f; font-size: 0.58rem; font-weight: 950; }
 .architecture-service-icon-1 { background: #eaf3ff; color: #2563a8; }
 .architecture-service-icon-2 { background: #f3ebff; color: #7047a6; }
@@ -1137,6 +1145,20 @@ textarea:focus-visible {
   color: var(--pp-muted);
   font-size: 0.76rem;
   line-height: 1.5;
+}
+
+.brief-empty-state-error {
+  border-color: #e7b4ac;
+  background: #fff7f5;
+}
+
+.brief-empty-state-error strong {
+  color: #8f2f23;
+}
+
+.brief-empty-state-error .small-action {
+  justify-self: center;
+  margin-top: 0.85rem;
 }
 .architecture-service-icon {
   background-position: center;

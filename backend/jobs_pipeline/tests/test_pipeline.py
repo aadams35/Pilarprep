@@ -1104,7 +1104,7 @@ class JobsApiTests(unittest.TestCase):
                         "clientId": {"S": SCOPE["clientId"]},
                         "projectScopeId": {"S": SCOPE["projectId"]},
                         "action": {"S": "catchup.generate"},
-                        "status": {"S": "running"},
+                        "status": {"S": "saving"},
                         "retryCount": {"N": "2"},
                         "leaseExpiresAt": {"N": "100"},
                     }
@@ -1150,7 +1150,46 @@ class JobsApiTests(unittest.TestCase):
         )
         self.assertEqual(len(updates), 1)
         self.assertIn("leaseExpiresAt < :now", updates[0]["ConditionExpression"])
+        self.assertIn(":saving", updates[0]["ConditionExpression"])
 
+    def test_validating_and_saving_jobs_remain_pending(self):
+        query = {
+            "clientId": SCOPE["clientId"],
+            "projectId": SCOPE["projectId"],
+            "sessionId": SCOPE["sessionId"],
+        }
+
+        for phase in ("validating", "saving"):
+            with self.subTest(phase=phase):
+                class FakeDynamoDB:
+                    def get_item(self, **_kwargs):
+                        return {
+                            "Item": {
+                                "ownerId": {"S": SCOPE["userId"]},
+                                "sessionId": {"S": SCOPE["sessionId"]},
+                                "clientId": {"S": SCOPE["clientId"]},
+                                "projectScopeId": {"S": SCOPE["projectId"]},
+                                "action": {"S": "brief.generate"},
+                                "status": {"S": phase},
+                                "phase": {"S": phase},
+                                "retryCount": {"N": "0"},
+                                "leaseExpiresAt": {"N": "9999999999"},
+                            }
+                        }
+
+                with (
+                    patch.object(api, "PROJECT_TABLE", "project-state"),
+                    patch.object(api, "aws_client", return_value=FakeDynamoDB()),
+                ):
+                    result = api.handler(
+                        iam_event("GET", "/jobs/job-0001", query=query),
+                        None,
+                    )
+
+                body = json.loads(result["body"])
+                self.assertEqual(result["statusCode"], 202)
+                self.assertEqual(body["status"], phase)
+                self.assertEqual(body["phase"], phase)
 
     def test_meeting_audio_upload_returns_scoped_private_form(self):
         calls = {"items": [], "posts": []}
@@ -1254,6 +1293,28 @@ class WorkerTests(unittest.TestCase):
             captured["ExpressionAttributeValues"][":lease"]["N"], "1660"
         )
         self.assertIn("leaseExpiresAt < :now", captured["ConditionExpression"])
+        self.assertIn(":validating", captured["ConditionExpression"])
+        self.assertIn(":saving", captured["ConditionExpression"])
+
+    def test_active_job_phase_is_persisted_without_releasing_the_lease(self):
+        captured = {}
+
+        class FakeDynamo:
+            def update_item(self, **kwargs):
+                captured.update(kwargs)
+                return {}
+
+        with patch.object(worker, "aws_client", return_value=FakeDynamo()):
+            worker._set_job_phase(SCOPE, "job-active-phase", "validating")
+
+        self.assertEqual(
+            captured["ExpressionAttributeValues"][":phase"]["S"],
+            "validating",
+        )
+        self.assertIn(":saving", captured["ConditionExpression"])
+        self.assertNotIn("REMOVE leaseExpiresAt", captured["UpdateExpression"])
+        with self.assertRaisesRegex(ValueError, "Unsupported active job phase"):
+            worker._set_job_phase(SCOPE, "job-active-phase", "unknown")
 
     def test_orphaned_queue_message_is_acknowledged_without_processing(self):
         class FakeDynamo:
@@ -1816,6 +1877,7 @@ class WorkerTests(unittest.TestCase):
                 return_value=authoritative,
             ),
             patch.object(worker, "_screen_ai_payload", side_effect=screen),
+            patch.object(worker, "_set_job_phase"),
             patch.object(worker, "_write_brief_draft", return_value=generated),
         ):
             result = worker._run_brief(
@@ -1848,6 +1910,7 @@ class WorkerTests(unittest.TestCase):
         with (
             patch.object(worker, "_brief_module", return_value=brief_module),
             patch.object(worker, "_brief_latest", return_value={}),
+            patch.object(worker, "_set_job_phase"),
             patch.object(worker, "_write_brief_draft", return_value=generated) as write,
         ):
             result = worker._run_brief(SCOPE, document, "job-bootstrap-refinement")
@@ -1919,6 +1982,51 @@ class WorkerTests(unittest.TestCase):
         with patch.object(worker, "_brief_module", return_value=brief_module):
             with self.assertRaisesRegex(ValueError, "temporary malformed model response"):
                 worker._run_brief(SCOPE, document, "job-generation-retry")
+
+    def test_brief_generation_reports_validation_then_saving(self):
+        generated = {
+            "provider": "bedrock",
+            "metadata": {"fallbackUsed": False},
+        }
+        brief_module = types.SimpleNamespace(
+            _validate_brief_payload=lambda _payload: None,
+            _resolve_model_id=lambda _payload: "us.amazon.nova-pro-v1:0",
+            _generate_brief=lambda _payload: generated,
+        )
+        phases = []
+        with (
+            patch.object(worker, "_brief_module", return_value=brief_module),
+            patch.object(
+                worker,
+                "_screen_ai_payload",
+                side_effect=[
+                    ({"company": "Custom Customer"}, {"policyResult": "passed"}),
+                    (generated, {"policyResult": "passed"}),
+                ],
+            ),
+            patch.object(
+                worker,
+                "_set_job_phase",
+                side_effect=lambda _scope, _job_id, phase: phases.append(phase),
+            ),
+            patch.object(
+                worker,
+                "_write_brief_draft",
+                return_value=generated,
+            ),
+        ):
+            result = worker._run_brief(
+                SCOPE,
+                {
+                    "action": "brief.generate",
+                    "inputVersion": "input-0001",
+                    "input": {"company": "Custom Customer"},
+                },
+                "job-generation-phases",
+            )
+
+        self.assertIs(result, generated)
+        self.assertEqual(phases, ["validating", "saving"])
 
     def test_retry_status_becomes_terminal_on_third_receive(self):
         calls = []
@@ -2783,6 +2891,8 @@ class MeetingWorkflowTests(unittest.TestCase):
     def test_pre_call_status_mapping_is_role_neutral_and_deterministic(self):
         self.assertEqual(worker._precall_status("queued"), "queued")
         self.assertEqual(worker._precall_status("running"), "preparing")
+        self.assertEqual(worker._precall_status("validating"), "preparing")
+        self.assertEqual(worker._precall_status("saving"), "preparing")
         self.assertEqual(worker._precall_status("complete"), "ready")
         self.assertEqual(worker._precall_status("failed"), "failed")
 
@@ -2855,6 +2965,87 @@ class ContentSafetyTests(unittest.TestCase):
         self.assertNotIn(
             "alice@example.com", calls[0]["content"][0]["text"]["text"]
         )
+
+    def test_structured_payload_is_screened_in_bounded_batches(self):
+        sections = [
+            {
+                "summary": (
+                    f"Section {index} owner Alice can be reached at "
+                    "alice@example.com for approved follow-up."
+                )
+            }
+            for index in range(30)
+        ]
+        comprehend_calls = []
+        guardrail_calls = []
+
+        class Comprehend:
+            def detect_pii_entities(self, **kwargs):
+                document = kwargs["Text"]
+                comprehend_calls.append(document)
+                entities = []
+                for pii_type, value in (
+                    ("NAME", "Alice"),
+                    ("EMAIL", "alice@example.com"),
+                ):
+                    cursor = 0
+                    while True:
+                        begin = document.find(value, cursor)
+                        if begin < 0:
+                            break
+                        entities.append(
+                            {
+                                "Type": pii_type,
+                                "BeginOffset": begin,
+                                "EndOffset": begin + len(value),
+                                "Score": 0.99,
+                            }
+                        )
+                        cursor = begin + len(value)
+                return {"Entities": entities}
+
+        class Guardrail:
+            def apply_guardrail(self, **kwargs):
+                guardrail_calls.append(kwargs)
+                return {"action": "NONE"}
+
+        clients = {"comprehend": Comprehend(), "bedrock-runtime": Guardrail()}
+        with (
+            patch.dict(
+                content_safety.os.environ,
+                {
+                    "PII_SCREENING_ENABLED": "true",
+                    "BEDROCK_GUARDRAIL_ID": "guardrail-1",
+                    "BEDROCK_GUARDRAIL_VERSION": "1",
+                },
+                clear=False,
+            ),
+            patch.object(
+                content_safety,
+                "aws_client",
+                side_effect=lambda name: clients[name],
+            ),
+        ):
+            screened, diagnostics = content_safety.screen_payload(
+                {
+                    "clientId": "blue-mesa-payments",
+                    "sections": sections,
+                },
+                source="INPUT",
+                action="brief.generate",
+            )
+
+        self.assertEqual(screened["clientId"], "blue-mesa-payments")
+        self.assertEqual(len(comprehend_calls), 1)
+        self.assertEqual(len(guardrail_calls), 1)
+        self.assertEqual(diagnostics["comprehendChunks"], 1)
+        self.assertEqual(diagnostics["guardrailChunks"], 1)
+        self.assertEqual(diagnostics["redactionCount"], 60)
+        for section in screened["sections"]:
+            self.assertNotIn("Alice", section["summary"])
+            self.assertNotIn("alice@example.com", section["summary"])
+            self.assertIn("[PII:NAME:001]", section["summary"])
+            self.assertIn("[PII:EMAIL:001]", section["summary"])
 
     def test_high_risk_pii_is_blocked_before_guardrail(self):
         text = "SSN 123-45-6789"
@@ -3441,6 +3632,7 @@ class SecurityBoundaryTests(unittest.TestCase):
                     worker.NonRetryableJobError("unsafe output"),
                 ],
             ),
+            patch.object(worker, "_set_job_phase"),
             patch.object(worker, "_write_brief_draft") as write,
             self.assertRaises(worker.NonRetryableJobError),
         ):

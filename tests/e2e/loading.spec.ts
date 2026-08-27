@@ -154,7 +154,8 @@ test("live job keeps the workspace responsive with an in-app clock", async ({ pa
     }
 
     pollCount += 1;
-    const status = pollCount < 3 ? "queued" : pollCount < 6 ? "running" : "complete";
+    const states = ["queued", "running", "validating", "saving", "complete"] as const;
+    const status = states[Math.min(pollCount - 1, states.length - 1)];
     await route.fulfill({
       status: status === "complete" ? 200 : 202,
       contentType: "application/json",
@@ -184,8 +185,14 @@ test("live job keeps the workspace responsive with an in-app clock", async ({ pa
   });
 
   await expect(generate).toBeEnabled();
+  const actionBoxBefore = await duplicateSubmit.boundingBox();
   await generate.click();
   await expect(duplicateSubmit).toBeDisabled();
+  const actionBoxBusy = await duplicateSubmit.boundingBox();
+  expect(actionBoxBefore).not.toBeNull();
+  expect(actionBoxBusy).not.toBeNull();
+  expect(Math.abs((actionBoxBusy?.width ?? 0) - (actionBoxBefore?.width ?? 0))).toBeLessThanOrEqual(1);
+  expect(Math.abs((actionBoxBusy?.height ?? 0) - (actionBoxBefore?.height ?? 0))).toBeLessThanOrEqual(1);
   await expect(workspace).toHaveAttribute("aria-busy", "true");
   await expect(page.getByText("Waiting for generation")).toBeVisible();
   await expect(briefNavigation).toBeDisabled();
@@ -214,16 +221,20 @@ test("live job keeps the workspace responsive with an in-app clock", async ({ pa
   expect(shellLayout.briefOverflowStyle).toBe("visible");
   expect(shellLayout.pageY).toBeGreaterThanOrEqual(0);
 
+  await expect(page.getByText("Checking quality and safety...", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Saving packet...", { exact: true }).first()).toBeVisible();
   await expect(workspace).toHaveAttribute("aria-busy", "false", {
     timeout: 10_000,
   });
+  await expect(page.getByText(businessCase.scenario)).toBeVisible();
+  await expect(page.getByText("No brief generated yet")).toHaveCount(0);
   await expect(briefNavigation).toBeEnabled();
   await expect(duplicateSubmit).toBeEnabled();
   await expect
     .poll(() => pageView.evaluate((element) => getComputedStyle(element).cursor))
     .not.toBe("wait");
   expect(postCount).toBe(1);
-  expect(pollCount).toBe(6);
+  expect(pollCount).toBe(5);
 
   const longestTask = await page.evaluate(
     () =>
@@ -234,6 +245,63 @@ test("live job keeps the workspace responsive with an in-app clock", async ({ pa
       )
   );
   expect(longestTask).toBeLessThan(250);
+});
+
+test("failed generation replaces the empty state with an actionable error", async ({ page }) => {
+  let pollCount = 0;
+  await page.route("https://test.execute-api.us-east-1.amazonaws.com/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === "GET" && path === "/clients") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ clients: [] }),
+      });
+      return;
+    }
+    if (route.request().method() === "POST") {
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({
+          jobId: "job-failed-0001",
+          clientId: "bluemesa-payments",
+          projectId: "bluemesa-payments",
+          status: "queued",
+          pollAfterMs: 750,
+        }),
+      });
+      return;
+    }
+
+    pollCount += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        jobId: "job-failed-0001",
+        clientId: "bluemesa-payments",
+        projectId: "bluemesa-payments",
+        status: "failed",
+        error: "The content did not pass PilarPrep's AI safety policy.",
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /BlueMesa Payments/ }).click();
+  await page.getByRole("button", { name: /Generate AI prebrief/i }).click();
+
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("Brief generation could not complete");
+  await expect(alert).toContainText("The content did not pass PilarPrep's AI safety policy.");
+  await expect(alert).toHaveCSS("background-color", "rgb(255, 247, 245)");
+  await expect(alert).toHaveCSS("border-color", "rgb(231, 180, 172)");
+  await expect(page.getByText("No brief generated yet")).toHaveCount(0);
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
+  await alert.getByRole("button", { name: "Review inputs" }).click();
+  await expect(page.getByRole("heading", { name: "Build the meeting context" })).toBeVisible();
+  expect(pollCount).toBe(1);
 });
 
 test("navigation aborts a running poll and immediately restores interaction", async ({ page }) => {
@@ -294,4 +362,119 @@ test("navigation aborts a running poll and immediately restores interaction", as
     )
     .not.toBe("wait");
   expect(pollCount).toBeLessThanOrEqual(1);
+});
+test("desktop and laptop layouts avoid horizontal overflow and preserve visible focus", async ({ page }) => {
+  await page.route("https://test.execute-api.us-east-1.amazonaws.com/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ clients: [] }),
+    });
+  });
+
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 1440, height: 900 },
+    { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Build the meeting context" })).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+      const root = document.scrollingElement;
+      const sections = Array.from(
+        document.querySelectorAll<HTMLElement>(".setup-grid > section")
+      ).map((element) => element.getBoundingClientRect());
+      return {
+        horizontalOverflow: root ? root.scrollWidth - window.innerWidth : 0,
+        sections: sections.map((box) => ({
+          left: box.left,
+          right: box.right,
+          top: box.top,
+          bottom: box.bottom,
+        })),
+      };
+    });
+
+    expect(layout.horizontalOverflow).toBeLessThanOrEqual(2);
+    expect(layout.sections).toHaveLength(2);
+    const [scenarioPanel, intakePanel] = layout.sections;
+    const sideBySide = Math.abs(scenarioPanel.top - intakePanel.top) <= 2;
+    if (sideBySide) {
+      expect(scenarioPanel.right).toBeLessThanOrEqual(intakePanel.left + 1);
+    } else {
+      expect(scenarioPanel.bottom).toBeLessThanOrEqual(intakePanel.top + 1);
+    }
+
+    await page.keyboard.press("Tab");
+    const focusStyle = await page.evaluate(() => {
+      const active = document.activeElement;
+      if (!(active instanceof HTMLElement)) return null;
+      const style = getComputedStyle(active);
+      return {
+        tagName: active.tagName,
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+      };
+    });
+    expect(focusStyle).not.toBeNull();
+    expect(focusStyle?.tagName).not.toBe("BODY");
+    expect(focusStyle?.outlineStyle).not.toBe("none");
+    expect(focusStyle?.outlineWidth).not.toBe("0px");
+
+    await page.screenshot({
+      path: "test-results/audit-after-local-" + viewport.width + ".png",
+      fullPage: true,
+    });
+  }
+});
+
+test("processing clock becomes static when reduced motion is requested", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route("https://test.execute-api.us-east-1.amazonaws.com/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === "GET" && path === "/clients") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ clients: [] }),
+      });
+      return;
+    }
+    if (route.request().method() === "POST") {
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({
+          jobId: "job-reduced-motion",
+          clientId: "apex-mutual",
+          projectId: "apex-mutual",
+          status: "queued",
+          pollAfterMs: 750,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({
+        jobId: "job-reduced-motion",
+        clientId: "apex-mutual",
+        projectId: "apex-mutual",
+        status: "running",
+        pollAfterMs: 750,
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Generate AI prebrief/i }).click();
+  const indicator = page.locator(".processing-indicator").first();
+  await expect(indicator).toBeVisible();
+  await expect(indicator.locator(".processing-clock-hour")).toHaveCSS("animation-name", "none");
+  await expect(indicator.locator(".processing-clock-minute")).toHaveCSS("animation-name", "none");
+  await page.getByRole("button", { name: "Open catch-up workspace" }).click();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
 });

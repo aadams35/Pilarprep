@@ -170,6 +170,8 @@ export type PipelineJobAction =
 export type PipelineJobState =
   | "queued"
   | "running"
+  | "validating"
+  | "saving"
   | "waiting_for_scan"
   | "transcribing"
   | "screening"

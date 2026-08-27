@@ -9,6 +9,7 @@ import boto3
 
 MAX_COMPREHEND_CHARS = 4_500
 MAX_GUARDRAIL_CHARS = 8_000
+CONTENT_BOUNDARY = "\n\n[PilarPrep content boundary]\n\n"
 PII_SCORE_THRESHOLD = float(os.getenv("PII_SCORE_THRESHOLD", "0.75"))
 
 HIGH_RISK_PII_TYPES = {
@@ -127,23 +128,85 @@ def _placeholder(
     return placeholders[key]
 
 
-def _redact_text(
-    text: str,
-    placeholders: dict[tuple[str, str], str],
-    pii_types: set[str],
+def _text_leaves(
+    value: object,
+    *,
+    field_name: str = "",
+    path: tuple[object, ...] = (),
+) -> list[tuple[tuple[object, ...], str]]:
+    if field_name in CONTROL_FIELDS:
+        return []
+    if isinstance(value, str):
+        return [(path, value)] if value.strip() else []
+    if isinstance(value, Mapping):
+        leaves: list[tuple[tuple[object, ...], str]] = []
+        for key, item in value.items():
+            leaves.extend(
+                _text_leaves(
+                    item,
+                    field_name=str(key),
+                    path=(*path, key),
+                )
+            )
+        return leaves
+    if isinstance(value, (list, tuple)):
+        leaves = []
+        for index, item in enumerate(value):
+            leaves.extend(_text_leaves(item, path=(*path, index)))
+        return leaves
+    return []
+
+
+def _text_batches(
+    leaves: list[tuple[tuple[object, ...], str]],
+    maximum: int,
+) -> list[
+    tuple[
+        str,
+        list[tuple[tuple[object, ...], int, int, int]],
+    ]
+]:
+    batches: list[
+        tuple[str, list[tuple[tuple[object, ...], int, int, int]]]
+    ] = []
+    current = ""
+    segments: list[tuple[tuple[object, ...], int, int, int]] = []
+
+    def flush() -> None:
+        nonlocal current, segments
+        if current:
+            batches.append((current, segments))
+        current = ""
+        segments = []
+
+    for path, text in leaves:
+        leaf_offset = 0
+        for chunk in _chunks(text, maximum):
+            separator = CONTENT_BOUNDARY if current else ""
+            if current and len(current) + len(separator) + len(chunk) > maximum:
+                flush()
+                separator = ""
+            current += separator
+            document_begin = len(current)
+            current += chunk
+            segments.append((path, leaf_offset, document_begin, len(current)))
+            leaf_offset += len(chunk)
+    flush()
+    return batches
+
+
+def _pii_findings(
+    leaves: list[tuple[tuple[object, ...], str]],
     *,
     block_high_risk: bool,
-) -> tuple[str, int, int]:
-    output: list[str] = []
-    redactions = 0
-    chunks_processed = 0
-    for chunk in _chunks(text, MAX_COMPREHEND_CHARS):
-        chunks_processed += 1
+) -> tuple[dict[tuple[object, ...], list[tuple[int, int, str]]], int]:
+    findings: dict[tuple[object, ...], list[tuple[int, int, str]]] = {}
+    batches = _text_batches(leaves, MAX_COMPREHEND_CHARS)
+    for document, segments in batches:
         response = aws_client("comprehend").detect_pii_entities(
-            Text=chunk,
+            Text=document,
             LanguageCode="en",
         )
-        candidates: list[tuple[int, int, str]] = []
         for entity in response.get("Entities", []):
             if not isinstance(entity, Mapping):
                 continue
@@ -157,33 +220,78 @@ def _redact_text(
                 or end <= begin
             ):
                 continue
-            if end > len(chunk):
+            if end > len(document):
                 raise ContentSafetyError("PII detector returned invalid offsets")
             if block_high_risk and pii_type in HIGH_RISK_PII_TYPES:
                 raise HighRiskPiiViolation(
                     "High-risk sensitive information must be removed before processing"
                 )
-            candidates.append((begin, end, pii_type))
+            for path, leaf_offset, document_begin, document_end in segments:
+                if begin >= document_begin and end <= document_end:
+                    findings.setdefault(path, []).append(
+                        (
+                            leaf_offset + begin - document_begin,
+                            leaf_offset + end - document_begin,
+                            pii_type,
+                        )
+                    )
+                    break
+    return findings, len(batches)
 
-        selected: list[tuple[int, int, str]] = []
-        for candidate in sorted(candidates, key=lambda item: (item[0], -item[1])):
-            if selected and candidate[0] < selected[-1][1]:
-                continue
-            selected.append(candidate)
 
-        cursor = 0
-        transformed: list[str] = []
-        for begin, end, pii_type in selected:
-            transformed.append(chunk[cursor:begin])
-            transformed.append(
-                _placeholder(pii_type, chunk[begin:end], placeholders)
+def _redact_findings(
+    text: str,
+    candidates: list[tuple[int, int, str]],
+    placeholders: dict[tuple[str, str], str],
+    pii_types: set[str],
+) -> tuple[str, int]:
+    selected: list[tuple[int, int, str]] = []
+    for candidate in sorted(candidates, key=lambda item: (item[0], -item[1])):
+        if candidate[0] < 0 or candidate[1] > len(text):
+            raise ContentSafetyError("PII detector returned invalid offsets")
+        if selected and candidate[0] < selected[-1][1]:
+            continue
+        selected.append(candidate)
+
+    cursor = 0
+    transformed: list[str] = []
+    for begin, end, pii_type in selected:
+        transformed.append(text[cursor:begin])
+        transformed.append(_placeholder(pii_type, text[begin:end], placeholders))
+        cursor = end
+        pii_types.add(pii_type)
+    transformed.append(text[cursor:])
+    return "".join(transformed), len(selected)
+
+
+def _replace_text_leaves(
+    value: object,
+    replacements: Mapping[tuple[object, ...], str],
+    *,
+    field_name: str = "",
+    path: tuple[object, ...] = (),
+) -> object:
+    if field_name in CONTROL_FIELDS:
+        return value
+    if isinstance(value, str):
+        return replacements.get(path, value)
+    if isinstance(value, Mapping):
+        return {
+            key: _replace_text_leaves(
+                item,
+                replacements,
+                field_name=str(key),
+                path=(*path, key),
             )
-            cursor = end
-            redactions += 1
-            pii_types.add(pii_type)
-        transformed.append(chunk[cursor:])
-        output.append("".join(transformed))
-    return "".join(output), redactions, chunks_processed
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        items = [
+            _replace_text_leaves(item, replacements, path=(*path, index))
+            for index, item in enumerate(value)
+        ]
+        return tuple(items) if isinstance(value, tuple) else items
+    return value
 
 
 def _sanitize(
@@ -195,78 +303,53 @@ def _sanitize(
     *,
     block_high_risk: bool,
 ) -> tuple[object, int, int]:
-    if field_name in CONTROL_FIELDS:
-        return value, 0, 0
-    if isinstance(value, str):
-        sanitized, redactions, chunks_processed = _redact_text(
-            value,
+    leaves = _text_leaves(value, field_name=field_name)
+    findings, chunks_processed = _pii_findings(
+        leaves,
+        block_high_risk=block_high_risk,
+    )
+    replacements: dict[tuple[object, ...], str] = {}
+    redactions = 0
+    for path, text in leaves:
+        sanitized, count = _redact_findings(
+            text,
+            findings.get(path, []),
             placeholders,
             pii_types,
-            block_high_risk=block_high_risk,
         )
+        replacements[path] = sanitized
+        redactions += count
         if sanitized.strip():
             text_sink.append(sanitized)
-        return sanitized, redactions, chunks_processed
-    if isinstance(value, Mapping):
-        result: dict[object, object] = {}
-        redactions = 0
-        chunks_processed = 0
-        for key, item in value.items():
-            sanitized, count, chunk_count = _sanitize(
-                item,
-                placeholders,
-                pii_types,
-                text_sink,
-                str(key),
-                block_high_risk=block_high_risk,
-            )
-            result[key] = sanitized
-            redactions += count
-            chunks_processed += chunk_count
-        return result, redactions, chunks_processed
-    if isinstance(value, (list, tuple)):
-        result_list: list[object] = []
-        redactions = 0
-        chunks_processed = 0
-        for item in value:
-            sanitized, count, chunk_count = _sanitize(
-                item,
-                placeholders,
-                pii_types,
-                text_sink,
-                block_high_risk=block_high_risk,
-            )
-            result_list.append(sanitized)
-            redactions += count
-            chunks_processed += chunk_count
-        result: object = tuple(result_list) if isinstance(value, tuple) else result_list
-        return result, redactions, chunks_processed
-    return value, 0, 0
-
+    return (
+        _replace_text_leaves(value, replacements, field_name=field_name),
+        redactions,
+        chunks_processed,
+    )
 
 def _apply_guardrail(texts: list[str], source: str) -> int:
     identifier, version = _guardrail_configuration()
-    chunks_processed = 0
-    for text in texts:
-        for chunk in _chunks(text, MAX_GUARDRAIL_CHARS):
-            chunks_processed += 1
-            response = aws_client("bedrock-runtime").apply_guardrail(
-                guardrailIdentifier=identifier,
-                guardrailVersion=version,
-                source=source,
-                content=[{"text": {"text": chunk}}],
+    batches = _text_batches(
+        [((index,), text) for index, text in enumerate(texts)],
+        MAX_GUARDRAIL_CHARS,
+    )
+    for chunk, _segments in batches:
+        response = aws_client("bedrock-runtime").apply_guardrail(
+            guardrailIdentifier=identifier,
+            guardrailVersion=version,
+            source=source,
+            content=[{"text": {"text": chunk}}],
+        )
+        action = str(response.get("action") or "")
+        if action == "GUARDRAIL_INTERVENED":
+            raise GuardrailIntervention(
+                "Content did not pass the configured AI safety policy"
             )
-            action = str(response.get("action") or "")
-            if action == "GUARDRAIL_INTERVENED":
-                raise GuardrailIntervention(
-                    "Content did not pass the configured AI safety policy"
-                )
-            if action != "NONE":
-                raise ContentSafetyError(
-                    "Guardrail returned an unknown policy result"
-                )
-    return chunks_processed
-
+        if action != "NONE":
+            raise ContentSafetyError(
+                "Guardrail returned an unknown policy result"
+            )
+    return len(batches)
 
 def screen_payload(
     value: object,

@@ -228,12 +228,16 @@ def _claim_job(scope: Mapping[str, str], job_id: str, receive_count: int) -> boo
                 "retryCount = :retryCount, leaseExpiresAt = :lease"
             ),
             ConditionExpression=(
-                "#status = :queued OR (#status = :running AND leaseExpiresAt < :now)"
+                "#status = :queued OR "
+                "(#status IN (:running, :validating, :saving) "
+                "AND leaseExpiresAt < :now)"
             ),
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
                 ":queued": {"S": "queued"},
                 ":running": {"S": "running"},
+                ":validating": {"S": "validating"},
+                ":saving": {"S": "saving"},
                 ":updatedAt": {"S": now_iso()},
                 ":retryCount": {"N": str(max(0, receive_count - 1))},
                 ":lease": {"N": str(lease)},
@@ -255,6 +259,8 @@ def _claim_job(scope: Mapping[str, str], job_id: str, receive_count: int) -> boo
             "complete",
             "failed",
             "running",
+            "validating",
+            "saving",
             "waiting_for_scan",
             "transcribing",
             "screening",
@@ -268,6 +274,29 @@ def _claim_job(scope: Mapping[str, str], job_id: str, receive_count: int) -> boo
             )
             return False
         raise
+
+
+def _set_job_phase(
+    scope: Mapping[str, str], job_id: str, phase: str
+) -> None:
+    if phase not in {"validating", "saving"}:
+        raise ValueError("Unsupported active job phase")
+    aws_client("dynamodb").update_item(
+        TableName=PROJECT_TABLE,
+        Key=job_key(scope, job_id),
+        UpdateExpression=(
+            "SET #status = :phase, phase = :phase, updatedAt = :updatedAt"
+        ),
+        ConditionExpression="#status IN (:running, :validating, :saving)",
+        ExpressionAttributeNames={"#status": "status"},
+        ExpressionAttributeValues={
+            ":phase": {"S": phase},
+            ":running": {"S": "running"},
+            ":validating": {"S": "validating"},
+            ":saving": {"S": "saving"},
+            ":updatedAt": {"S": now_iso()},
+        },
+    )
 
 
 def _load_input(
@@ -693,6 +722,7 @@ def _run_brief(
         "fallbackUsed"
     ):
         raise RuntimeError("Bedrock did not produce a live model result")
+    _set_job_phase(scope, job_id, "validating")
     screened_result, output_safety = _screen_ai_payload(
         generated,
         source="OUTPUT",
@@ -712,6 +742,7 @@ def _run_brief(
             },
         }
     )
+    _set_job_phase(scope, job_id, "saving")
     return _write_brief_draft(
         scope,
         payload,
@@ -891,7 +922,7 @@ def _precall_status(job_status: str) -> str:
         return "ready"
     if job_status == "failed":
         return "failed"
-    if job_status == "running":
+    if job_status in {"running", "validating", "saving"}:
         return "preparing"
     return "queued"
 
@@ -1876,12 +1907,14 @@ def _store_result(
             "REMOVE leaseExpiresAt, #error"
         ),
         ConditionExpression=(
-            "#status = :running OR #status = :analyzing"
+            "#status IN (:running, :validating, :saving, :analyzing)"
         ),
         ExpressionAttributeNames={"#status": "status", "#error": "error"},
         ExpressionAttributeValues={
             ":final": {"S": final_status},
             ":running": {"S": "running"},
+            ":validating": {"S": "validating"},
+            ":saving": {"S": "saving"},
             ":analyzing": {"S": "analyzing"},
             ":resultKey": {"S": result_key},
             ":updatedAt": {"S": timestamp},
@@ -2310,10 +2343,13 @@ def _process_record(record: Mapping[str, Any]) -> None:
             )
             if agent_metadata.get("fallbackUsed") is True:
                 metric("AgentCoreFallbacks", Action=action)
+            _set_job_phase(scope, job_id, "validating")
         elif action.startswith("evidence."):
             result = _run_evidence(scope, document, job_id)
         else:
             raise ValueError("Unsupported job action")
+        if action not in {"brief.generate", "brief.refine"}:
+            _set_job_phase(scope, job_id, "saving")
         _store_result(
             scope,
             job_id,

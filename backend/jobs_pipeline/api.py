@@ -1061,7 +1061,7 @@ def _reconcile_expired_final_attempt(
     job: Mapping[str, Any],
 ) -> dict[str, Any]:
     if (
-        job.get("status") != "running"
+        job.get("status") not in {"running", "validating", "saving"}
         or int(job.get("retryCount") or 0) < MAX_RECEIVE_COUNT - 1
         or int(job.get("leaseExpiresAt") or 0) >= now_epoch()
     ):
@@ -1076,13 +1076,16 @@ def _reconcile_expired_final_attempt(
                 "REMOVE leaseExpiresAt"
             ),
             ConditionExpression=(
-                "#status = :running AND retryCount >= :lastRetry "
+                "#status IN (:running, :validating, :saving) "
+                "AND retryCount >= :lastRetry "
                 "AND leaseExpiresAt < :now"
             ),
             ExpressionAttributeNames={"#status": "status", "#error": "error"},
             ExpressionAttributeValues={
                 ":failed": {"S": "failed"},
                 ":running": {"S": "running"},
+                ":validating": {"S": "validating"},
+                ":saving": {"S": "saving"},
                 ":lastRetry": {"N": str(MAX_RECEIVE_COUNT - 1)},
                 ":now": {"N": str(now_epoch())},
                 ":updatedAt": {"S": now_iso()},
@@ -1135,6 +1138,8 @@ def _get_job(event: Mapping[str, Any], job_id: str) -> dict[str, Any]:
     if status in {
         "queued",
         "running",
+        "validating",
+        "saving",
         "waiting_for_scan",
         "transcribing",
         "screening",
