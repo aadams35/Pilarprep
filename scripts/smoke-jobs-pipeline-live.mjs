@@ -192,7 +192,11 @@ async function runJob(apiUrl, credentials, envelope, label) {
       undefined,
       `${label} poll`
     );
-    if (status.body.status === "queued" || status.body.status === "running") {
+    if (
+      ["queued", "running", "validating", "saving"].includes(
+        status.body.status
+      )
+    ) {
       waitMs = status.body.pollAfterMs ?? waitMs;
       continue;
     }
