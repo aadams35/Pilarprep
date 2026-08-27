@@ -2100,7 +2100,6 @@ def _process_transcribe_record(
             {
                 "document": document,
                 "transcript": transcript,
-                "approvedDocument": approved_document,
             },
             source="INPUT",
             action="meeting.process",
@@ -2110,7 +2109,6 @@ def _process_transcribe_record(
             raise NonRetryableJobError("The normalized meeting context is invalid")
         document = screened_context["document"]
         transcript = screened_context["transcript"]
-        approved_document = screened_context["approvedDocument"]
         if not all(
             isinstance(value, Mapping)
             for value in (document, transcript, approved_document)

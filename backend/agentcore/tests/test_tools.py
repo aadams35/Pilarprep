@@ -185,6 +185,52 @@ class ToolTests(unittest.TestCase):
         self.assertEqual(result["metadata"]["source"], "approved-pointer")
         self.assertEqual(requests[0]["Key"], approved_key)
 
+    def test_get_latest_brief_accepts_scoped_latest_pointer(self):
+        approved_key = (
+            "tenants/demo/clients/bluemesa-payments/projects/bluemesa-payments/"
+            "brief/latest.json"
+        )
+
+        class FakeS3:
+            def get_object(self, **_kwargs):
+                document = {
+                    "scope": {
+                        "tenantId": SCOPE["tenantId"],
+                        "clientId": SCOPE["clientId"],
+                        "projectId": SCOPE["projectId"],
+                    },
+                    "response": {
+                        "technical": ["Approved"],
+                        "metadata": {
+                            "packetVersion": 2,
+                            "approvalStatus": "approved",
+                        },
+                    },
+                    "packetVersion": 2,
+                    "approvalStatus": "approved",
+                }
+                return {"Body": FakeBody(json.dumps(document).encode("utf-8"))}
+
+        class FakeDynamo:
+            def get_item(self, **_kwargs):
+                return {
+                    "Item": {
+                        "approvedArtifactKey": {"S": approved_key},
+                        "approvedPacketVersion": {"N": "2"},
+                    }
+                }
+
+        clients = {"s3": FakeS3(), "dynamodb": FakeDynamo()}
+        with (
+            patch.object(app, "ARTIFACT_BUCKET", "private-artifacts"),
+            patch.object(app, "PROJECT_TABLE", "project-state"),
+            patch.object(app, "_client", side_effect=lambda name: clients[name]),
+        ):
+            result = app.get_latest_brief(SCOPE)
+
+        self.assertEqual(result["brief"]["technical"], ["Approved"])
+        self.assertEqual(result["metadata"]["source"], "scoped-latest-pointer")
+
     def test_get_latest_brief_rejects_cross_scope_pointer(self):
         class FakeDynamo:
             def get_item(self, **_kwargs):

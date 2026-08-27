@@ -178,15 +178,21 @@ def get_latest_brief(scope: Mapping[str, str]) -> dict[str, Any]:
     latest = _latest_brief_state(scope)
     approved_version = int(latest.get("approvedPacketVersion") or 0)
     scoped_key = str(latest.get("approvedArtifactKey") or "")
-    expected_key = (
+    immutable_key = (
         f"{project_artifact_prefix(dict(scope))}/brief/approved/"
         f"v{approved_version:06d}/packet.json"
     )
+    scoped_latest_key = f"{project_artifact_prefix(dict(scope))}/brief/latest.json"
     document = None
     source = "approved-pointer"
     if scoped_key:
-        if not approved_version or scoped_key != expected_key:
+        if not approved_version or scoped_key not in {
+            immutable_key,
+            scoped_latest_key,
+        }:
             raise PermissionError("Approved brief pointer is outside the authorized project")
+        if scoped_key == scoped_latest_key:
+            source = "scoped-latest-pointer"
         document = _read_json_object(scoped_key)
         if document is not None:
             _validate_approved_brief(scope, document, approved_version)

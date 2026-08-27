@@ -263,6 +263,17 @@ Resources:
                   ForAllValues:StringLike:
                     dynamodb:LeadingKeys:
                       - "TENANT#*|CLIENT#*|PROJECT#*"
+              - !If
+                - HasDataKmsKey
+                - Sid: UseConfiguredDataKey
+                  Effect: Allow
+                  Action:
+                    - kms:Decrypt
+                    - kms:Encrypt
+                    - kms:GenerateDataKey
+                    - kms:DescribeKey
+                  Resource: !Ref DataKmsKeyArn
+                - !Ref "AWS::NoValue"
               - Sid: InvokeOnlyAgentWorker
                 Effect: Allow
                 Action: lambda:InvokeFunction
@@ -326,10 +337,12 @@ Resources:
                 Resource: !Ref ScopeSigningSecret
               - !If
                 - HasDataKmsKey
-                - Sid: DecryptConfiguredScopeSecret
+                - Sid: UseConfiguredDataKey
                   Effect: Allow
                   Action:
                     - kms:Decrypt
+                    - kms:Encrypt
+                    - kms:GenerateDataKey
                     - kms:DescribeKey
                   Resource: !Ref DataKmsKeyArn
                 - !Ref "AWS::NoValue"
@@ -405,7 +418,7 @@ Resources:
       Handler: router.app.worker_handler
       Role: !GetAtt AgentWorkerRole.Arn
       Layers: [!Ref AgentLambdaSdkLayer]
-      Timeout: 180
+      Timeout: 600
       MemorySize: 512
       Environment:
         Variables:
@@ -413,6 +426,7 @@ Resources:
           FALLBACK_FUNCTION_ARN: !Ref FallbackFunctionArn
           SCOPE_SECRET_ARN: !Ref ScopeSigningSecret
           PROJECT_TABLE: !Ref ProjectStateTableName
+          AGENT_RUNTIME_READ_TIMEOUT_SECONDS: "540"
           DEMO_TENANT_ID: !Ref DemoTenantId
           DEMO_ALLOWED_CLIENT_IDS: !Ref DemoAllowedClientIds
           ALLOW_LOCAL_IDENTITY: "false"
@@ -476,7 +490,9 @@ Resources:
               - Sid: ReadOnlyScopedBrief
                 Effect: Allow
                 Action: s3:GetObject
-                Resource: !Sub "arn:${AWS::Partition}:s3:::${ArtifactBucketName}/tenants/*/clients/*/projects/*/brief/approved/v*/packet.json"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${ArtifactBucketName}/tenants/*/clients/*/projects/*/brief/approved/v*/packet.json"
+                  - !Sub "arn:${AWS::Partition}:s3:::${ArtifactBucketName}/tenants/*/clients/*/projects/*/brief/latest.json"
               - Sid: ReadWriteScopedHandoff
                 Effect: Allow
                 Action:

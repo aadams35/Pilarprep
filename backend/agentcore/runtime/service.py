@@ -531,6 +531,43 @@ def _validate_agent_result(value: object) -> dict[str, Any]:
 
 
 
+def _reason_and_validate_agent_result(
+    model_prompt: str,
+    model_id: str,
+    session_manager: Any,
+    reasoner: Callable[[str, str, Any], Mapping[str, Any]],
+) -> dict[str, Any]:
+    raw_generated = reasoner(model_prompt, model_id, session_manager)
+    try:
+        return _validate_agent_result(raw_generated)
+    except ValueError as first_error:
+        validation_error = str(first_error)[:240]
+        LOGGER.warning(
+            "Agent handoff failed deterministic schema validation; requesting one repair",
+            extra={"errorType": type(first_error).__name__},
+        )
+
+    try:
+        repair_payload = json.loads(model_prompt)
+    except json.JSONDecodeError:
+        repair_payload = {"originalTask": model_prompt}
+    if not isinstance(repair_payload, dict):
+        repair_payload = {"originalTask": model_prompt}
+    repair_payload["schemaRepair"] = {
+        "instruction": (
+            "Regenerate the complete handoff response from the authoritative context. "
+            "Return every required field and satisfy every stated item-count constraint. "
+            "Return a full replacement, not a patch or commentary."
+        ),
+        "validationError": validation_error,
+    }
+    repaired = reasoner(
+        json.dumps(repair_payload, separators=(",", ":"), ensure_ascii=True),
+        model_id,
+        session_manager,
+    )
+    return _validate_agent_result(repaired)
+
 def _validate_catchup_result(value: object) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ValueError("Catch-up result must be an object")
@@ -714,6 +751,10 @@ def _default_reasoner(
         isinstance(prompt_payload, Mapping)
         and prompt_payload.get("mode") == "catchup"
     )
+    schema_repair_mode = (
+        isinstance(prompt_payload, Mapping)
+        and isinstance(prompt_payload.get("schemaRepair"), Mapping)
+    )
     if catchup_mode:
         guardrail_id = os.getenv("BEDROCK_GUARDRAIL_ID", "")
         guardrail_version = os.getenv("BEDROCK_GUARDRAIL_VERSION", "")
@@ -794,6 +835,7 @@ def _default_reasoner(
         model=BedrockModel(**model_options),
         system_prompt=SYSTEM_PROMPT,
         session_manager=session_manager,
+        agent_id="pilarprep-handoff-repair" if schema_repair_mode else None,
     )
     guarded_content = (
         _guarded_user_content(prompt_payload)
@@ -1074,12 +1116,12 @@ def handle_request(
                 allowed_sources,
                 retrieved_evidence,
             )
-            raw_generated = reasoner(
-                model_prompt,
-                model_id,
-                session_manager,
-            )
             if request["action"] == "generate_catchup":
+                raw_generated = reasoner(
+                    model_prompt,
+                    model_id,
+                    session_manager,
+                )
                 if isinstance(raw_generated, Mapping):
                     normalized_raw = dict(raw_generated)
                     _normalize_catchup_sources(normalized_raw, allowed_sources)
@@ -1087,7 +1129,12 @@ def handle_request(
                     normalized_raw = raw_generated
                 generated = _validate_catchup_result(normalized_raw)
             else:
-                generated = _validate_agent_result(raw_generated)
+                generated = _reason_and_validate_agent_result(
+                    model_prompt,
+                    model_id,
+                    session_manager,
+                    reasoner,
+                )
         _assert_grounded_sources(generated, allowed_sources)
 
         source_brief = _source_response(latest)

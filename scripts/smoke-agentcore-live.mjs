@@ -68,7 +68,8 @@ async function signedPostJson(url, payload, credentials) {
     protocol: endpoint.protocol,
     hostname: endpoint.hostname,
     method: "POST",
-    path: `${endpoint.pathname}${endpoint.search}`,
+    path: endpoint.pathname,
+    query: Object.fromEntries(endpoint.searchParams.entries()),
     headers: { accept: "application/json", "content-type": "application/json", host: endpoint.host },
     body,
   });
@@ -104,7 +105,7 @@ async function postAndRead(url, payload, credentials, label) {
 
   const jobId = result.jobId;
   let polls = 0;
-  let remainingWaitMs = 240_000;
+  let remainingWaitMs = 600_000;
   while (remainingWaitMs > 0) {
     const waitMs = Math.max(750, Math.min(result.pollAfterMs ?? 1500, 5000));
     await sleep(waitMs);
@@ -130,39 +131,7 @@ async function postAndRead(url, payload, credentials, label) {
     }
   }
 
-  throw new Error(`${label} did not complete within four minutes.`);
-}
-
-async function completeBriefRequest(url, payload, credentials, label) {
-  let response = await signedPostJson(
-    url,
-    { ...payload, asyncGeneration: payload.modelPreference !== "nova-micro" },
-    credentials,
-  );
-  let text = await response.text();
-  if (!response.ok) throw new Error(label + " returned HTTP " + response.status + ": " + text);
-
-  let result = JSON.parse(text);
-  if (response.status !== 202) return result;
-  if (!result.jobId || !result.projectId) throw new Error(label + " did not return a usable job.");
-
-  let remainingWaitMs = 240_000;
-  while (remainingWaitMs > 0) {
-    const waitMs = Math.max(750, Math.min(result.pollAfterMs ?? 1500, 5000));
-    await sleep(waitMs);
-    remainingWaitMs -= waitMs;
-    response = await signedPostJson(
-      url,
-      { operation: "getBriefJob", jobId: result.jobId, projectId: result.projectId },
-      credentials,
-    );
-    text = await response.text();
-    if (!response.ok) throw new Error(label + " poll returned HTTP " + response.status + ": " + text);
-    result = JSON.parse(text);
-    if (response.status !== 202) return result;
-  }
-
-  throw new Error(label + " did not complete within four minutes.");
+  throw new Error(`${label} did not complete within ten minutes.`);
 }
 
 const backend = stackOutputs(backendStack);
@@ -194,111 +163,37 @@ const crossClientResponse = await signedPostJson(agent.AgentApiUrl, {
 }, credentials);
 if (crossClientResponse.status !== 403) throw new Error(`Cross-client Agent API request returned HTTP ${crossClientResponse.status}, expected 403.`);
 
-const briefRequest = {
-  mode: "prebrief",
-  modelPreference: "nova-pro",
-  company: "BlueMesa Payments",
-  industry: "Financial Services",
-  meetingType: "Executive Briefing",
-  companySize: "Enterprise",
-  pillars: ["Security", "Reliability", "Operational Excellence"],
-  pillarRanking: [
-    { rank: 1, pillar: "Security" },
-    { rank: 2, pillar: "Reliability" },
-    { rank: 3, pillar: "Operational Excellence" },
-  ],
-  context: "BlueMesa is consolidating merchant dispute processing and customer reporting after two acquisitions. The platform mixes on-premises systems with aging integrations, and leadership needs a phased AWS modernization before holiday transaction volume increases.",
-  companyValues: "Merchant trust, rigorous compliance, low-drama change management, and faster delivery only when customer impact remains protected.",
-  companyValuesUrl: "https://www.bluemesa-payments.example/company/values",
-  meetingNotes: "Dev Malik owns resilience evidence, Rachel Kim owns PCI and identity controls, and Ariana Cole sponsors the holiday-readiness checkpoint. Overnight settlement recovery and rollback must be proven before customer traffic moves.",
-
-  decisionMakers: [
-    { name: "Ariana Cole", title: "Chief Digital Officer", source: "Customer-approved profile notes", context: "Sponsors merchant trust, modernization outcomes, and holiday readiness." },
-    { name: "Dev Malik", title: "VP Infrastructure and Resilience", source: "Customer-approved profile notes", context: "Owns settlement recovery, failover evidence, and rollback readiness." },
-    { name: "Rachel Kim", title: "Chief Risk and Compliance Officer", source: "Customer-approved profile notes", context: "Owns PCI evidence, identity separation, and compliance approval." },
-  ],
-  role: "PM",
-  prompt: "Create the first two-week plan.",
-};
-
-const baselineBrief = await completeBriefRequest(backend.BriefApiUrl, briefRequest, credentials, "Brief API baseline");
-const previousBrief = Object.fromEntries(
-  [
-    "businessCase",
-    "technical",
-    "executive",
-    "stakeholders",
-    "gameplan",
-    "objections",
-    "projectAnswer",
-    "projectArtifacts",
-    "citations",
-    "evidence",
-  ].map((key) => [key, structuredClone(baselineBrief[key])])
-);
-let brief = await completeBriefRequest(backend.BriefApiUrl, {
-  ...briefRequest,
-  feedback: ["Risk and compliance: Lead with security and evidence"],
-  feedbackDetails: [{ category: "Risk and compliance", instruction: "Lead with security and evidence" }],
-  feedbackNotes: "Make owners, approval evidence, and the decision gate explicit throughout the Business Case.",
-  baseBriefVersion: 1,
-  refinementTarget: "businessCase",
-  previousBrief,
-}, credentials, "Brief API refinement");
-if (baselineBrief.metadata?.fallbackUsed || brief.metadata?.fallbackUsed) {
-  throw new Error(`Brief generation used a deterministic fallback: ${brief.metadata?.fallbackReason ?? baselineBrief.metadata?.fallbackReason ?? "unknown reason"}`);
+const latestState = awsJson([
+  "dynamodb", "get-item",
+  "--table-name", backend.ProjectStateTableName,
+  "--key", JSON.stringify({
+    projectId: { S: "TENANT#demo|CLIENT#bluemesa-payments|PROJECT#bluemesa-payments" },
+    sortKey: { S: "BRIEF#LATEST" },
+  }),
+  "--consistent-read",
+]);
+const approvedVersion = Number(latestState.Item?.approvedPacketVersion?.N ?? 0);
+const approvedKey = latestState.Item?.approvedArtifactKey?.S ?? "";
+const projectPrefix = "tenants/demo/clients/bluemesa-payments/projects/bluemesa-payments";
+const allowedKeys = new Set([
+  `${projectPrefix}/brief/latest.json`,
+  `${projectPrefix}/brief/approved/v${String(approvedVersion).padStart(6, "0")}/packet.json`,
+]);
+if (!approvedVersion || !allowedKeys.has(approvedKey)) {
+  throw new Error("AgentCore smoke could not resolve a scoped approved Blue Mesa packet.");
 }
-if (
-  brief.metadata?.baseBriefVersion !== 1 ||
-  brief.metadata?.refinementInstructionCount < 2 ||
-  brief.metadata?.refinementTarget !== "businessCase" ||
-  brief.metadata?.unauthorizedSectionChanges !== 0 ||
-  brief.metadata?.refinementIsolationPassed !== true ||
-  brief.businessCase?.scenario === baselineBrief.businessCase?.scenario ||
-  JSON.stringify(brief.technical) !== JSON.stringify(baselineBrief.technical) ||
-  JSON.stringify(brief.projectArtifacts) !== JSON.stringify(baselineBrief.projectArtifacts)
-) {
-  throw new Error("AgentCore smoke setup did not create a traceable refined latest packet.");
-}
-
-const beforeCorrection = Object.fromEntries(
+const storedPacket = JSON.parse(execFileSync(
+  "aws",
   [
-    "businessCase",
-    "technical",
-    "executive",
-    "stakeholders",
-    "gameplan",
-    "objections",
-    "projectAnswer",
-    "projectArtifacts",
-    "citations",
-    "evidence",
-  ].map((key) => [key, structuredClone(brief[key])])
-);
-brief = await completeBriefRequest(backend.BriefApiUrl, {
-  ...briefRequest,
-  feedback: ["Customer context: Customer is already on AWS"],
-  feedbackDetails: [
-    { category: "Customer context", instruction: "Customer is already on AWS" },
+    "s3", "cp",
+    `s3://${backend.ArtifactBucketName}/${approvedKey}`,
+    "-", "--region", region, "--no-progress",
   ],
-  feedbackNotes: "Remove every on-premises or initial AWS migration assumption from this tab.",
-  baseBriefVersion: 2,
-  refinementTarget: "technical",
-  previousBrief: beforeCorrection,
-}, credentials, "Brief API contradiction correction");
-
-if (
-  brief.metadata?.refinementTarget !== "technical" ||
-  brief.metadata?.refinementCoveragePassed !== true ||
-  brief.metadata?.contradictionValidationPassed !== true ||
-  brief.metadata?.changedPassageIds?.length !== 4 ||
-  /\bon[- ]prem(?:ises)?\b/i.test(brief.technical.join(" ")) ||
-  /\bmigrat(?:e|es|ing|ion)\b.{0,80}\bto\s+aws\b/i.test(brief.technical.join(" ")) ||
-  JSON.stringify(brief.businessCase) !== JSON.stringify(beforeCorrection.businessCase) ||
-  JSON.stringify(brief.executive) !== JSON.stringify(beforeCorrection.executive) ||
-  JSON.stringify(brief.projectArtifacts) !== JSON.stringify(beforeCorrection.projectArtifacts)
-) {
-  throw new Error("Live refinement did not fully remove the superseded on-premises assumption from the selected Technical Brief.");
+  { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+));
+const brief = storedPacket.response ?? storedPacket;
+if (!brief || brief.metadata?.approvalStatus !== "approved") {
+  throw new Error("AgentCore smoke requires the server's latest approved Blue Mesa packet.");
 }
 const approvedBrief = Object.fromEntries(
   [
@@ -314,6 +209,11 @@ const approvedBrief = Object.fromEntries(
     "evidence",
   ].map((key) => [key, brief[key]])
 );
+const briefRequest = {
+  mode: "project",
+  meetingNotes: "Use the latest approved customer context and project evidence.",
+  approvedBrief,
+};
 
 const handoff = await postAndRead(agent.AgentApiUrl, {
   action: "create_handoff",

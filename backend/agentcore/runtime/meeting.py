@@ -564,15 +564,22 @@ def analyze_meeting(
         # Meeting analysis is a one-shot, read-only calculation. Reusing
         # conversational Memory across SQS or validation retries can pollute a
         # proposal with stale output; handoff and catch-up retain Memory.
-        screened_input, input_safety = content_safety.screen_payload(
-            reasoning_input,
+        screened_untrusted, input_safety = content_safety.screen_payload(
+            {
+                "meetingTranscript": transcript,
+                "repairReason": request.get("repairReason", ""),
+            },
             source="INPUT",
             action="meeting.process",
             trace_id=str(request.get("traceId") or ""),
         )
-        if not isinstance(screened_input, Mapping):
+        if not isinstance(screened_untrusted, Mapping):
             raise RuntimeError("The screened meeting context is invalid")
-        analysis = _reason(screened_input, None)
+        reasoning_input["meetingTranscript"] = screened_untrusted.get(
+            "meetingTranscript", {}
+        )
+        reasoning_input["repairReason"] = screened_untrusted.get("repairReason", "")
+        analysis = _reason(reasoning_input, None)
     LOGGER.info(
         json.dumps(
             {

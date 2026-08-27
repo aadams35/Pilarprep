@@ -17,6 +17,20 @@ if "boto3" not in sys.modules:
     fake_boto3.client = lambda *args, **kwargs: None
     sys.modules["boto3"] = fake_boto3
 
+if "botocore.config" not in sys.modules:
+    fake_botocore = types.ModuleType("botocore")
+    fake_botocore_config = types.ModuleType("botocore.config")
+
+    class FakeConfig:
+        def __init__(self, **kwargs):
+            self.connect_timeout = kwargs.get("connect_timeout")
+            self.read_timeout = kwargs.get("read_timeout")
+            self.retries = kwargs.get("retries", {})
+
+    fake_botocore_config.Config = FakeConfig
+    fake_botocore.config = fake_botocore_config
+    sys.modules["botocore"] = fake_botocore
+    sys.modules["botocore.config"] = fake_botocore_config
 from common.contracts import validate_router_request  # noqa: E402
 from router import app  # noqa: E402
 
@@ -73,6 +87,17 @@ def worker_event(request=REQUEST, scope=SCOPE):
     }
 
 
+
+class RouterTests(unittest.TestCase):
+    def test_agentcore_client_uses_long_read_timeout(self):
+        with patch.object(app.boto3, "client") as client:
+            app._client("bedrock-agentcore")
+
+        config = client.call_args.kwargs["config"]
+        self.assertEqual(config.connect_timeout, 5)
+        self.assertEqual(config.read_timeout, 540)
+        self.assertEqual(config.retries["max_attempts"], 0)
+
     def test_claude_sonnet_46_is_a_supported_model_preference(self):
         request = {**REQUEST, "modelPreference": "claude-sonnet-4.6"}
         self.assertEqual(
@@ -80,7 +105,6 @@ def worker_event(request=REQUEST, scope=SCOPE):
             "claude-sonnet-4.6",
         )
 
-class RouterTests(unittest.TestCase):
     def test_solutions_architect_is_a_supported_audience_role(self):
         request = {**REQUEST, "audienceRole": "Solutions Architect"}
         self.assertEqual(

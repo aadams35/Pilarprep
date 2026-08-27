@@ -220,7 +220,7 @@ def _verify_clean_audio(item: Mapping[str, Any]) -> tuple[str, str, str]:
     try:
         actual_version, actual_etag, actual_size = _object_identity(
             object_key,
-            version_id=version_id,
+            version_id="",
         )
         scan_tag = _scan_tag(object_key, version_id)
     except ClientError as exc:
@@ -238,6 +238,65 @@ def _verify_clean_audio(item: Mapping[str, Any]) -> tuple[str, str, str]:
         )
     return object_key, str(item.get("mediaFormat") or ""), version_id
 
+
+def _reconcile_verified_clean_scan(
+    scope: Mapping[str, str], upload_id: str, item: Mapping[str, Any]
+) -> bool:
+    object_key = str(item.get("objectKey") or "")
+    expected_size = int(item.get("expectedSizeBytes") or 0)
+    if not object_key or expected_size <= 0:
+        return False
+    try:
+        version_id, etag, actual_size = _object_identity(object_key, version_id="")
+        managed_tag = _scan_tag(object_key, version_id)
+    except ClientError:
+        return False
+    if (
+        not version_id
+        or not etag
+        or actual_size != expected_size
+        or managed_tag != "NO_THREATS_FOUND"
+    ):
+        return False
+    timestamp = now_iso()
+    try:
+        aws_client("dynamodb").update_item(
+            TableName=PROJECT_TABLE,
+            Key=_upload_key(scope, upload_id),
+            UpdateExpression=(
+                "SET #status = :clean, scanBucketName = :bucket, "
+                "scanVersionId = :versionId, scanETag = :etag, "
+                "scanStatus = :completed, scanResultStatus = :cleanResult, "
+                "scanTagVerified = :verified, scanSource = :source, "
+                "scannedAt = :updatedAt, updatedAt = :updatedAt"
+            ),
+            ConditionExpression=(
+                "#status = :pending AND objectKey = :objectKey "
+                "AND expectedSizeBytes = :expectedSize"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":pending": {"S": "pending_scan"},
+                ":clean": {"S": "clean"},
+                ":bucket": {"S": MEETING_EVIDENCE_BUCKET},
+                ":versionId": {"S": version_id},
+                ":etag": {"S": etag},
+                ":completed": {"S": "COMPLETED"},
+                ":cleanResult": {"S": "NO_THREATS_FOUND"},
+                ":verified": {"BOOL": True},
+                ":source": {"S": "guardduty-managed-tag-reconciliation"},
+                ":objectKey": {"S": object_key},
+                ":expectedSize": {"N": str(actual_size)},
+                ":updatedAt": {"S": timestamp},
+            },
+        )
+        return True
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") != (
+            "ConditionalCheckFailedException"
+        ):
+            raise
+        return False
 
 def _defer_for_scan(
     scope: Mapping[str, str],
@@ -350,6 +409,8 @@ def _resolve_audio_upload(
         )
         status = str(item.get("status") or "")
         if status == "pending_scan":
+            if _reconcile_verified_clean_scan(scope, upload_id, item):
+                continue
             if _defer_for_scan(
                 scope,
                 upload_id,
@@ -476,7 +537,7 @@ def handle_guardduty_scan_event(
         raise PermissionError("GuardDuty object key did not match the upload record")
     actual_version, actual_etag, actual_size = _object_identity(
         object_key,
-        version_id=version_id,
+        version_id="",
     )
     if (
         actual_version != version_id

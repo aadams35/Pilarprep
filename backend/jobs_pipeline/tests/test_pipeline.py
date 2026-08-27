@@ -1633,6 +1633,13 @@ class WorkerTests(unittest.TestCase):
             "traceId": "trace-meeting-0001",
         }
         calls = {"reset": [], "failed": []}
+        screened_inputs = []
+
+        def screen(value, *, source, **_kwargs):
+            if source == "INPUT":
+                screened_inputs.append(json.loads(json.dumps(value)))
+            return value, {"source": source, "policyResult": "passed"}
+
         fake_meeting = types.SimpleNamespace(
             claim_continuation=lambda _job_name: continuation,
             continuation_scope=lambda _item: BLUE_SCOPE,
@@ -1687,6 +1694,7 @@ class WorkerTests(unittest.TestCase):
                 "_run_meeting_analysis",
                 side_effect=RuntimeError("model failed"),
             ),
+            patch.object(worker, "_screen_ai_payload", side_effect=screen),
             patch.object(worker, "_store_result") as store_result,
             patch.object(worker, "_record_failure"),
         ):
@@ -1698,6 +1706,8 @@ class WorkerTests(unittest.TestCase):
         self.assertNotIn("complete", calls)
         self.assertEqual(calls["failed"], [])
         store_result.assert_not_called()
+        self.assertEqual(set(screened_inputs[0]), {"document", "transcript"})
+        self.assertNotIn("approvedDocument", screened_inputs[0])
 
     def test_refinement_content_validation_failure_is_non_retryable(self):
         brief_module = types.SimpleNamespace(
@@ -3072,7 +3082,7 @@ class AudioSecurityTests(unittest.TestCase):
                         meeting,
                         "_object_identity",
                         return_value=(self.version_id, self.etag, 4096),
-                    ),
+                    ) as identity,
                     patch.object(meeting, "_scan_tag", return_value=managed_tag),
                     patch.object(meeting, "aws_client", return_value=Dynamo()),
                 ):
@@ -3081,7 +3091,76 @@ class AudioSecurityTests(unittest.TestCase):
                         final_attempt=True,
                     )
                 self.assertEqual(outcome["outcome"], expected)
+                identity.assert_called_once_with(self._object_key(), version_id="")
 
+    def test_pending_upload_reconciles_only_verified_clean_managed_tag(self):
+        updates = []
+
+        class Dynamo:
+            def update_item(self, **kwargs):
+                updates.append(kwargs)
+                return {}
+
+        with (
+            patch.object(meeting, "MEETING_EVIDENCE_BUCKET", "meeting-evidence"),
+            patch.object(meeting, "PROJECT_TABLE", "project-state"),
+            patch.object(
+                meeting,
+                "_object_identity",
+                return_value=(self.version_id, self.etag, 4096),
+            ),
+            patch.object(meeting, "_scan_tag", return_value="NO_THREATS_FOUND"),
+            patch.object(meeting, "aws_client", return_value=Dynamo()),
+        ):
+            reconciled = meeting._reconcile_verified_clean_scan(
+                BLUE_SCOPE, self.upload_id, self._upload()
+            )
+
+        self.assertTrue(reconciled)
+        values = updates[0]["ExpressionAttributeValues"]
+        self.assertEqual(values[":cleanResult"]["S"], "NO_THREATS_FOUND")
+        self.assertEqual(values[":versionId"]["S"], self.version_id)
+        self.assertTrue(values[":verified"]["BOOL"])
+
+    def test_pending_upload_does_not_reconcile_a_threat_tag(self):
+        with (
+            patch.object(
+                meeting,
+                "_object_identity",
+                return_value=(self.version_id, self.etag, 4096),
+            ),
+            patch.object(meeting, "_scan_tag", return_value="THREATS_FOUND"),
+            patch.object(meeting, "aws_client") as client,
+        ):
+            reconciled = meeting._reconcile_verified_clean_scan(
+                BLUE_SCOPE, self.upload_id, self._upload()
+            )
+
+        self.assertFalse(reconciled)
+        client.assert_not_called()
+    def test_clean_audio_verifies_current_identity_then_scanned_version_tag(self):
+        clean = {
+            **self._upload(status="clean"),
+            "scanVersionId": self.version_id,
+            "scanETag": self.etag,
+            "scanTagVerified": True,
+        }
+        with (
+            patch.object(
+                meeting,
+                "_object_identity",
+                return_value=(self.version_id, self.etag, 4096),
+            ) as identity,
+            patch.object(
+                meeting,
+                "_scan_tag",
+                return_value="NO_THREATS_FOUND",
+            ) as scan_tag,
+        ):
+            meeting._verify_clean_audio(clean)
+
+        identity.assert_called_once_with(self._object_key(), version_id="")
+        scan_tag.assert_called_once_with(self._object_key(), self.version_id)
     def test_spoofed_guardduty_bucket_is_rejected(self):
         event = self._event()
         event["detail"]["s3ObjectDetails"]["bucketName"] = "attacker-bucket"

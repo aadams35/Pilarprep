@@ -9,6 +9,7 @@ from typing import Any, Mapping
 from uuid import uuid4
 
 import boto3
+from botocore.config import Config
 
 from common.contracts import validate_router_request
 from common.identifiers import project_partition_key, require_identifier, stable_identifier
@@ -25,6 +26,9 @@ FALLBACK_FUNCTION_ARN = os.getenv("FALLBACK_FUNCTION_ARN", "")
 SCOPE_SECRET_ARN = os.getenv("SCOPE_SECRET_ARN", "")
 PROJECT_TABLE = os.getenv("PROJECT_TABLE", "")
 AGENT_WORKER_FUNCTION = os.getenv("AGENT_WORKER_FUNCTION", "")
+AGENT_RUNTIME_READ_TIMEOUT_SECONDS = int(
+    os.getenv("AGENT_RUNTIME_READ_TIMEOUT_SECONDS", "540")
+)
 JOB_TTL_MINUTES = 60
 MAX_JOB_RESULT_BYTES = 350 * 1024
 DEMO_TENANT_ID = os.getenv("DEMO_TENANT_ID", "demo")
@@ -43,6 +47,16 @@ class AuthorizationError(PermissionError):
 
 
 def _client(service_name: str):
+    if service_name == "bedrock-agentcore":
+        return boto3.client(
+            service_name,
+            region_name=REGION,
+            config=Config(
+                connect_timeout=5,
+                read_timeout=AGENT_RUNTIME_READ_TIMEOUT_SECONDS,
+                retries={"max_attempts": 0, "mode": "standard"},
+            ),
+        )
     return boto3.client(service_name, region_name=REGION)
 
 
@@ -414,6 +428,7 @@ def _start_agent_job(
     now = datetime.now(timezone.utc)
     expires_at = int((now + timedelta(minutes=JOB_TTL_MINUTES)).timestamp())
     created = False
+    dispatch_stage = "create_job_record"
 
     try:
         _client("dynamodb").put_item(
@@ -433,6 +448,7 @@ def _start_agent_job(
             ConditionExpression="attribute_not_exists(projectId) AND attribute_not_exists(sortKey)",
         )
         created = True
+        dispatch_stage = "invoke_worker"
         invocation = _client("lambda").invoke(
             FunctionName=AGENT_WORKER_FUNCTION,
             InvocationType="Event",
@@ -450,6 +466,17 @@ def _start_agent_job(
         if invocation.get("StatusCode") != 202:
             raise RuntimeError("Agent worker did not accept the job")
     except Exception as exc:
+        error_response = getattr(exc, "response", {})
+        error_details = (
+            error_response.get("Error", {})
+            if isinstance(error_response, Mapping)
+            else {}
+        )
+        error_code = (
+            str(error_details.get("Code") or "")
+            if isinstance(error_details, Mapping)
+            else ""
+        )
         if created:
             try:
                 _update_agent_job(
@@ -465,6 +492,8 @@ def _start_agent_job(
                 {
                     "event": "agentcore_job_dispatch_failure",
                     "traceId": trace_id,
+                    "stage": dispatch_stage,
+                    "errorCode": error_code,
                     "errorType": type(exc).__name__,
                 }
             )

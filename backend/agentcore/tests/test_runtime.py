@@ -534,6 +534,72 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(len(prompts), 2)
         self.assertIn("entire answer", prompts[1])
 
+    def test_handoff_schema_failure_is_repaired_once(self):
+        invalid = json.loads(json.dumps(MODEL_RESULT))
+        invalid["projectArtifacts"]["riskRegister"] = invalid["projectArtifacts"][
+            "riskRegister"
+        ][:1]
+        calls = []
+
+        def reasoner(prompt, _model_id, _session_manager):
+            calls.append(json.loads(prompt))
+            return invalid if len(calls) == 1 else MODEL_RESULT
+
+        result = runtime_service._reason_and_validate_agent_result(
+            '{"mode":"handoff"}',
+            "amazon.nova-pro-v1:0",
+            object(),
+            reasoner,
+        )
+
+        self.assertEqual(result["projectAnswer"], MODEL_RESULT["projectAnswer"])
+        self.assertEqual(len(calls), 2)
+        self.assertIn("riskRegister", calls[1]["schemaRepair"]["validationError"])
+
+    def test_schema_repair_uses_a_distinct_strands_agent_id(self):
+        captured = {}
+        fake_strands = types.ModuleType("strands")
+        fake_models = types.ModuleType("strands.models")
+
+        class BedrockModel:
+            def __init__(self, **_options):
+                pass
+
+        class Agent:
+            def __init__(self, **options):
+                captured.update(options)
+
+            def __call__(self, *_args, **_kwargs):
+                return json.dumps(MODEL_RESULT)
+
+        fake_strands.Agent = Agent
+        fake_models.BedrockModel = BedrockModel
+        prompt = json.dumps(
+            {
+                "mode": "handoff",
+                "schemaRepair": {"validationError": "riskRegister requires 2 items"},
+            }
+        )
+        with (
+            patch.dict(
+                sys.modules,
+                {"strands": fake_strands, "strands.models": fake_models},
+            ),
+            patch.object(runtime_service, "_handoff_output_model", return_value=dict),
+            patch.dict(
+                runtime_service.os.environ,
+                {"BEDROCK_GUARDRAIL_ID": "", "BEDROCK_GUARDRAIL_VERSION": ""},
+            ),
+        ):
+            result = runtime_service._default_reasoner(
+                prompt,
+                "us.amazon.nova-pro-v1:0",
+                {"memory": "available"},
+            )
+
+        self.assertEqual(result["projectAnswer"], MODEL_RESULT["projectAnswer"])
+        self.assertEqual(captured["agent_id"], "pilarprep-handoff-repair")
+
     def test_guarded_user_content_excludes_approved_evidence(self):
         guarded = json.loads(
             runtime_service._guarded_user_content(
@@ -1089,6 +1155,11 @@ class MeetingAgenticRagTests(unittest.TestCase):
 
     def test_analysis_performs_three_bounded_reads_and_no_writes(self):
         calls = []
+        safety_calls = []
+
+        def screen(value, *, source, **_kwargs):
+            safety_calls.append((source, json.loads(json.dumps(value))))
+            return value, {"source": source, "policyResult": "passed"}
 
         class Gateway:
             def __enter__(self):
@@ -1132,6 +1203,11 @@ class MeetingAgenticRagTests(unittest.TestCase):
                 meeting_runtime,
                 "_reason",
                 return_value={"meetingSummary": "Payroll meeting analyzed."},
+            ) as reasoner,
+            patch.object(
+                meeting_runtime.content_safety,
+                "screen_payload",
+                side_effect=screen,
             ),
         ):
             def fail_if_memory_is_loaded(_scope):
@@ -1148,5 +1224,14 @@ class MeetingAgenticRagTests(unittest.TestCase):
         self.assertEqual(result["retrieval"]["toolCallCount"], 3)
         self.assertEqual(result["retrieval"]["retrievalRounds"], 1)
         self.assertFalse(result["model"]["fallbackUsed"])
+        self.assertEqual(safety_calls[0][0], "INPUT")
+        self.assertEqual(
+            set(safety_calls[0][1]), {"meetingTranscript", "repairReason"}
+        )
+        self.assertNotIn("latestApprovedBrief", safety_calls[0][1])
+        reasoning_input = reasoner.call_args.args[0]
+        self.assertIn("latestApprovedBrief", reasoning_input)
+        self.assertIn("approvedRetrievedEvidence", reasoning_input)
+        self.assertEqual(safety_calls[-1][0], "OUTPUT")
 if __name__ == "__main__":
     unittest.main()
