@@ -1487,8 +1487,8 @@ def _run_agent(
     idempotency = require_identifier(
         document.get("idempotencyKey"), "idempotencyKey"
     )
-    runtime_session_id = stable_identifier(
-        "runtime-session",
+    agent_session_id = stable_identifier(
+        "agent-session",
         [
             scope[field]
             for field in (
@@ -1499,6 +1499,11 @@ def _run_agent(
                 "sessionId",
             )
         ],
+        48,
+    )
+    runtime_session_id = stable_identifier(
+        "runtime-invocation",
+        [agent_session_id, idempotency],
         48,
     )
     trace_id = stable_identifier("trace", [runtime_session_id, idempotency], 32)
@@ -1552,7 +1557,8 @@ def _run_agent(
     result = dict(screened_result)
     result.setdefault("metadata", {}).update(
         {
-            "agentSessionId": runtime_session_id,
+            "agentSessionId": agent_session_id,
+            "agentRuntimeSessionId": runtime_session_id,
             "agentTraceId": trace_id,
             "agentMode": "agentcore",
             "fallbackUsed": False,

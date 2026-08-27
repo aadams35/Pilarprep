@@ -107,7 +107,7 @@ def aws_client(service_name: str):
             config=Config(
                 connect_timeout=5,
                 read_timeout=read_timeout,
-                retries={"max_attempts": 0, "mode": "standard"},
+                retries={"max_attempts": 2, "mode": "standard"},
             ),
         )
     elif service_name == "s3":

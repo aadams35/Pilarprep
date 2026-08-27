@@ -220,7 +220,7 @@ class CommonContractTests(unittest.TestCase):
         config = client.call_args.kwargs["config"]
         self.assertEqual(config.connect_timeout, 5)
         self.assertEqual(config.read_timeout, 300)
-        self.assertEqual(config.retries["max_attempts"], 0)
+        self.assertEqual(config.retries["max_attempts"], 2)
 
     def test_s3_client_forces_sigv4_for_kms_presigned_downloads(self):
         with patch.object(common.boto3, "client", return_value=object()) as client:
@@ -2220,6 +2220,56 @@ class WorkerTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "changed project state"):
                 worker._run_agent(SCOPE, document)
 
+    def test_agent_jobs_share_memory_but_use_isolated_runtime_sessions(self):
+        runtime_calls = []
+
+        class FakeAgentCore:
+            def invoke_agent_runtime(self, **kwargs):
+                runtime_calls.append(kwargs)
+                return {
+                    "response": BytesIO(
+                        b'{"provider":"agentcore","answer":"catch-up","metadata":{}}'
+                    )
+                }
+
+        approved = (
+            {"approvedPacketVersion": 2},
+            {"response": {"technical": ["Approved"]}, "request": {}},
+        )
+        documents = [
+            {
+                "action": "catchup.generate",
+                "idempotencyKey": f"catchup-session-{index}",
+                "input": {"audienceRole": "PM"},
+            }
+            for index in (1, 2)
+        ]
+        with (
+            patch.object(worker, "AGENT_RUNTIME_ARN", "runtime-arn"),
+            patch.object(worker, "_approved_document", return_value=approved),
+            patch.object(worker, "_project_state_version", return_value=7),
+            patch.object(worker, "_scope_token", return_value="signed-scope"),
+            patch.object(worker, "aws_client", return_value=FakeAgentCore()),
+        ):
+            results = [worker._run_agent(SCOPE, document) for document in documents]
+
+        runtime_session_ids = [
+            call["runtimeSessionId"] for call in runtime_calls
+        ]
+        self.assertNotEqual(runtime_session_ids[0], runtime_session_ids[1])
+        self.assertTrue(all(len(value) >= 33 for value in runtime_session_ids))
+        self.assertEqual(
+            results[0]["metadata"]["agentSessionId"],
+            results[1]["metadata"]["agentSessionId"],
+        )
+        self.assertEqual(
+            results[0]["metadata"]["agentRuntimeSessionId"],
+            runtime_session_ids[0],
+        )
+        self.assertEqual(
+            results[1]["metadata"]["agentRuntimeSessionId"],
+            runtime_session_ids[1],
+        )
     def test_handoff_rejects_a_stale_approved_packet_version(self):
         document = {
             "action": "handoff.generate",
