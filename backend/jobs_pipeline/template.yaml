@@ -1124,7 +1124,9 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub "${MeetingEvidenceBucket.Arn}/transcripts/public-demo/blue-mesa-payments/*"
+                Resource:
+                  - !Sub "${MeetingEvidenceBucket.Arn}/transcripts/public-demo/blue-mesa-payments/*"
+                  - !Sub "${MeetingEvidenceBucket.Arn}/transcripts/private/*/bluemesa-payments/bluemesa-payments/blue-mesa-discovery/latest.json"
               - Sid: ManageOnlyTenantEvidenceObjects
                 Effect: Allow
                 Action:
@@ -1153,6 +1155,7 @@ Resources:
                       - audio/public-demo/blue-mesa-payments/*
                       - audio/uploads/*
                       - transcripts/public-demo/blue-mesa-payments/*
+                      - transcripts/private/*/bluemesa-payments/bluemesa-payments/blue-mesa-discovery/latest.json
                       - evidence/tenants/*
               - Sid: RunOnlyBatchTranscription
                 Effect: Allow

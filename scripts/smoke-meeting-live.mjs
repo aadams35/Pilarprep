@@ -166,6 +166,8 @@ async function runJob(apiUrl, credentials, envelope, label, terminalStatuses) {
         "queued",
         "waiting_for_scan",
         "running",
+        "validating",
+        "saving",
         "transcribing",
         "screening",
         "analyzing",

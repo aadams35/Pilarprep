@@ -882,6 +882,7 @@ def _approved_source_labels(
         "Latest approved PilarPrep brief",
         "Approved meeting outcomes",
         "DynamoDB project state",
+        "AgentCore project memory",
     ]
 
     def add(value: object) -> None:
@@ -920,6 +921,64 @@ def _assert_grounded_sources(
                     used.append(item.get("source"))
     if any(source not in allowed for source in used):
         raise ValueError("Agent result used a source label outside the approved evidence set")
+
+
+def _canonical_source_label(
+    value: object, allowed_sources: list[str]
+) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    source = value.strip()[:240]
+    allowed_by_casefold = {item.casefold(): item for item in allowed_sources}
+    exact = allowed_by_casefold.get(source.casefold())
+    if exact:
+        return exact
+    normalized = " ".join(re.findall(r"[a-z0-9]+", source.casefold()))
+    aliases = {
+        "approved brief": "Latest approved PilarPrep brief",
+        "latest approved brief": "Latest approved PilarPrep brief",
+        "current project state": "DynamoDB project state",
+        "project state": "DynamoDB project state",
+        "meeting outcomes": "Approved meeting outcomes",
+        "memory supplied in this request": "AgentCore project memory",
+        "project memory": "AgentCore project memory",
+    }
+    canonical = aliases.get(normalized)
+    return canonical if canonical in allowed_sources else None
+
+
+def _normalize_handoff_sources(
+    generated: dict[str, Any], allowed_sources: list[str]
+) -> None:
+    citations = [
+        canonical
+        for source in generated.get("citations", [])
+        if (canonical := _canonical_source_label(source, allowed_sources))
+    ]
+    if not citations:
+        canonical = "Latest approved PilarPrep brief"
+        if canonical not in allowed_sources:
+            raise ValueError("Handoff has no approved source citation")
+        citations = [canonical]
+    generated["citations"] = list(dict.fromkeys(citations))
+
+    update = generated.get("projectUpdate")
+    if not isinstance(update, Mapping):
+        return
+    for register in REGISTER_NAMES:
+        for index, item in enumerate(update.get(register, [])):
+            if not isinstance(item, dict):
+                continue
+            canonical = _canonical_source_label(
+                item.get("source"), allowed_sources
+            )
+            if not canonical:
+                raise ValueError(
+                    "Agent result used a source label outside the approved "
+                    "evidence set in "
+                    f"projectUpdate.{register}[{index}]"
+                )
+            item["source"] = canonical
 
 
 def _normalize_catchup_sources(
@@ -1135,6 +1194,7 @@ def handle_request(
                     session_manager,
                     reasoner,
                 )
+                _normalize_handoff_sources(generated, allowed_sources)
         _assert_grounded_sources(generated, allowed_sources)
 
         source_brief = _source_response(latest)

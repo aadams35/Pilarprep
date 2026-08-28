@@ -3,6 +3,7 @@ param(
   [string]$BackendStackName = "pillarprep-bedrock",
   [string]$JobsStackName = "pillarprep-jobs",
   [string]$Region = "us-east-1",
+  [string]$Profile = "pillarprep-deployer",
   [string]$AllowedOrigin = "https://d2e0btay0ynyf.cloudfront.net",
   [string]$SecondaryAllowedOrigin = "https://pilarprep.app",
   [string]$ResourcePrefix = "pillarprep-demo",
@@ -41,9 +42,13 @@ function Require-Command($Name) {
 }
 
 function Invoke-Aws {
-  & aws @args
+  $commandArgs = @($args)
+  if ($Profile) {
+    $commandArgs += @("--profile", $Profile)
+  }
+  & aws @commandArgs
   if ($LASTEXITCODE -ne 0) {
-    throw "AWS CLI command failed: aws $($args -join ' ')"
+    throw "AWS CLI command failed: aws $($commandArgs -join ' ')"
   }
 }
 
@@ -65,6 +70,11 @@ function Optional-Stack-Output($Outputs, $Key) {
 
 Require-Command aws
 Require-Command python
+
+$profileArgs = @()
+if ($Profile) {
+  $profileArgs = @("--profile", $Profile)
+}
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $agentRoot = Join-Path $repoRoot "backend\agentcore"
@@ -132,7 +142,7 @@ if (
   -not $KnowledgeBaseId -or
   -not $KnowledgeBaseArn
 ) {
-  $jobsOutputJson = & aws cloudformation describe-stacks --stack-name $JobsStackName --region $Region --query "Stacks[0].Outputs" --output json 2>$null
+  $jobsOutputJson = & aws cloudformation describe-stacks --stack-name $JobsStackName --region $Region --query "Stacks[0].Outputs" --output json @profileArgs 2>$null
   if ($LASTEXITCODE -eq 0 -and $jobsOutputJson) {
     $jobsOutputs = $jobsOutputJson | ConvertFrom-Json
     if (-not $UnifiedWorkerRoleArn) {
@@ -161,7 +171,7 @@ if ($KnowledgeBaseArn) {
   Write-Host "Authorizing metadata-scoped PilarPrep Knowledge Base: $KnowledgeBaseId"
 }
 
-& aws s3api head-bucket --bucket $PackagingBucket 2>$null
+& aws s3api head-bucket --bucket $PackagingBucket @profileArgs 2>$null
 if ($LASTEXITCODE -ne 0) {
   if ($Region -eq "us-east-1") {
     Invoke-Aws s3api create-bucket --bucket $PackagingBucket --region $Region | Out-Null

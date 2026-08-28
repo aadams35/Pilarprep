@@ -1936,7 +1936,7 @@ def _promote_approved_meeting(
     idempotency = stable_identifier(
         "meeting-promotion",
         [str(document.get("idempotencyKey") or "")],
-        48,
+        40,
     )
     saved_state = tools.save_project_update(
         scope,

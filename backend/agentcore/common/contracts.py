@@ -3,8 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Mapping
 
-from common.identifiers import require_identifier
-from common.security import validate_scope
+from .identifiers import require_identifier
+from .security import validate_scope
 
 
 ACTIONS = {"create_handoff", "generate_catchup", "analyze_meeting"}

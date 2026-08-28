@@ -36,6 +36,11 @@ Authority order:
 Rules:
 - The customer is already operating on AWS. Never describe an initial migration
   from on-premises.
+- Treat any prior on-premises migration language as an obsolete assumption. It
+  may appear only in previousAssumption or quoted evidenceText and must be
+  explicitly corrected. All summaries, current-state statements, requirements,
+  risks, scope changes, actions, and handoff guidance must describe Blue Mesa's
+  existing AWS environment.
 - Payroll integration is a primary objective and must appear in the summary,
   requirements, risks or dependencies, and actions or open questions.
 - Proposal arrays contain only changes learned from the meeting transcript.
@@ -423,6 +428,19 @@ def _meeting_prompt_content(
 ) -> list[dict[str, Any]]:
     context = dict(evidence)
     transcript = context.pop("meetingTranscript", {})
+    repair_reason = str(context.pop("repairReason", "") or "").strip()
+    if repair_reason:
+        instruction += (
+            "VALIDATION REPAIR REQUIRED: "
+            f"{repair_reason[:500]}. Regenerate the entire meeting analysis. "
+            "Remove every affirmative claim of an initial AWS migration or a "
+            "migration from on-premises from meetingSummary, "
+            "proposedHandoffSummary, and every current-state item. Blue Mesa "
+            "already operates on AWS. Obsolete migration language may appear "
+            "only in previousAssumption or quoted evidenceText and must be "
+            "explicitly corrected. Return the complete required JSON object, "
+            "not a patch.\n"
+        )
     context_text = json.dumps(
         context,
         separators=(",", ":"),

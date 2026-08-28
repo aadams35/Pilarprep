@@ -1,6 +1,6 @@
 # PilarPrep Secured Meeting Audio Deployment Runbook
 
-Status: implementation updated and verified locally on 2026-08-27. AWS deployment and live verification are pending.
+Status: deployed and verified in us-east-1 on 2026-08-27.
 
 Region: us-east-1
 
@@ -174,14 +174,14 @@ Conditional writes prevent duplicate EventBridge or SQS deliveries from starting
 - Customer content remains in private S3 and scoped DynamoDB records.
 - Customer content, prompts, transcripts, PII, and rejected output are excluded from application logs.
 
-## 10. Local Test Results
+## 10. Verification Results
 
 Completed locally:
 
 | Verification | Result |
 | --- | --- |
 | Jobs pipeline unit and contract tests | 110 passed |
-| AgentCore tests | 77 passed, 1 skipped |
+| AgentCore tests | 79 passed, 1 skipped |
 | Bedrock Lambda tests | 60 passed |
 | Frontend/Node tests | 42 passed |
 | Playwright browser workflows | 11 passed |
@@ -194,7 +194,22 @@ Completed locally:
 | AgentCore SAM validation with lint | Passed |
 | Final SVG XML validation | Passed |
 
-No live AWS smoke test was run because deployment was explicitly excluded.
+Live AWS verification:
+
+| Verification | Result |
+| --- | --- |
+| CloudFormation stacks | AgentCore, jobs, and frontend reached UPDATE_COMPLETE |
+| GuardDuty malware plan | ACTIVE |
+| Secured meeting workflow | Passed through scan, transcription, content safety, analysis, human review, handoff, and catch-up |
+| Transcript identity context | Synthetic names preserved |
+| Bedrock Guardrail | Input screening passed |
+| Human review | 7 changes accepted and 1 rejected |
+| Custom scenario regression | Generation, targeted business-case and objections refinements, approval, handoff, catch-up, and DOCX download passed |
+| Tenant isolation | Unsigned and cross-client requests returned 403 |
+| Private storage | Direct artifact and evidence S3 requests returned 403 |
+| Frontend publish | CloudFront invalidation completed |
+
+The successful meeting smoke completed in 155,487 ms. The successful custom-scenario smoke used live Bedrock and AgentCore providers. The DLQ contains 29 messages from pre-fix testing; they are intentionally quarantined and must be reviewed before any replay or deletion. CloudWatch reported no new DLQ messages during the final deployment and verification window.
 
 ## 11. Cost Implications
 
@@ -248,7 +263,7 @@ Re-run local validation:
 
 Deploy AgentCore first so the shared safety module is packaged while the existing jobs outputs are still available:
 
-    .\scripts\deploy-agentcore.ps1 -Region us-east-1 -AllowedOrigin https://d2e0btay0ynyf.cloudfront.net -SecondaryAllowedOrigin https://pilarprep.app
+    .\scripts\deploy-agentcore.ps1 -Region us-east-1 -Profile pillarprep-deployer -AllowedOrigin https://d2e0btay0ynyf.cloudfront.net -SecondaryAllowedOrigin https://pilarprep.app
 
 Deploy the jobs stack. This adds GuardDuty, Event 1, IAM, upload status routes, worker changes, metrics, and alarms. The script refreshes AgentCore authorization unless SkipAgentCoreAuthorization is supplied.
 
@@ -287,23 +302,23 @@ Existing unverified audio must not be grandfathered in. Re-upload it through the
 
 Infrastructure:
 
-- [ ] pillarprep-agentcore, pillarprep-jobs, and pillarprep-frontend finish in a complete state.
-- [ ] MeetingAudioMalwareProtectionPlanStatus is active.
-- [ ] GuardDuty scope is exactly the meeting bucket and audio/uploads/ prefix.
-- [ ] Event 1 and Event 2 rules are enabled and target the existing queue.
-- [ ] The queue policy has only the two expected EventBridge source ARNs/accounts.
-- [ ] Uploaded-audio reads require the clean managed tag.
-- [ ] Direct S3 access remains denied.
+- [x] pillarprep-agentcore, pillarprep-jobs, and pillarprep-frontend finish in a complete state.
+- [x] MeetingAudioMalwareProtectionPlanStatus is active.
+- [x] GuardDuty scope is exactly the meeting bucket and audio/uploads/ prefix.
+- [x] Event 1 and Event 2 rules are enabled and target the existing queue.
+- [x] The queue policy has only the two expected EventBridge source ARNs/accounts.
+- [x] Uploaded-audio reads require the clean managed tag.
+- [x] Direct S3 access remains denied.
 
 Application:
 
-- [ ] The public app loads over HTTPS with the current frontend bundle.
-- [ ] Brief generation, refinement, handoff, catch-up, and custom scenarios still complete.
-- [ ] Blue Mesa remains the only scenario with meeting audio.
+- [x] The public app loads over HTTPS with the current frontend bundle.
+- [x] Brief generation, refinement, handoff, catch-up, and custom scenarios still complete.
+- [x] Blue Mesa remains the only scenario with meeting audio.
 - [ ] Upload shows Scanning for threats.
 - [ ] Process during scanning shows Waiting for scan and does not start Transcribe early.
-- [ ] A clean upload advances through Transcribing, Checking content safety, Analyzing meeting, and Complete.
-- [ ] The complete transcript preserves expected synthetic names, speaker labels, and timestamps.
+- [x] A clean upload advances through Transcribing, Checking content safety, Analyzing meeting, and Complete.
+- [x] The complete transcript preserves expected synthetic names, speaker labels, and timestamps.
 - [ ] No transcript body appears in SQS, DynamoDB job records, metrics, logs, or error messages.
 - [ ] A blocked or failed object never reaches Transcribe and reveals no internal finding details.
 - [ ] Duplicate Event 1 and Event 2 deliveries do not repeat work.

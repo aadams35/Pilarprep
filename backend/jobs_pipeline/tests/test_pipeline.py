@@ -676,6 +676,20 @@ class InfrastructureSecurityTests(unittest.TestCase):
         self.assertIn("RateBasedStatement:", frontend)
         self.assertIn("Name: RateLimitPublicDemo", frontend)
         self.assertIn("MeetingEvidenceBucketPolicy:", pipeline)
+        self.assertIn(
+            "transcripts/private/*/bluemesa-payments/bluemesa-payments/"
+            "blue-mesa-discovery/latest.json",
+            pipeline,
+        )
+        agent_contracts = (
+            BACKEND_ROOT / "agentcore" / "common" / "contracts.py"
+        ).read_text(encoding="utf-8")
+        agent_security = (
+            BACKEND_ROOT / "agentcore" / "common" / "security.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("from .identifiers import", agent_contracts)
+        self.assertIn("from .security import", agent_contracts)
+        self.assertIn("from .identifiers import", agent_security)
 
     def test_every_blue_mesa_source_has_consistent_approved_metadata(self):
         corpus = BACKEND_ROOT.parent / "data" / "blue-mesa-evidence"
@@ -2593,6 +2607,12 @@ class MeetingWorkflowTests(unittest.TestCase):
         self.assertNotIn("ContentRedaction", captured["request"])
 
     def test_human_review_promotes_agent_analysis_without_second_model_call(self):
+        promotion_idempotency = common.stable_identifier(
+            "meeting-promotion", ["approval-request"], length=40
+        )
+        self.assertLessEqual(len(promotion_idempotency), 64)
+        self.assertRegex(promotion_idempotency, r"^[a-z0-9-]+$")
+
         base = {
             "provider": "agentcore",
             "projectAnswer": "Pre-call handoff",
@@ -2853,6 +2873,38 @@ class MeetingWorkflowTests(unittest.TestCase):
         self.assertIn("payroll", validated["requirements"][0]["statement"].lower())
         self.assertEqual(validated["openQuestions"], [])
 
+        negated_correction = json.loads(json.dumps(analysis))
+        negated_correction["meetingSummary"] = (
+            "Blue Mesa is already on AWS and does not need to migrate from on-premises."
+        )
+        negated_correction["correctedAssumptions"][0]["evidenceText"] = (
+            "The prior migration from on-prem assumption is incorrect."
+        )
+        negated_correction["correctedAssumptions"][0]["meetingCorrection"] = (
+            "No initial AWS migration is required."
+        )
+        meeting_contracts.validate_analysis(negated_correction, transcript)
+
+        explicit_correction = json.loads(json.dumps(analysis))
+        explicit_correction["correctedAssumptions"][0]["statement"] = (
+            "The prior migration from on-premises assumption is obsolete."
+        )
+        meeting_contracts.validate_analysis(explicit_correction, transcript)
+
+        stale_correction_statement = json.loads(json.dumps(analysis))
+        stale_correction_statement["correctedAssumptions"][0]["statement"] = (
+            "Migrate from on-premises before adding the payroll integration."
+        )
+        normalized_correction = meeting_contracts.validate_analysis(
+            stale_correction_statement, transcript
+        )
+        self.assertEqual(
+            normalized_correction["correctedAssumptions"][0]["statement"],
+            normalized_correction["correctedAssumptions"][0][
+                "meetingCorrection"
+            ],
+        )
+
         timestamp_bound = json.loads(json.dumps(analysis))
         timestamp_bound["requirements"][0]["evidenceText"] = (
             "The payroll connection is a required deliverable."
@@ -2910,7 +2962,7 @@ class MeetingWorkflowTests(unittest.TestCase):
             "Migrate from on-prem before integrating payroll."
         )
         with self.assertRaisesRegex(
-            ValueError, "existing-on-AWS"
+            ValueError, r"existing-on-AWS.*requirements\[0\]\.statement"
         ):
             meeting_contracts.validate_analysis(contradictory, transcript)
 

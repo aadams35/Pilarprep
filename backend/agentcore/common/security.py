@@ -7,7 +7,7 @@ import json
 import time
 from typing import Any, Mapping
 
-from common.identifiers import require_identifier
+from .identifiers import require_identifier
 
 
 SCOPE_FIELDS = ("tenantId", "clientId", "projectId", "userId", "sessionId")

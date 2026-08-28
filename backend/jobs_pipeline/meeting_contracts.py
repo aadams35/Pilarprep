@@ -189,6 +189,83 @@ def _normalized_text(value: object) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", str(value).lower()))
 
 
+_ON_PREM_MIGRATION_PATTERNS = (
+    re.compile(r"\bmigrat(?:e|es|ed|ing|ion)\s+from\s+on[- ]prem(?:ises)?\b"),
+    re.compile(r"\bmov(?:e|es|ed|ing)\s+from\s+on[- ]prem(?:ises)?\b"),
+    re.compile(r"\binitial\s+aws\s+migration\b"),
+)
+
+
+def _has_affirmative_on_prem_migration(value: object) -> bool:
+    text = str(value or "").lower()
+    for sentence in re.split(r"(?<=[.!?;])\s+|[\r\n]+", text):
+        for pattern in _ON_PREM_MIGRATION_PATTERNS:
+            for match in pattern.finditer(sentence):
+                before = sentence[max(0, match.start() - 90) : match.start()]
+                after = sentence[match.end() : match.end() + 90]
+                negated_before = re.search(
+                    r"\b(?:no|not|never|without|avoid(?:s|ed|ing)?|"
+                    r"rather\s+than|instead\s+of|reject(?:s|ed|ing)?)\b"
+                    r"[^.!?;]{0,70}$",
+                    before,
+                )
+                corrected_after = re.search(
+                    r"^[^.!?;]{0,55}\b(?:incorrect|false|superseded|"
+                    r"rejected|invalid|inaccurate|outdated|obsolete|wrong|"
+                    r"mistaken|not\s+(?:required|needed|planned)|"
+                    r"no\s+longer\s+(?:required|needed|planned)|"
+                    r"out\s+of\s+scope)\b",
+                    after,
+                )
+                if not negated_before and not corrected_after:
+                    return True
+    return False
+
+
+def _confirms_existing_aws_state(value: object) -> bool:
+    text = _normalized_text(value)
+    if "aws" not in text:
+        return False
+    return bool(
+        re.search(
+            r"\b(?:already|currently|current|existing)\b.{0,90}\baws\b|"
+            r"\b(?:runs?|operat(?:e|es|ing)|host(?:ed|ing)?)\b.{0,70}"
+            r"\b(?:on|in)\s+aws\b|"
+            r"\bno\s+initial\s+aws\s+migration\b",
+            text,
+        )
+    )
+
+
+def _analysis_claim_texts(
+    output: Mapping[str, Any],
+) -> list[tuple[str, str]]:
+    values = [
+        ("meetingSummary", str(output.get("meetingSummary") or "")),
+        (
+            "proposedHandoffSummary",
+            str(output.get("proposedHandoffSummary") or ""),
+        ),
+    ]
+    excluded = {
+        "affectedBriefSections",
+        "evidenceText",
+        "previousAssumption",
+        "sourceType",
+        "speaker",
+    }
+    for field in ANALYSIS_LIST_FIELDS:
+        for index, item in enumerate(output.get(field, [])):
+            if not isinstance(item, Mapping):
+                continue
+            values.extend(
+                (f"{field}[{index}].{key}", str(item_value))
+                for key, item_value in item.items()
+                if key not in excluded and isinstance(item_value, str)
+            )
+    return values
+
+
 def _evidence_supported(evidence: str, transcript_text: str) -> bool:
     evidence_norm = _normalized_text(evidence)
     transcript_norm = _normalized_text(transcript_text)
@@ -420,6 +497,25 @@ def validate_analysis(
                         f"{field}[{index}].{correction_field}",
                         maximum=3000,
                     )
+                if _has_affirmative_on_prem_migration(
+                    item["meetingCorrection"]
+                ):
+                    raise ValueError(
+                        f"{field}[{index}].meetingCorrection contradicts the "
+                        "confirmed existing-on-AWS state"
+                    )
+                if _has_affirmative_on_prem_migration(item["statement"]):
+                    if not _confirms_existing_aws_state(
+                        item["meetingCorrection"]
+                    ):
+                        raise ValueError(
+                            f"{field}[{index}] does not provide a validated "
+                            "existing-AWS correction"
+                        )
+                    # Preserve the obsolete wording in previousAssumption and
+                    # expose the corrected current truth as the user-facing
+                    # statement used by the handoff.
+                    item["statement"] = item["meetingCorrection"]
                 affected = item.get("affectedBriefSections")
                 if not isinstance(affected, list) or not affected:
                     raise ValueError(
@@ -473,27 +569,15 @@ def validate_analysis(
     ).lower()
     if "payroll" not in meaningful_text:
         raise ValueError("Meeting analysis omitted the payroll objective")
-    current_state = {
-        field: [
-            {
-                key: item_value
-                for key, item_value in item.items()
-                if key != "previousAssumption"
-            }
-            for item in output[field]
-        ]
-        for field in ANALYSIS_LIST_FIELDS
-    }
-    current_state_text = json.dumps(current_state, ensure_ascii=True).lower()
-    forbidden = (
-        "migrate from on-prem",
-        "migration from on-prem",
-        "move from on-prem",
-        "initial aws migration",
-    )
-    if any(phrase in current_state_text for phrase in forbidden):
+    conflicting_paths = [
+        path
+        for path, text in _analysis_claim_texts(output)
+        if _has_affirmative_on_prem_migration(text)
+    ]
+    if conflicting_paths:
         raise ValueError(
-            "Meeting analysis contradicted the confirmed existing-on-AWS state"
+            "Meeting analysis contradicted the confirmed existing-on-AWS state "
+            f"in {', '.join(conflicting_paths[:5])}"
         )
     return output
 

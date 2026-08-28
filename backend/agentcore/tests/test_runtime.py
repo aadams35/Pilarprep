@@ -431,6 +431,59 @@ class RuntimeTests(unittest.TestCase):
         )
         self.assertEqual(generated["citations"], ["Approved brief"])
 
+    def test_handoff_canonicalizes_only_known_source_aliases(self):
+        generated = {
+            "citations": [
+                "approved brief",
+                "current project state",
+                "memory supplied in this request",
+                "Invented brief from the internet",
+            ],
+            "projectUpdate": {
+                register: [] for register in runtime_service.REGISTER_NAMES
+            },
+        }
+        generated["projectUpdate"]["actions"] = [
+            {"source": "current project state"}
+        ]
+        allowed = [
+            "Latest approved PilarPrep brief",
+            "Approved meeting outcomes",
+            "DynamoDB project state",
+            "AgentCore project memory",
+        ]
+
+        runtime_service._normalize_handoff_sources(generated, allowed)
+
+        self.assertEqual(
+            generated["citations"],
+            [
+                "Latest approved PilarPrep brief",
+                "DynamoDB project state",
+                "AgentCore project memory",
+            ],
+        )
+        self.assertEqual(
+            generated["projectUpdate"]["actions"][0]["source"],
+            "DynamoDB project state",
+        )
+
+    def test_handoff_rejects_unknown_register_source(self):
+        generated = {
+            "citations": ["Approved brief"],
+            "projectUpdate": {
+                register: [] for register in runtime_service.REGISTER_NAMES
+            },
+        }
+        generated["projectUpdate"]["risks"] = [
+            {"source": "Unverified internet source"}
+        ]
+        with self.assertRaisesRegex(ValueError, "projectUpdate.risks\\[0\\]"):
+            runtime_service._normalize_handoff_sources(
+                generated,
+                ["Latest approved PilarPrep brief"],
+            )
+
     def test_catchup_uses_canonical_source_when_model_labels_are_invalid(self):
         generated = {
             "projectAnswer": "Grounded catch-up narrative.",
@@ -972,6 +1025,22 @@ class MeetingAgenticRagTests(unittest.TestCase):
                 )
             },
         )
+
+        repair_content = meeting_runtime._meeting_prompt_content(
+            {
+                "task": "Compare the meeting.",
+                "repairReason": (
+                    "Meeting analysis contradicted the confirmed "
+                    "existing-on-AWS state in meetingSummary"
+                ),
+                "meetingTranscript": {"text": "Synthetic transcript."},
+            },
+            guardrail_enabled=False,
+        )
+        self.assertIn("VALIDATION REPAIR REQUIRED", repair_content[0]["text"])
+        self.assertIn("already operates on AWS", repair_content[0]["text"])
+        self.assertIn("meetingSummary", repair_content[0]["text"])
+        self.assertNotIn("repairReason", repair_content[0]["text"])
 
         invoke_calls = [
             node
