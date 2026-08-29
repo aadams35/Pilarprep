@@ -511,7 +511,7 @@ def _put_immutable_object(
             raise
         existing = s3.get_object(Bucket=ARTIFACT_BUCKET, Key=key)["Body"].read()
         if hashlib.sha256(existing).hexdigest() != digest:
-            raise RuntimeError(
+            raise NonRetryableJobError(
                 "An immutable approved artifact already exists with different content"
             ) from exc
     return digest
@@ -611,7 +611,26 @@ def _write_brief_draft(
     job_id: str,
     input_version: str,
 ) -> dict[str, Any]:
-    packet_version = int(generated.get("metadata", {}).get("packetVersion") or 1)
+    generated_metadata = generated.setdefault("metadata", {})
+    if not isinstance(generated_metadata, dict):
+        generated_metadata = {}
+        generated["metadata"] = generated_metadata
+
+    current_packet_version: int | None = None
+    if action == "brief.generate":
+        latest = _brief_latest(scope)
+        raw_current_version = latest.get("packetVersion")
+        if raw_current_version is not None:
+            current_packet_version = int(raw_current_version)
+        approved_version = int(latest.get("approvedPacketVersion") or 0)
+        version_floor = max(current_packet_version or 0, approved_version)
+        packet_version = version_floor + 1 if version_floor else 1
+    elif action == "brief.refine":
+        packet_version = int(payload.get("baseBriefVersion") or 0) + 1
+    else:
+        raise NonRetryableJobError(f"Unsupported brief action: {action}")
+    generated_metadata["packetVersion"] = packet_version
+
     timestamp = now_iso()
     prefix = f"{project_artifact_prefix(scope)}/brief/draft/"
     stored_request = {
@@ -679,7 +698,13 @@ def _write_brief_draft(
         ),
         "ExpressionAttributeValues": values,
     }
-    if action == "brief.refine":
+    if action == "brief.generate":
+        if current_packet_version is None:
+            request["ConditionExpression"] = "attribute_not_exists(packetVersion)"
+        else:
+            request["ConditionExpression"] = "packetVersion = :baseVersion"
+            values[":baseVersion"] = {"N": str(current_packet_version)}
+    elif action == "brief.refine":
         request["ConditionExpression"] = (
             "attribute_not_exists(packetVersion) OR packetVersion = :baseVersion"
         )
@@ -687,10 +712,18 @@ def _write_brief_draft(
     try:
         aws_client("dynamodb").update_item(**request)
     except ClientError as exc:
-        if action == "brief.refine" and _client_error_code(exc) == "ConditionalCheckFailedException":
-            raise NonRetryableJobError(
-                "The brief changed before refinement; reload the latest packet and apply feedback again."
-            ) from exc
+        if _client_error_code(exc) == "ConditionalCheckFailedException":
+            if action == "brief.refine":
+                message = (
+                    "The brief changed before refinement; reload the latest packet "
+                    "and apply feedback again."
+                )
+            else:
+                message = (
+                    "Another brief generation completed first; reload the latest "
+                    "packet before generating again."
+                )
+            raise NonRetryableJobError(message) from exc
         raise
     generated.setdefault("metadata", {}).update(
         {
@@ -1242,7 +1275,27 @@ def _approve_brief(
     expected_version = int(document["input"]["packetVersion"])
     latest = _brief_latest(scope)
     if int(latest.get("packetVersion") or 0) != expected_version:
-        raise NonRetryableJobError("The brief changed before approval; review the latest version.")
+        raise NonRetryableJobError(
+            "The brief changed before approval; review the latest version."
+        )
+    prior_approved_version = int(latest.get("approvedPacketVersion") or 0)
+    approval_version = expected_version
+    if (
+        latest.get("approvalStatus") != "approved"
+        and prior_approved_version >= expected_version
+    ):
+        approval_version = prior_approved_version + 1
+        metric("ApprovalVersionCollisionRecovered", Action="brief.approve")
+        LOGGER.warning(
+            json.dumps(
+                {
+                    "event": "approval_version_collision_recovered",
+                    "jobId": job_id,
+                    "requestedPacketVersion": expected_version,
+                    "approvedPacketVersion": approval_version,
+                }
+            )
+        )
     draft_key = str(latest.get("draftArtifactKey") or "")
     draft_docx_key = str(latest.get("draftDocxArtifactKey") or "")
     expected_prefix = f"{project_artifact_prefix(scope)}/brief/draft/"
@@ -1266,7 +1319,7 @@ def _approve_brief(
     )
     approved_prefix = (
         f"{project_artifact_prefix(scope)}/brief/approved/"
-        f"v{expected_version:06d}/"
+        f"v{approval_version:06d}/"
     )
     expected_artifact_key = f"{approved_prefix}packet.json"
     expected_docx_key = f"{approved_prefix}packet.docx"
@@ -1276,8 +1329,8 @@ def _approve_brief(
         {
             "projectId": scope["projectId"],
             "clientId": scope["clientId"],
-            "packetVersion": expected_version,
-            "approvedPacketVersion": expected_version,
+            "packetVersion": approval_version,
+            "approvedPacketVersion": approval_version,
             "approvalStatus": "approved",
             "approvedAt": approved_at,
             "artifactKey": expected_artifact_key,
@@ -1302,7 +1355,8 @@ def _approve_brief(
     approval_audit = {
         "approverId": scope["userId"],
         "approvedAt": approved_at,
-        "packetVersion": expected_version,
+        "packetVersion": approval_version,
+        "sourcePacketVersion": expected_version,
         "sourceJobId": job_id,
         "modelId": metadata.get("modelId"),
         "modelProfile": metadata.get("modelProfile"),
@@ -1313,38 +1367,52 @@ def _approve_brief(
     }
     approved_document = {
         **draft_document,
+        "packetVersion": approval_version,
         "approvalStatus": "approved",
         "approvedAt": approved_at,
         "approvedBy": scope["userId"],
         "approvalJobId": job_id,
         "approvalAudit": approval_audit,
     }
-    docx_bytes = s3.get_object(
-        Bucket=ARTIFACT_BUCKET, Key=draft_docx_key
-    )["Body"].read()
+    if approval_version == expected_version:
+        docx_bytes = s3.get_object(
+            Bucket=ARTIFACT_BUCKET, Key=draft_docx_key
+        )["Body"].read()
+    else:
+        docx_bytes = _brief_module()._brief_docx_bytes(
+            dict(approved_document.get("request") or {}),
+            generated,
+            {
+                "projectId": scope["projectId"],
+                "clientId": scope["clientId"],
+                "packetVersion": approval_version,
+                "artifactRetention": "immutable-approved",
+            },
+        )
     artifact_key, docx_key, download_url, json_digest, docx_digest = (
         _write_approved_packet_pair(
-        scope,
-        expected_version,
-        approved_document,
-        docx_bytes,
-        download_filename=_artifact_download_filename(
-            approved_document.get("request", {}).get("company"),
-            "brief",
-            expected_version,
-        ),
-    ))
+            scope,
+            approval_version,
+            approved_document,
+            docx_bytes,
+            download_filename=_artifact_download_filename(
+                approved_document.get("request", {}).get("company"),
+                "brief",
+                approval_version,
+            ),
+        )
+    )
     if artifact_key != expected_artifact_key or docx_key != expected_docx_key:
         raise RuntimeError("Approved artifact writer returned unexpected keys")
     audit_key = {
         "projectId": {"S": project_partition_key(scope)},
-        "sortKey": {"S": f"BRIEF#APPROVAL#v{expected_version:06d}"},
+        "sortKey": {"S": f"BRIEF#APPROVAL#v{approval_version:06d}"},
     }
     audit_item = {
         **audit_key,
         "entityType": {"S": "BRIEF_APPROVAL_AUDIT"},
         "approvalStatus": {"S": "approved"},
-        "packetVersion": {"N": str(expected_version)},
+        "packetVersion": {"N": str(approval_version)},
         "approvedAt": {"S": approved_at},
         "approverId": {"S": scope["userId"]},
         "sourceJobId": {"S": job_id},
@@ -1361,18 +1429,20 @@ def _approve_brief(
                     "TableName": PROJECT_TABLE,
                     "Key": _brief_latest_key(scope),
                     "UpdateExpression": (
-                "SET approvalStatus = :approved, approvedPacketVersion = :version, "
+                "SET packetVersion = :approvedVersion, approvalStatus = :approved, "
+                "approvedPacketVersion = :approvedVersion, "
                 "approvedArtifactKey = :artifactKey, "
                 "approvedDocxArtifactKey = :docxKey, approvedAt = :approvedAt, "
                 "approvedBy = :approvedBy, approvalJobId = :jobId, "
                 "updatedAt = :updatedAt"
                     ),
                     "ConditionExpression": (
-                "packetVersion = :version AND draftArtifactKey = :draftArtifactKey"
+                "packetVersion = :expectedVersion AND draftArtifactKey = :draftArtifactKey"
                     ),
                     "ExpressionAttributeValues": {
                 ":approved": {"S": "approved"},
-                ":version": {"N": str(expected_version)},
+                ":approvedVersion": {"N": str(approval_version)},
+                ":expectedVersion": {"N": str(expected_version)},
                 ":artifactKey": {"S": artifact_key},
                 ":docxKey": {"S": docx_key},
                 ":approvedAt": {"S": approved_at},
@@ -1401,13 +1471,13 @@ def _approve_brief(
             if (
                 current.get("approvalJobId") == job_id
                 and int(current.get("approvedPacketVersion") or 0)
-                == expected_version
+                == approval_version
                 and current.get("approvedArtifactKey") == artifact_key
             ):
                 _attach_pre_call_handoff_metadata(
                     scope,
                     approved_document,
-                    expected_version,
+                    approval_version,
                     job_id,
                     metadata,
                 )
@@ -1420,14 +1490,14 @@ def _approve_brief(
         brief={
             "company": latest.get("company"),
             "approvedAt": approved_at,
-            "approvedPacketVersion": expected_version,
+            "approvedPacketVersion": approval_version,
             "approvedArtifactKey": artifact_key,
         },
     )
     _attach_pre_call_handoff_metadata(
         scope,
         approved_document,
-        expected_version,
+        approval_version,
         job_id,
         metadata,
     )

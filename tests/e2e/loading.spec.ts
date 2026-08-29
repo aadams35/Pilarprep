@@ -381,6 +381,88 @@ test("live job keeps the workspace responsive with an in-app clock", async ({ pa
   expect(longestTask).toBeLessThan(250);
 });
 
+test("approve pre-call packet completes and opens the pre-call handoff", async ({ page }) => {
+  const submittedActions: Array<{
+    action?: string;
+    input?: { packetVersion?: number };
+  }> = [];
+  const approvedBrief = {
+    ...completedBrief,
+    metadata: {
+      ...completedBrief.metadata,
+      packetVersion: 2,
+      approvedPacketVersion: 2,
+      approvalStatus: "approved",
+      precallHandoffJobId: "job-precall-ready",
+      precallHandoffStatus: "ready",
+      precallHandoffSourceVersion: 2,
+    },
+  };
+
+  await page.route("https://test.execute-api.us-east-1.amazonaws.com/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() === "GET" && path === "/clients") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ clients: [] }),
+      });
+      return;
+    }
+    if (request.method() === "POST") {
+      const payload = request.postDataJSON() as {
+        action?: string;
+        input?: { packetVersion?: number };
+      };
+      submittedActions.push(payload);
+      const approval = payload.action === "brief.approve";
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({
+          jobId: approval ? "job-approve-v1" : "job-generate-v1",
+          clientId: "apex-mutual",
+          projectId: "apex-mutual",
+          status: "queued",
+          pollAfterMs: 10,
+        }),
+      });
+      return;
+    }
+
+    const approval = path.endsWith("/job-approve-v1");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        jobId: approval ? "job-approve-v1" : "job-generate-v1",
+        clientId: "apex-mutual",
+        projectId: "apex-mutual",
+        status: "complete",
+        result: approval ? approvedBrief : completedBrief,
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Generate AI prebrief/i }).click();
+  await expect(page.getByText(businessCase.scenario)).toBeVisible();
+
+  const approve = page.getByRole("button", { name: "Approve pre-call packet" });
+  await expect(approve).toBeEnabled();
+  await approve.click();
+
+  await expect(
+    page.getByRole("heading", { name: "Prepare the team for the customer call" })
+  ).toBeVisible();
+  expect(submittedActions.map((request) => request.action)).toEqual([
+    "brief.generate",
+    "brief.approve",
+  ]);
+  expect(submittedActions[1]?.input?.packetVersion).toBe(1);
+});
+
 test("claim citations open an accessible authorized evidence drawer", async ({ page }) => {
   await page.route("https://test.execute-api.us-east-1.amazonaws.com/**", async (route) => {
     const path = new URL(route.request().url()).pathname;

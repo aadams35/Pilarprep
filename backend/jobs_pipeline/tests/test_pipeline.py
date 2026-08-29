@@ -1891,6 +1891,146 @@ class WorkerTests(unittest.TestCase):
         self.assertIn("ClientRequestToken", transactions[0])
         self.assertLessEqual(len(transactions[0]["ClientRequestToken"]), 36)
 
+    def test_approval_promotes_a_draft_that_collides_with_an_approved_version(self):
+        written = {}
+        transactions = []
+        draft_key = (
+            f"tenants/{SCOPE['tenantId']}/clients/apex-mutual/projects/apex-mutual/"
+            "brief/draft/latest.json"
+        )
+        draft_docx_key = draft_key.replace("latest.json", "latest.docx")
+        draft = {
+            "packetVersion": 1,
+            "request": {"company": "Apex Mutual"},
+            "response": {
+                "provider": "bedrock",
+                "metadata": {"packetVersion": 1, "approvalStatus": "draft"},
+            },
+        }
+
+        class FakeS3:
+            def get_object(self, **kwargs):
+                self.assert_draft_key(kwargs["Key"])
+                return {"Body": BytesIO(json.dumps(draft).encode("utf-8"))}
+
+            @staticmethod
+            def assert_draft_key(key):
+                if key != draft_key:
+                    raise AssertionError(f"Unexpected S3 key: {key}")
+
+        class FakeDynamoDB:
+            def transact_write_items(self, **kwargs):
+                transactions.append(kwargs)
+
+        def write_pair(scope, version, document, docx_bytes, *, download_filename):
+            written.update(
+                {
+                    "version": version,
+                    "document": json.loads(json.dumps(document)),
+                    "docx": docx_bytes,
+                    "download_filename": download_filename,
+                }
+            )
+            prefix = (
+                f"tenants/{scope['tenantId']}/clients/apex-mutual/"
+                f"projects/apex-mutual/brief/approved/v{version:06d}/"
+            )
+            return (
+                f"{prefix}packet.json",
+                f"{prefix}packet.docx",
+                "https://download.example/packet.docx",
+                "json-sha256",
+                "docx-sha256",
+            )
+
+        brief_module = types.SimpleNamespace(
+            _brief_docx_bytes=lambda *_args: b"rebuilt-v2-docx"
+        )
+        with (
+            patch.object(worker, "PROJECT_TABLE", "project-state"),
+            patch.object(worker, "ARTIFACT_BUCKET", "artifact-bucket"),
+            patch.object(
+                worker,
+                "_brief_latest",
+                return_value={
+                    "packetVersion": 1,
+                    "approvedPacketVersion": 1,
+                    "approvalStatus": "draft",
+                    "draftArtifactKey": draft_key,
+                    "draftDocxArtifactKey": draft_docx_key,
+                    "company": "Apex Mutual",
+                },
+            ),
+            patch.object(worker, "_brief_module", return_value=brief_module),
+            patch.object(worker, "_write_approved_packet_pair", side_effect=write_pair),
+            patch.object(worker, "_upsert_client_directory"),
+            patch.object(worker, "_attach_pre_call_handoff_metadata"),
+            patch.object(worker, "metric") as metric,
+            patch.object(
+                worker,
+                "aws_client",
+                side_effect=lambda name: {
+                    "s3": FakeS3(),
+                    "dynamodb": FakeDynamoDB(),
+                }[name],
+            ),
+        ):
+            result = worker._approve_brief(
+                SCOPE,
+                {
+                    "createdAt": "2026-08-22T01:00:00Z",
+                    "input": {"packetVersion": 1},
+                },
+                "job-collision-recovery",
+            )
+
+        self.assertEqual(written["version"], 2)
+        self.assertEqual(written["docx"], b"rebuilt-v2-docx")
+        self.assertEqual(written["document"]["packetVersion"], 2)
+        self.assertEqual(
+            written["document"]["approvalAudit"]["sourcePacketVersion"], 1
+        )
+        self.assertEqual(result["metadata"]["packetVersion"], 2)
+        self.assertEqual(result["metadata"]["approvedPacketVersion"], 2)
+        update = transactions[0]["TransactItems"][0]["Update"]
+        self.assertEqual(
+            update["ExpressionAttributeValues"][":expectedVersion"]["N"], "1"
+        )
+        self.assertEqual(
+            update["ExpressionAttributeValues"][":approvedVersion"]["N"], "2"
+        )
+        audit = transactions[0]["TransactItems"][1]["Put"]["Item"]
+        self.assertEqual(audit["sortKey"]["S"], "BRIEF#APPROVAL#v000002")
+        metric.assert_any_call(
+            "ApprovalVersionCollisionRecovered", Action="brief.approve"
+        )
+
+    def test_immutable_artifact_conflict_is_not_retried(self):
+        class FakeS3:
+            def put_object(self, **_kwargs):
+                raise ClientError(
+                    {"Error": {"Code": "PreconditionFailed"}},
+                    "PutObject",
+                )
+
+            def get_object(self, **_kwargs):
+                return {"Body": BytesIO(b"different-content")}
+
+        with (
+            patch.object(worker, "ARTIFACT_BUCKET", "artifact-bucket"),
+            self.assertRaisesRegex(
+                worker.NonRetryableJobError,
+                "immutable approved artifact",
+            ),
+        ):
+            worker._put_immutable_object(
+                FakeS3(),
+                SCOPE,
+                key="approved/v000001/packet.json",
+                body=b"new-content",
+                content_type="application/json",
+            )
+
     def test_idempotent_approval_recovers_automatic_handoff(self):
         draft_key = (
             f"tenants/{SCOPE['tenantId']}/clients/apex-mutual/projects/apex-mutual/"
@@ -2455,6 +2595,66 @@ class WorkerTests(unittest.TestCase):
         )
         self.assertEqual(
             updates[0]["ExpressionAttributeValues"][":baseVersion"]["N"], "1"
+        )
+
+    def test_generation_uses_the_next_server_owned_packet_version(self):
+        updates = []
+
+        class FakeDynamoDB:
+            def update_item(self, **kwargs):
+                updates.append(kwargs)
+                return {}
+
+        generated = {
+            "provider": "bedrock",
+            "metadata": {"packetVersion": 1, "fallbackUsed": False},
+        }
+        brief_module = types.SimpleNamespace(
+            _brief_docx_bytes=lambda *_args: b"docx",
+        )
+        with (
+            patch.object(worker, "PROJECT_TABLE", "project-state"),
+            patch.object(worker, "_brief_module", return_value=brief_module),
+            patch.object(
+                worker,
+                "_brief_latest",
+                return_value={
+                    "packetVersion": 1,
+                    "approvedPacketVersion": 1,
+                    "approvalStatus": "draft",
+                },
+            ),
+            patch.object(
+                worker,
+                "_write_packet_pair",
+                return_value=(
+                    "brief/draft/latest.json",
+                    "brief/draft/latest.docx",
+                    "https://example.test/download",
+                ),
+            ),
+            patch.object(worker, "aws_client", return_value=FakeDynamoDB()),
+        ):
+            result = worker._write_brief_draft(
+                SCOPE,
+                {"company": "Custom Customer"},
+                generated,
+                action="brief.generate",
+                job_id="job-next-version",
+                input_version="input-0002",
+            )
+
+        self.assertEqual(result["metadata"]["packetVersion"], 2)
+        self.assertEqual(len(updates), 1)
+        self.assertEqual(
+            updates[0]["ConditionExpression"],
+            "packetVersion = :baseVersion",
+        )
+        self.assertEqual(
+            updates[0]["ExpressionAttributeValues"][":baseVersion"]["N"], "1"
+        )
+        self.assertEqual(
+            updates[0]["ExpressionAttributeValues"][":packetVersion"]["N"], "2"
         )
 
     def test_generation_model_value_error_remains_retryable(self):
