@@ -8,6 +8,7 @@ import type {
   DecisionMakerContext,
   EvidenceCoverage,
   EvidenceSourceRecord,
+  EvidenceStatus,
   ProjectArtifacts,
   RefinementTarget,
 } from "./types";
@@ -36,6 +37,89 @@ function stableLocalSourceId(label: string) {
   }
   const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 36) || "evidence";
   return `src-${slug}-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+const evidenceStopWords = new Set([
+  "about", "after", "against", "also", "and", "are", "because", "before",
+  "brief", "business", "can", "company", "could", "customer", "customers",
+  "decision", "decisions", "evidence", "for", "from", "has", "have", "how",
+  "into", "meeting", "must", "our", "pilarprep", "should", "that", "the",
+  "their", "them", "then", "there", "these", "they", "this", "through",
+  "team", "teams", "technical", "use", "using", "validate", "validation",
+  "what", "when", "where", "which", "who", "will", "with", "would",
+]);
+
+function evidenceTerms(value: string, ignored = new Set<string>()) {
+  return new Set(
+    (value.toLowerCase().match(/[a-z0-9][a-z0-9-]{1,}/g) ?? []).filter(
+      (term) =>
+        !evidenceStopWords.has(term) &&
+        !ignored.has(term) &&
+        (term.length >= 3 || term === "ai" || term === "s3")
+    )
+  );
+}
+
+function localSourceSupportScore(
+  text: string,
+  source: EvidenceSourceRecord,
+  ignored: Set<string>
+) {
+  const claimTerms = evidenceTerms(text, ignored);
+  const sourceTerms = evidenceTerms(`${source.evidenceSnippet} ${source.title}`, ignored);
+  const overlap = [...claimTerms].filter((term) => sourceTerms.has(term));
+  return overlap.length >= 2 ? overlap.length : 0;
+}
+
+function supportingLocalSources(
+  text: string,
+  catalog: EvidenceSourceRecord[],
+  preferredLabels: string[],
+  ignored: Set<string>
+) {
+  const preferred = new Set(preferredLabels);
+  return catalog
+    .map((source) => ({
+      source,
+      score: localSourceSupportScore(text, source, ignored),
+      preferred: preferred.has(source.label),
+    }))
+    .filter((match) => match.score >= 3)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        Number(right.preferred) - Number(left.preferred) ||
+        left.source.label.localeCompare(right.source.label)
+    )
+    .slice(0, 3);
+}
+
+function localClaimStatus(
+  section: BriefEvidence["section"],
+  itemIndex: number,
+  text: string,
+  matches: Array<{ score: number }>
+): EvidenceStatus {
+  const lowered = text.toLowerCase();
+  if (/conflicting evidence|sources disagree|conflict between/.test(lowered)) {
+    return matches.length ? "conflicting-evidence" : "needs-validation";
+  }
+  if (
+    (section === "businessCase" && itemIndex === 9) ||
+    /working assumption|remains an assumption|unknown to validate/.test(lowered)
+  ) {
+    return "assumption";
+  }
+  if (section === "objections") return "needs-validation";
+  if (!matches.length) return "needs-validation";
+  if (
+    section === "gameplan" ||
+    section === "projectAnswer" ||
+    /\b(?:assume|assumed|hypothesis|may|might|recommend|should|propose|evaluate|consider|unknown)\b/.test(lowered)
+  ) {
+    return "partially-supported";
+  }
+  return "supported";
 }
 
 function attachLocalProvenance(brief: BriefResponse, input: BriefRequest): BriefResponse {
@@ -80,10 +164,10 @@ function attachLocalProvenance(brief: BriefResponse, input: BriefRequest): Brief
       lifecycleStatus: "active",
     };
   });
-  const sourcesByLabel = new Map(sourceCatalog.map((source) => [source.label, source]));
   const evidenceByItem = new Map(
     (brief.evidence ?? []).map((item) => [`${item.section}:${item.itemIndex}`, item])
   );
+  const ignoredEvidenceTerms = evidenceTerms(input.company);
   const rows: Array<{ section: BriefEvidence["section"]; itemIndex: number; text: string }> = [
     ...businessCaseFields.map((field, itemIndex) => ({ section: "businessCase" as const, itemIndex, text: brief.businessCase[field] })),
     ...(["technical", "executive", "stakeholders", "gameplan", "objections"] as const).flatMap((section) =>
@@ -93,18 +177,29 @@ function attachLocalProvenance(brief: BriefResponse, input: BriefRequest): Brief
   ].filter((row) => row.text.trim());
   const claims: BriefClaim[] = rows.map((row) => {
     const evidence = evidenceByItem.get(`${row.section}:${row.itemIndex}`);
-    const sourceIds = (evidence?.sources ?? []).flatMap((label) => {
-      const source = sourcesByLabel.get(label);
-      return source ? [source.sourceId] : [];
-    });
-    const assumption =
-      (row.section === "businessCase" && row.itemIndex === 9) ||
-      /\b(?:working assumption|remains an assumption|unknown to validate)\b/i.test(row.text);
-    const evidenceStatus = assumption
-      ? "assumption"
-      : sourceIds.length
-        ? "customer-provided"
-        : "needs-validation";
+    const matches = supportingLocalSources(
+      row.text,
+      sourceCatalog,
+      evidence?.sources ?? [],
+      ignoredEvidenceTerms
+    );
+    const evidenceStatus = localClaimStatus(
+      row.section,
+      row.itemIndex,
+      row.text,
+      matches
+    );
+    const sourceIds = evidenceStatus === "assumption" || evidenceStatus === "needs-validation"
+      ? []
+      : matches.map((match) => match.source.sourceId);
+    const validationStatus: Record<EvidenceStatus, string> = {
+      supported: "supported-by-approved-source",
+      "partially-supported": "partially-supported-by-approved-source",
+      "customer-provided": "supported-by-customer-context",
+      assumption: "explicit-assumption",
+      "conflicting-evidence": "conflicting-evidence",
+      "needs-validation": "unsupported-no-matching-source",
+    };
     return {
       claimId: `claim-${stableLocalSourceId(`${row.section}-${row.itemIndex}-${row.text}`).slice(-8)}`,
       section: row.section,
@@ -115,7 +210,7 @@ function attachLocalProvenance(brief: BriefResponse, input: BriefRequest): Brief
       evidenceSnippet: sourceIds.length
         ? sourceCatalog.find((source) => source.sourceId === sourceIds[0])?.evidenceSnippet ?? ""
         : "No approved supporting source is recorded.",
-      validationStatus: sourceIds.length ? "valid-source-reference" : "explicit-assumption",
+      validationStatus: validationStatus[evidenceStatus],
     };
   });
   const supported = claims.filter((claim) => claim.sourceIds.length).length;
@@ -123,8 +218,24 @@ function attachLocalProvenance(brief: BriefResponse, input: BriefRequest): Brief
     counts[claim.evidenceStatus] = (counts[claim.evidenceStatus] ?? 0) + 1;
     return counts;
   }, {});
+  const resolvedEvidence = claims.flatMap((claim) => {
+    const sources = claim.sourceIds.flatMap((sourceId) => {
+      const source = sourceCatalog.find((item) => item.sourceId === sourceId);
+      return source ? [source.label] : [];
+    });
+    return sources.length
+      ? [{ section: claim.section, itemIndex: claim.itemIndex, sources }]
+      : [];
+  });
   return {
     ...brief,
+    citations: Array.from(
+      new Set([
+        ...brief.citations,
+        ...resolvedEvidence.flatMap((item) => item.sources),
+      ])
+    ),
+    evidence: resolvedEvidence,
     sourceCatalog,
     claims,
     evidenceCoverage: {

@@ -32,6 +32,12 @@ export type BriefVersionComparison = {
 
 export type BriefReviewMode = "clean" | "changes";
 
+export type RefinementHistoryVersion = {
+  company: string;
+  refinementTarget?: ComparableBriefSection;
+  generatedBrief: BriefResponse;
+};
+
 export function approvalAfterGeneration(
   mode: "prebrief" | "project",
   wasApproved: boolean
@@ -205,4 +211,30 @@ export function compareBriefVersions(
     changedSections: changedSectionNames.size,
     changedSectionNames: [...changedSectionNames],
   };
+}
+
+export function comparisonForSelectedRefinement(
+  history: RefinementHistoryVersion[],
+  currentIndex: number,
+  activeSection: ComparableBriefSection
+): BriefVersionComparison | null {
+  if (currentIndex < 0) return null;
+  const current = history[currentIndex];
+  if (!current || current.refinementTarget !== activeSection) return null;
+
+  const clientKey = current.company.trim().toLowerCase();
+  const previous = history
+    .slice(currentIndex + 1)
+    .find((entry) => entry.company.trim().toLowerCase() === clientKey);
+  if (!previous) return null;
+
+  const comparison = compareBriefVersions(
+    previous.generatedBrief,
+    current.generatedBrief
+  );
+  return comparison.changedSectionNames.some(
+    (section) => section !== activeSection
+  )
+    ? null
+    : comparison;
 }

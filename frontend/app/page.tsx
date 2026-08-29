@@ -51,8 +51,10 @@ import {
   businessCaseFields,
   businessCasePassages,
   compareBriefVersions,
+  comparisonForSelectedRefinement,
   type BriefReviewMode,
 } from "@/lib/pillarprep/brief-diff";
+import { evidenceStatusLabel } from "@/lib/pillarprep/evidence-status";
 import {
   cloneRefinementDrafts,
   createRefinementDrafts,
@@ -846,10 +848,6 @@ function providerLabel(provider: BriefResponse["provider"]) {
   }
 
   return "Local fallback";
-}
-
-function evidenceStatusLabel(value: string) {
-  return value.replace(/-/g, " ").replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
 function fallbackBriefForRequest(request: BriefRequest) {
@@ -1726,44 +1724,20 @@ const industryFocus = useMemo(() => {
   const currentBriefHistoryIndex = selectedHistoryId
     ? briefHistory.findIndex((entry) => entry.id === selectedHistoryId)
     : -1;
-  const currentBriefHistoryEntry =
-    currentBriefHistoryIndex >= 0 ? briefHistory[currentBriefHistoryIndex] : null;
-  const activeComparison = useMemo(() => {
-    if (currentBriefHistoryIndex < 0 || !currentBriefHistoryEntry) {
-      return null;
+  const activeComparison = useMemo(
+    () =>
+      comparisonForSelectedRefinement(
+        briefHistory,
+        currentBriefHistoryIndex,
+        activeTab
+      ),
+    [activeTab, briefHistory, currentBriefHistoryIndex]
+  );
+  useEffect(() => {
+    if (!activeComparison && reviewMode === "changes") {
+      setReviewMode("clean");
     }
-
-    const clientKey = currentBriefHistoryEntry.company.trim().toLowerCase();
-    const targetHistoryIndex = briefHistory.findIndex(
-      (entry, index) =>
-        index >= currentBriefHistoryIndex &&
-        entry.company.trim().toLowerCase() === clientKey &&
-        entry.refinementTarget === activeTab
-    );
-
-    if (targetHistoryIndex < 0) {
-      return null;
-    }
-
-    const targetVersion = briefHistory[targetHistoryIndex];
-    const previousTargetVersion = briefHistory
-      .slice(targetHistoryIndex + 1)
-      .find((entry) => entry.company.trim().toLowerCase() === clientKey);
-
-    if (!previousTargetVersion) {
-      return null;
-    }
-
-    const comparison = compareBriefVersions(
-      previousTargetVersion.generatedBrief,
-      targetVersion.generatedBrief
-    );
-    const changedOutsideTarget = comparison.changedSectionNames.some(
-      (section) => section !== activeTab
-    );
-
-    return changedOutsideTarget ? null : comparison;
-  }, [activeTab, briefHistory, currentBriefHistoryEntry, currentBriefHistoryIndex]);
+  }, [activeComparison, reviewMode]);
   const activePassageChanges =
     activeComparison?.changes.filter((item) => item.section === activeTab) ?? [];
   const activeRemovedPassages =
@@ -3221,6 +3195,8 @@ const industryFocus = useMemo(() => {
         if (activeTabRef.current === requestRefinementTarget) {
           setReviewMode("changes");
         }
+      } else if (!requestRefinementTarget) {
+        setReviewMode("clean");
       }
       pushBriefHistory(
         nextBrief,

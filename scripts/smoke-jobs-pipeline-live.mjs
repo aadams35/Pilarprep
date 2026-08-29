@@ -263,6 +263,19 @@ function assertLiveProvider(result, provider, label) {
   }
 }
 
+function assertEvidenceStatusVariety(result, label) {
+  const statuses = new Set(
+    (result.claims ?? []).map((claim) => claim.evidenceStatus).filter(Boolean)
+  );
+  const hasSupported =
+    statuses.has("supported") || statuses.has("customer-provided");
+  if (!hasSupported || !statuses.has("needs-validation")) {
+    throw new Error(
+      `${label} did not distinguish supported claims from unsupported claims.`
+    );
+  }
+}
+
 const useDirectOutputs = Boolean(
   directApiUrl && directIdentityPoolId && directArtifactBucket
 );
@@ -592,12 +605,16 @@ if (resumeApproved) {
     "Brief generation"
   );
   assertLiveProvider(generation.result, "bedrock", "Brief generation");
+  assertEvidenceStatusVariety(generation.result, "Brief generation");
   if (
     generation.result.metadata?.packetVersion !== 1 ||
     generation.result.metadata?.approvalStatus !== "draft" ||
+    generation.result.metadata?.refinementTarget ||
     !generation.result.metadata?.artifactKey?.includes("/brief/draft/")
   ) {
-    throw new Error("Generated brief was not persisted as scoped draft version 1.");
+    throw new Error(
+      "Generated brief was not persisted as a clean scoped draft version 1."
+    );
   }
 
   if (audienceRefinements) {

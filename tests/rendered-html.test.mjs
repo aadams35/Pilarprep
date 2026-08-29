@@ -159,7 +159,10 @@ test("generates a demo brief through the API contract", async () => {
   assert.match(payload.technical.join("\n"), /Apex Mutual/);
   assert.match(payload.businessCase.scenario, /Apex Mutual/);
   assert.equal(Object.keys(payload.businessCase).length, 13);
-  assert.equal(payload.evidence.filter((item) => item.section === "businessCase").length, 13);
+  assert.equal(payload.claims.filter((item) => item.section === "businessCase").length, 13);
+  assert.ok(payload.evidence.filter((item) => item.section === "businessCase").length < 13);
+  assert.ok(payload.evidenceCoverage.statusCounts["partially-supported"] > 0);
+  assert.ok(payload.evidenceCoverage.statusCounts["needs-validation"] > 0);
   assert.ok(payload.projectArtifacts.nextSteps.immediateActions.length >= 3);
   assert.match(payload.technical.join("\n"), /ranked Well-Architected priorities/i);
   assert.match(payload.executive.join("\n"), /auditability/);

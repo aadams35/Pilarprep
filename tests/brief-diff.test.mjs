@@ -6,6 +6,7 @@ import {
   businessCasePassages,
   changedTextSegments,
   compareBriefVersions,
+  comparisonForSelectedRefinement,
 } from "../frontend/lib/pillarprep/brief-diff.ts";
 
 function makeBrief(overrides = {}) {
@@ -150,4 +151,35 @@ test("refining an approved pre-brief expires approval while project generation d
     approved: true,
     stale: false,
   });
+});
+
+test("a fresh packet never inherits change review from an older technical refinement", () => {
+  const original = makeBrief();
+  const technicalRefinement = makeBrief({
+    technical: ["Validate identity boundaries, rollback ownership, and recovery evidence."],
+  });
+  const freshPacket = makeBrief({
+    technical: ["A fresh technical brief generated from the current customer context."],
+  });
+  const history = [
+    { company: "Apex Mutual", generatedBrief: freshPacket },
+    {
+      company: "Apex Mutual",
+      refinementTarget: "technical",
+      generatedBrief: technicalRefinement,
+    },
+    { company: "Apex Mutual", generatedBrief: original },
+  ];
+
+  assert.equal(
+    comparisonForSelectedRefinement(history, 0, "technical"),
+    null,
+  );
+  assert.equal(
+    comparisonForSelectedRefinement(history, 1, "businessCase"),
+    null,
+  );
+  assert.ok(
+    comparisonForSelectedRefinement(history, 1, "technical")?.changedPassages,
+  );
 });

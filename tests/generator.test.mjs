@@ -123,7 +123,10 @@ test("BlueMesa backup enforces a deep Business Case and canonical SA handoff", (
 
   assert.match(Object.values(brief.businessCase).join(" "), /Sales/i);
   assert.match(Object.values(brief.businessCase).join(" "), /\bSA\b|Solutions Architect/i);
-  assert.equal(brief.evidence.filter((item) => item.section === "businessCase").length, 13);
+  assert.equal(brief.claims.filter((item) => item.section === "businessCase").length, 13);
+  assert.ok(brief.evidence.filter((item) => item.section === "businessCase").length < 13);
+  assert.ok(brief.evidenceCoverage.statusCounts.supported > 0);
+  assert.ok(brief.evidenceCoverage.statusCounts["needs-validation"] > 0);
   assert.ok(brief.projectArtifacts.twoWeekPlan.every((item) => /^Days?\s+\d/i.test(item.title)));
   assert.ok(brief.projectArtifacts.twoWeekPlan.every((item) => /Objective:.*Output:.*Dependency:.*Exit criterion:/is.test(item.detail)));
   assert.ok(brief.projectArtifacts.riskRegister.some((item) => /^Unvalidated assumption:/i.test(item.title) && item.status === "Unvalidated"));

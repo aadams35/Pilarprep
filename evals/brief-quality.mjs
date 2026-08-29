@@ -101,12 +101,18 @@ function scoreBrief(scenario, expected, brief) {
     "projectAnswer:0",
   ]);
   const evidence = Array.isArray(brief.evidence) ? brief.evidence : [];
-  const evidenceKeys = new Set(evidence.map((item) => `${item.section}:${item.itemIndex}`));
   const approvedLabels = new Set(brief.citations ?? []);
   const evidenceValid = evidence.every((item) => item.sources?.length && item.sources.every((source) => approvedLabels.has(source)));
-  const evidenceComplete = [...expectedEvidenceKeys].every((key) => evidenceKeys.has(key));
-  if (evidenceComplete && evidenceValid) score += 15;
-  else notes.push("Paragraph-level evidence is incomplete or contains a source outside the approved source list.");
+  const sourceIds = new Set((brief.sourceCatalog ?? []).map((source) => source.sourceId));
+  const claims = Array.isArray(brief.claims) ? brief.claims : [];
+  const claimKeys = new Set(claims.map((claim) => `${claim.section}:${claim.itemIndex}`));
+  const claimsComplete = [...expectedEvidenceKeys].every((key) => claimKeys.has(key));
+  const claimSourcesValid = claims.every((claim) =>
+    (claim.sourceIds ?? []).every((sourceId) => sourceIds.has(sourceId))
+  );
+  const evidenceTransparent = claimsComplete && claimSourcesValid && evidenceValid;
+  if (evidenceTransparent) score += 15;
+  else notes.push("Claim classifications are incomplete or reference an unapproved source.");
 
   const artifacts = brief.projectArtifacts ?? {};
   const timelineIsSequenced =
@@ -157,20 +163,22 @@ function scoreBrief(scenario, expected, brief) {
   if (meetingAnchorsFound.length !== meetingAnchors.length) {
     notes.push("Meeting context is not consistently represented in the handoff artifacts.");
   }
-  const unsupportedClaims = [...expectedEvidenceKeys].filter(
-    (key) => !evidenceKeys.has(key)
+  const unsupportedClaims = claims.filter((claim) =>
+    ["assumption", "conflicting-evidence", "needs-validation"].includes(claim.evidenceStatus)
   ).length;
+  const evidenceStatusVariety = new Set(claims.map((claim) => claim.evidenceStatus)).size;
 
 
   return {
     score: Math.min(score, 100),
     liveQuestions,
     anchors: `${anchorsFound.length}/${expected.requiredAnchors.length}`,
-    evidence: evidenceComplete && evidenceValid ? "pass" : "fail",
+    evidence: evidenceTransparent ? "pass" : "fail",
     businessCase: businessCasePass ? "pass" : "fail",
     directionCoverage: directionFound.length + "/" + directionAnchors.length,
     meetingConsistency: meetingAnchorsFound.length === meetingAnchors.length ? "pass" : "fail",
     unsupportedClaims,
+    evidenceStatusVariety,
     nextSteps: handoffComplete ? "pass" : "fail",
     notes,
   };
@@ -265,7 +273,8 @@ for (const scenario of scenarios) {
     scenario.id + " ignored required additional direction"
   );
   assert.equal(result.meetingConsistency, "pass", scenario.id + " handoff lost meeting context");
-  assert.equal(result.unsupportedClaims, 0, scenario.id + " contains ungrounded packet passages");
+  assert.ok(result.unsupportedClaims > 0, scenario.id + " hides ungrounded packet passages instead of flagging them");
+  assert.ok(result.evidenceStatusVariety >= 2, scenario.id + " applies one blanket evidence status");
   assert.ok(generationLatencyMs < 2000, scenario.id + " local generation exceeded two seconds");
   const refinementResponse = await fetchWorker("/api/brief", {
     method: "POST",

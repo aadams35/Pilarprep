@@ -1,6 +1,10 @@
 "use client";
 
 import type { BriefClaim, EvidenceSourceRecord } from "@/lib/pillarprep/types";
+import {
+  evidenceStatusHeading,
+  evidenceStatusLabel,
+} from "@/lib/pillarprep/evidence-status";
 
 type EvidenceDrawerProps = {
   source: EvidenceSourceRecord | null;
@@ -30,9 +34,9 @@ export function EvidenceDrawer({ source, claim, onClose }: EvidenceDrawerProps) 
         {claim ? (
           <section className="evidence-drawer-claim">
             <span className={`claim-evidence-status claim-evidence-status-${claim.evidenceStatus}`}>
-              {readable(claim.evidenceStatus)}
+              {evidenceStatusLabel(claim.evidenceStatus)}
             </span>
-            <strong>Claim supported</strong>
+            <strong>{evidenceStatusHeading(claim.evidenceStatus)}</strong>
             <p>{claim.text}</p>
           </section>
         ) : null}

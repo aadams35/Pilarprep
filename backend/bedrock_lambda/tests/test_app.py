@@ -225,20 +225,15 @@ class LambdaHandlerTest(unittest.TestCase):
         self.assertTrue(body["projectArtifacts"]["followUpEmail"]["subject"].startswith("Follow-up"))
         self.assertEqual(body["metadata"]["projectId"], "apex-mutual")
 
-    def test_returns_claim_level_evidence_for_every_brief_item(self):
+    def test_returns_claim_level_evidence_only_when_a_source_matches(self):
         response = self.invoke(VALID_PAYLOAD)
         body = response["json"]
         evidence = body["evidence"]
 
-        self.assertEqual(len(evidence), 34)
-        self.assertEqual(
-            len([item for item in evidence if item["section"] == "businessCase"]),
-            len(app.BUSINESS_CASE_FIELDS),
-        )
-        self.assertEqual(
-            {(item["section"], item["itemIndex"]) for item in evidence if item["section"] == "technical"},
-            {("technical", index) for index in range(4)},
-        )
+        self.assertEqual(len(body["claims"]), 34)
+        sourced_claims = [claim for claim in body["claims"] if claim["sourceIds"]]
+        self.assertEqual(len(evidence), len(sourced_claims))
+        self.assertTrue(any(not claim["sourceIds"] for claim in body["claims"]))
         self.assertTrue(all(item["sources"] for item in evidence))
         approved_sources = set(body["citations"])
         self.assertTrue(
@@ -304,7 +299,30 @@ class LambdaHandlerTest(unittest.TestCase):
             "artifact is authoritative for the current environment?\""
         )
 
-        normalized = app._normalize_generated(generated, VALID_PAYLOAD)
+        payload = {
+            **VALID_PAYLOAD,
+            "approvedEvidenceSources": [
+                {
+                    "sourceId": "src-current-state-notes",
+                    "sourceTitle": "Current-state architecture notes",
+                    "sourceType": "technical-inventory",
+                    "evidenceSnippet": (
+                        "The current-state architecture notes describe the portal "
+                        "environment and its approved operating boundaries."
+                    ),
+                },
+                {
+                    "sourceId": "src-latest-correction",
+                    "sourceTitle": "Latest customer correction",
+                    "sourceType": "previous-meeting-notes",
+                    "evidenceSnippet": (
+                        "The latest customer correction changes the authoritative "
+                        "description of the current environment."
+                    ),
+                },
+            ],
+        }
+        normalized = app._normalize_generated(generated, payload)
         claim = next(
             row
             for row in normalized["claims"]
@@ -317,6 +335,71 @@ class LambdaHandlerTest(unittest.TestCase):
             normalized["evidenceCoverage"]["statusCounts"]["conflicting-evidence"],
             1,
         )
+
+    def test_claim_grading_uses_matching_evidence_instead_of_one_blanket_status(self):
+        generated = {
+            "businessCase": {
+                "scenario": (
+                    "Apex Mutual runs its customer portal on AWS today with approved "
+                    "audit evidence and a bounded modernization scope."
+                )
+            },
+            "technical": [
+                "A speculative quantum-network replacement has no approved customer "
+                "source and must not be presented as established context."
+            ],
+            "executive": [],
+            "stakeholders": [],
+            "gameplan": [],
+            "objections": [],
+            "projectAnswer": "",
+            "citations": [],
+            "evidence": [],
+        }
+        payload = {
+            **VALID_PAYLOAD,
+            "context": (
+                "Apex Mutual runs its customer portal on AWS today with approved "
+                "audit evidence and a bounded modernization scope."
+            ),
+            "approvedEvidenceSources": [
+                {
+                    "sourceId": "src-current-state",
+                    "sourceTitle": "Approved current state",
+                    "sourceType": "current-aws-environment",
+                    "evidenceSnippet": (
+                        "Apex Mutual runs its customer portal on AWS today with "
+                        "approved audit evidence and a bounded modernization scope."
+                    ),
+                }
+            ],
+        }
+
+        normalized = app._attach_provenance(generated, payload)
+        supported = next(
+            claim
+            for claim in normalized["claims"]
+            if claim["section"] == "businessCase" and claim["itemIndex"] == 0
+        )
+        unsupported = next(
+            claim
+            for claim in normalized["claims"]
+            if claim["section"] == "technical" and claim["itemIndex"] == 0
+        )
+        statuses = {claim["evidenceStatus"] for claim in normalized["claims"]}
+
+        self.assertEqual(supported["evidenceStatus"], "supported")
+        self.assertTrue(supported["sourceIds"])
+        self.assertEqual(unsupported["evidenceStatus"], "needs-validation")
+        self.assertEqual(unsupported["sourceIds"], [])
+        self.assertEqual(
+            unsupported["validationStatus"],
+            "unsupported-no-matching-source",
+        )
+        self.assertIn("supported", statuses)
+        self.assertIn("needs-validation", statuses)
+        self.assertGreater(normalized["evidenceCoverage"]["coveragePercent"], 0)
+        self.assertLess(normalized["evidenceCoverage"]["coveragePercent"], 100)
 
     def test_rejects_model_citations_outside_the_server_allowlist(self):
         generated = json.loads(MODEL_RESPONSE)

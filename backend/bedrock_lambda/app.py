@@ -831,14 +831,118 @@ def _claim_text_rows(generated):
     return rows
 
 
-def _claim_status(section, item_index, text, source_rows):
+_EVIDENCE_STOP_WORDS = {
+    "about",
+    "after",
+    "against",
+    "also",
+    "and",
+    "are",
+    "because",
+    "before",
+    "brief",
+    "business",
+    "can",
+    "company",
+    "could",
+    "customer",
+    "customers",
+    "decision",
+    "decisions",
+    "evidence",
+    "for",
+    "from",
+    "has",
+    "have",
+    "how",
+    "into",
+    "meeting",
+    "must",
+    "our",
+    "pilarprep",
+    "should",
+    "that",
+    "the",
+    "their",
+    "them",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "through",
+    "team",
+    "teams",
+    "technical",
+    "use",
+    "using",
+    "validate",
+    "validation",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "will",
+    "with",
+    "would",
+}
+
+
+def _evidence_terms(value, ignored_terms=None):
+    ignored = set(ignored_terms or ())
+    return {
+        term
+        for term in re.findall(r"[a-z0-9][a-z0-9-]{1,}", _clean_string(value).lower())
+        if term not in _EVIDENCE_STOP_WORDS
+        and term not in ignored
+        and (len(term) >= 3 or term in {"ai", "s3"})
+    }
+
+
+def _source_support_score(text, source, ignored_terms=None):
+    claim_terms = _evidence_terms(text, ignored_terms)
+    source_text = " ".join(
+        (
+            _clean_string(source.get("evidenceSnippet")),
+            _clean_string(source.get("title")),
+        )
+    )
+    source_terms = _evidence_terms(source_text, ignored_terms)
+    if not claim_terms or not source_terms:
+        return 0
+    overlap = claim_terms.intersection(source_terms)
+    if len(overlap) < 2:
+        return 0
+    return len(overlap)
+
+
+def _supporting_source_rows(text, catalog, preferred_labels, ignored_terms=None):
+    preferred = set(preferred_labels)
+    ranked = []
+    for source in catalog:
+        score = _source_support_score(text, source, ignored_terms)
+        if score < 3:
+            continue
+        ranked.append((score, source.get("label") in preferred, source))
+    ranked.sort(
+        key=lambda item: (
+            -item[0],
+            -int(item[1]),
+            _clean_string(item[2].get("label")).lower(),
+        )
+    )
+    return [(source, score) for score, _preferred, source in ranked[:3]]
+
+
+def _claim_status(section, item_index, text, source_matches):
     lowered = text.lower()
     if (
         "conflicting evidence" in lowered
         or "sources disagree" in lowered
         or "conflict between" in lowered
     ):
-        return "conflicting-evidence"
+        return "conflicting-evidence" if source_matches else "needs-validation"
     if section == "businessCase" and item_index == 9:
         return "assumption"
     if (
@@ -847,48 +951,64 @@ def _claim_status(section, item_index, text, source_rows):
         or "unknown to validate" in lowered
     ):
         return "assumption"
-    if not source_rows:
+    if section == "objections":
         return "needs-validation"
-    source_types = {row.get("sourceType") for row in source_rows}
-    if "approved-customer-evidence" in source_types:
-        return "supported"
-    if source_types.intersection(
-        {
-            "customer-provided-context",
-            "company-values",
-            "stakeholder-profile",
-            "meeting-transcript-or-notes",
-            "customer-correction",
-        }
+    if not source_matches:
+        return "needs-validation"
+    if section in {"gameplan", "projectAnswer"} or re.search(
+        r"\b(?:assume|assumed|hypothesis|may|might|recommend|should|propose|evaluate|consider|unknown)\b",
+        lowered,
     ):
-        return "customer-provided"
-    return "partially-supported"
+        return "partially-supported"
+    return "supported"
 
 
 def _attach_provenance(generated, payload):
     catalog = _source_catalog(payload)
-    by_label = {row["label"]: row for row in catalog}
     evidence_by_key = {
         (item.get("section"), item.get("itemIndex")): item
         for item in generated.get("evidence", [])
         if isinstance(item, dict)
     }
+    ignored_terms = _evidence_terms(payload.get("company"))
     claims = []
+    resolved_evidence = []
     for section, item_index, text in _claim_text_rows(generated):
         evidence = evidence_by_key.get((section, item_index), {})
-        source_rows = [
-            by_label[label]
-            for label in evidence.get("sources", [])
-            if label in by_label
-        ]
-        status = _claim_status(section, item_index, text, source_rows)
+        source_matches = _supporting_source_rows(
+            text,
+            catalog,
+            evidence.get("sources", []),
+            ignored_terms,
+        )
+        source_rows = [row for row, _score in source_matches]
+        status = _claim_status(section, item_index, text, source_matches)
+        if status in {"assumption", "needs-validation"}:
+            source_matches = []
+            source_rows = []
         if not source_rows and status not in {"assumption", "needs-validation"}:
             raise ValueError(
                 f"Claim {section}[{item_index}] omitted an approved source"
             )
+        if source_rows:
+            resolved_evidence.append(
+                {
+                    "section": section,
+                    "itemIndex": item_index,
+                    "sources": [row["label"] for row in source_rows],
+                }
+            )
         digest = hashlib.sha256(
             f"{section}|{item_index}|{text}".encode("utf-8")
         ).hexdigest()[:14]
+        validation_status = {
+            "supported": "supported-by-approved-source",
+            "partially-supported": "partially-supported-by-approved-source",
+            "customer-provided": "supported-by-customer-context",
+            "assumption": "explicit-assumption",
+            "conflicting-evidence": "conflicting-evidence",
+            "needs-validation": "unsupported-no-matching-source",
+        }[status]
         claims.append(
             {
                 "claimId": f"claim-{digest}",
@@ -902,11 +1022,7 @@ def _attach_provenance(generated, payload):
                     if source_rows
                     else "No approved supporting source is recorded."
                 ),
-                "validationStatus": (
-                    "valid-source-reference"
-                    if source_rows
-                    else "explicit-assumption"
-                ),
+                "validationStatus": validation_status,
             }
         )
     known_ids = {row["sourceId"] for row in catalog}
@@ -921,6 +1037,17 @@ def _attach_provenance(generated, payload):
         status = claim["evidenceStatus"]
         status_counts[status] = status_counts.get(status, 0) + 1
     supported = sum(1 for claim in claims if claim["sourceIds"])
+    generated["citations"] = list(
+        dict.fromkeys(
+            _as_string_list(generated.get("citations"))
+            + [
+                source
+                for item in resolved_evidence
+                for source in item["sources"]
+            ]
+        )
+    )[:24]
+    generated["evidence"] = resolved_evidence
     generated["sourceCatalog"] = catalog
     generated["claims"] = claims
     generated["evidenceCoverage"] = {
