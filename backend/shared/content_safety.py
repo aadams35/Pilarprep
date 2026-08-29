@@ -24,6 +24,7 @@ HIGH_RISK_PII_TYPES = {
     "PIN",
     "SSN",
 }
+PRESERVED_PII_TYPES = {"NAME"}
 CONTROL_FIELDS = {
     "action",
     "approvedBrief",
@@ -232,6 +233,7 @@ def _pii_findings(
             if (
                 float(entity.get("Score") or 0) < PII_SCORE_THRESHOLD
                 or not pii_type
+                or pii_type in PRESERVED_PII_TYPES
                 or begin < 0
                 or end <= begin
             ):

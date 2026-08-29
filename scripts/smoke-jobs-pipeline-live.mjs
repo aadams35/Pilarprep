@@ -276,6 +276,29 @@ function assertEvidenceStatusVariety(result, label) {
   }
 }
 
+function assertNamedStakeholderProfiles(result, input, label) {
+  const profiles = (input.decisionMakers ?? []).filter(
+    (person) => person.name?.trim() && person.title?.trim()
+  );
+  const matchedNames = new Set();
+  for (const passage of result.stakeholders ?? []) {
+    const match = profiles.find(
+      (person) =>
+        passage.toLowerCase().includes(person.name.toLowerCase()) &&
+        passage.toLowerCase().includes(person.title.toLowerCase())
+    );
+    if (!match && profiles.length >= 4) {
+      throw new Error(
+        `${label} returned a stakeholder passage without a supplied name and position.`
+      );
+    }
+    if (match) matchedNames.add(match.name);
+  }
+  if (matchedNames.size !== Math.min(4, profiles.length)) {
+    throw new Error(`${label} did not preserve four distinct named profiles.`);
+  }
+}
+
 const useDirectOutputs = Boolean(
   directApiUrl && directIdentityPoolId && directArtifactBucket
 );
@@ -606,6 +629,11 @@ if (resumeApproved) {
   );
   assertLiveProvider(generation.result, "bedrock", "Brief generation");
   assertEvidenceStatusVariety(generation.result, "Brief generation");
+  assertNamedStakeholderProfiles(
+    generation.result,
+    briefInput,
+    "Brief generation"
+  );
   if (
     generation.result.metadata?.packetVersion !== 1 ||
     generation.result.metadata?.approvalStatus !== "draft" ||

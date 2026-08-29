@@ -1074,6 +1074,26 @@ export default function Home() {
   const meetingRequestRef = useRef(false);
   const meetingAbortRef = useRef<AbortController | null>(null);
   const meetingUploadAbortRef = useRef<AbortController | null>(null);
+  const previousActivePageRef = useRef<ConsolePage>(activePage);
+
+  useEffect(() => {
+    if (previousActivePageRef.current === activePage) {
+      return;
+    }
+
+    previousActivePageRef.current = activePage;
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      document
+        .querySelectorAll<HTMLElement>(".page-view, .refinement-panel, .brief-surface")
+        .forEach((element) => {
+          element.scrollTop = 0;
+          element.scrollLeft = 0;
+        });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activePage]);
 
   const activeRefinementDraft = refinementDrafts[activeTab];
   const feedback = activeRefinementDraft.feedback;
@@ -1733,11 +1753,9 @@ const industryFocus = useMemo(() => {
       ),
     [activeTab, briefHistory, currentBriefHistoryIndex]
   );
-  useEffect(() => {
-    if (!activeComparison && reviewMode === "changes") {
-      setReviewMode("clean");
-    }
-  }, [activeComparison, reviewMode]);
+  const visibleReviewMode: BriefReviewMode = activeComparison
+    ? reviewMode
+    : "clean";
   const activePassageChanges =
     activeComparison?.changes.filter((item) => item.section === activeTab) ?? [];
   const activeRemovedPassages =
@@ -5110,6 +5128,7 @@ const industryFocus = useMemo(() => {
 
               <div className="brief-workspace-main">
                 <div className="space-y-4">
+                  <div className="brief-review-primary">
                   <div
                     className={cx("brief-surface", isGenerating && (!refiningTarget || refiningTarget === activeTab) && "brief-surface-busy")}
                     aria-busy={isGenerating && (!refiningTarget || refiningTarget === activeTab)}
@@ -5148,17 +5167,17 @@ const industryFocus = useMemo(() => {
                     <div className="brief-review-tools">
                       <div className="review-mode-control" role="group" aria-label="Brief review mode">
                         <button
-                          className={cx(reviewMode === "clean" && "review-mode-active")}
+                          className={cx(visibleReviewMode === "clean" && "review-mode-active")}
                           type="button"
-                          aria-pressed={reviewMode === "clean"}
+                          aria-pressed={visibleReviewMode === "clean"}
                           onClick={() => setReviewMode("clean")}
                         >
                           Clean
                         </button>
                         <button
-                          className={cx(reviewMode === "changes" && "review-mode-active")}
+                          className={cx(visibleReviewMode === "changes" && "review-mode-active")}
                           type="button"
-                          aria-pressed={reviewMode === "changes"}
+                          aria-pressed={visibleReviewMode === "changes"}
                           disabled={!activeComparison}
                           title={activeComparison ? "Show changes to this tab" : "Refine this tab to compare versions"}
                           onClick={() => setReviewMode("changes")}
@@ -5185,7 +5204,7 @@ const industryFocus = useMemo(() => {
                           const claim = claimRecord(activeTab, index);
                           const sources = claimSourceRecords(activeTab, index);
                           const change =
-                            reviewMode === "changes"
+                            visibleReviewMode === "changes"
                               ? activePassageChanges.find((entry) => entry.itemIndex === index)
                               : undefined;
                           const fieldLabel = briefSectionHeading(activeTab, index);
@@ -5277,7 +5296,7 @@ const industryFocus = useMemo(() => {
                           ) : null}
                         </div>
                       )}
-                      {reviewMode === "changes"
+                      {visibleReviewMode === "changes"
                         ? activeRemovedPassages.map((item) => (
                             <div className="brief-claim brief-claim-removed" key={`removed-${activeTab}-${item.itemIndex}`}>
                               <h3 className="brief-field-label">{briefSectionHeading(activeTab, item.itemIndex)}</h3>
@@ -5383,6 +5402,7 @@ const industryFocus = useMemo(() => {
                         </button>
                       </div>
                     </div>
+                  </div>
                   <div className="refinement-panel" id="brief-refine-section">
                     <div className="refinement-header">
                       <div>

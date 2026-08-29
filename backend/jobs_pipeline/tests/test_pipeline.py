@@ -3624,7 +3624,7 @@ class ContentSafetyTests(unittest.TestCase):
     def tearDown(self):
         content_safety.clear_client_cache()
 
-    def test_low_risk_pii_is_redacted_before_input_guardrail(self):
+    def test_customer_names_are_preserved_while_contact_pii_is_redacted(self):
         text = "Contact Alice at alice@example.com."
         entities = [
             {
@@ -3675,12 +3675,14 @@ class ContentSafetyTests(unittest.TestCase):
                 trace_id="trace-safe-input",
             )
 
-        self.assertNotIn("Alice", screened["notes"])
+        self.assertIn("Alice", screened["notes"])
         self.assertNotIn("alice@example.com", screened["notes"])
-        self.assertIn("[PII:NAME:001]", screened["notes"])
+        self.assertNotIn("[PII:NAME:001]", screened["notes"])
         self.assertIn("[PII:EMAIL:001]", screened["notes"])
-        self.assertEqual(diagnostics["redactionCount"], 2)
+        self.assertEqual(diagnostics["piiTypes"], ["EMAIL"])
+        self.assertEqual(diagnostics["redactionCount"], 1)
         self.assertEqual(calls[0]["source"], "INPUT")
+        self.assertIn("Alice", calls[0]["content"][0]["text"]["text"])
         self.assertNotIn(
             "alice@example.com", calls[0]["content"][0]["text"]["text"]
         )
@@ -3809,11 +3811,11 @@ class ContentSafetyTests(unittest.TestCase):
         self.assertEqual(len(guardrail_calls), 1)
         self.assertEqual(diagnostics["comprehendChunks"], 1)
         self.assertEqual(diagnostics["guardrailChunks"], 1)
-        self.assertEqual(diagnostics["redactionCount"], 60)
+        self.assertEqual(diagnostics["redactionCount"], 30)
         for section in screened["sections"]:
-            self.assertNotIn("Alice", section["summary"])
+            self.assertIn("Alice", section["summary"])
             self.assertNotIn("alice@example.com", section["summary"])
-            self.assertIn("[PII:NAME:001]", section["summary"])
+            self.assertNotIn("[PII:NAME:001]", section["summary"])
             self.assertIn("[PII:EMAIL:001]", section["summary"])
 
     def test_high_risk_pii_is_blocked_before_guardrail(self):

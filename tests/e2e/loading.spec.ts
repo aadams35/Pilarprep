@@ -348,6 +348,28 @@ test("live job keeps the workspace responsive with an in-app clock", async ({ pa
   expect(postCount).toBe(1);
   expect(pollCount).toBe(5);
 
+  const approvalGap = await page.evaluate(() => {
+    const brief = document.querySelector(".brief-surface")?.getBoundingClientRect();
+    const approval = document
+      .querySelector(".refinement-approve-row")
+      ?.getBoundingClientRect();
+    if (!brief || !approval) return Number.POSITIVE_INFINITY;
+    return Math.round(approval.top - brief.bottom);
+  });
+  expect(approvalGap).toBeGreaterThanOrEqual(0);
+  expect(approvalGap).toBeLessThanOrEqual(20);
+
+  await page.evaluate(() => {
+    window.scrollTo({
+      top: document.scrollingElement?.scrollHeight ?? document.body.scrollHeight,
+      behavior: "auto",
+    });
+  });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Open PilarPrep context" }).click();
+  await expect(page.getByRole("heading", { name: "Build the meeting context" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
   const longestTask = await page.evaluate(
     () =>
       Math.max(

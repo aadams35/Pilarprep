@@ -1229,7 +1229,7 @@ Content requirements:
 - businessCase: return all thirteen required fields before the audience briefs. Business scenario must be 90-150 words. Each other field must be a substantive 45-100 word paragraph, except recommended meeting framing may be 35-75 words. Keep every concept in its named field instead of compressing the decision narrative into a few generic paragraphs. Explain why the initiative matters now using only supplied context and clearly label working assumptions. Connect the business event, customer impact, operational or competitive pressure, cost or risk concern, stakeholders, blockers, dependencies, approval gates, and next actions to the technical evidence the SA must validate. Explain how Sales should frame value and how the SA should test feasibility. Use measurable or testable outcomes only when supported; otherwise include an explicit discovery question. Do not invent financial values, commitments, deadlines, compliance status, or customer facts.
 - technical: exactly 4 SA-facing paragraphs, not headings. Each paragraph must be 60-85 words, 3-5 complete sentences, connect to the company context, ranked pillars, industry signals, current-state assumptions, and include one explicit discovery question starting with "Ask:".
 - executive: exactly 4 business-facing paragraphs with no AWS jargon. Each paragraph must be 55-80 words, 3-5 complete sentences, name a business risk, outcome, metric, or decision, include ROI or success framing where useful, and include one executive-level question starting with "Ask:".
-- stakeholders: exactly 4 role-aware paragraphs of 45-65 words based only on supplied decision-maker context; if context is thin, say what to validate and include a practical stakeholder question starting with "Ask:".
+- stakeholders: exactly 4 role-aware paragraphs of 45-65 words based only on supplied decision-maker context. Select the four most relevant supplied profiles. Every paragraph about a supplied person must begin with that person's exact name and exact title copied from decisionMakers in the form "Name - Title:". Never replace a supplied name or title with only a generic label such as executive sponsor, economic buyer, technical authority, or control approver. If context is thin, say what to validate and include a practical stakeholder question starting with "Ask:".
 - gameplan: exactly 4 meeting-plan paragraphs of 50-70 words. Each paragraph must explain what the SA should do in that part of the meeting and include one question the SA can ask live.
 - objections: exactly 4 objects with concern, response, and ask strings. The combined text in each object must be 50-70 words. Make each response specific enough to use in front of a customer and make each ask a live customer question.
 - projectAnswer: answer the requested follow-on role and prompt with one substantial paragraph of 4-5 sentences using the generated brief context so the Project model can auto-build from the same response.
@@ -2166,6 +2166,92 @@ def _ensure_string_items(value, fallback_items, count=LIST_ITEM_COUNT):
 
     return items
 
+
+def _stakeholder_profiles(payload):
+    people = (
+        payload.get("decisionMakers")
+        if isinstance(payload.get("decisionMakers"), list)
+        else []
+    )
+    return [
+        person
+        for person in people
+        if isinstance(person, dict)
+        and (
+            _clean_string(person.get("name"))
+            or _clean_string(person.get("title"))
+        )
+    ]
+
+
+def _stakeholder_profile_match_score(item, person):
+    lowered = _clean_string(item).lower()
+    name = _clean_string(person.get("name"))
+    title = _clean_string(person.get("title"))
+    organizational_role = _clean_string(person.get("organizationalRole"))
+    score = 0
+    if name and name.lower() in lowered:
+        score += 100
+    if title and title.lower() in lowered:
+        score += 60
+    if organizational_role and organizational_role.lower() in lowered:
+        score += 30
+    profile_text = " ".join(
+        _clean_string(person.get(field_name))
+        for field_name in (
+            "title",
+            "organizationalRole",
+            "decisionAuthority",
+            "priorities",
+            "concerns",
+            "successMeasures",
+            "engagementGuidance",
+            "context",
+        )
+    )
+    score += len(_evidence_terms(item).intersection(_evidence_terms(profile_text)))
+    return score
+
+
+def _ensure_named_stakeholder_items(value, fallback_items, payload):
+    items = _ensure_string_items(value, fallback_items)
+    remaining_profiles = list(_stakeholder_profiles(payload))
+    if not remaining_profiles:
+        return items
+
+    named_items = []
+    for item in items:
+        if not remaining_profiles:
+            named_items.append(item)
+            continue
+        scored_profiles = [
+            (_stakeholder_profile_match_score(item, person), index, person)
+            for index, person in enumerate(remaining_profiles)
+        ]
+        _score, profile_index, profile = max(
+            scored_profiles,
+            key=lambda match: (match[0], -match[1]),
+        )
+        remaining_profiles.pop(profile_index)
+        name = _clean_string(profile.get("name")) or "Name to confirm"
+        title = _clean_string(profile.get("title")) or "Position to confirm"
+        lowered = item.lower()
+        if name.lower() in lowered and title.lower() in lowered:
+            named_items.append(item)
+            continue
+        remainder = item
+        if name != "Name to confirm" and lowered.startswith(name.lower()):
+            remainder = re.sub(
+                r"^[\s\-,:()]+",
+                "",
+                item[len(name) :],
+            )
+            if remainder:
+                remainder = remainder[0].upper() + remainder[1:]
+        named_items.append(f"{name} - {title}: {remainder}")
+    return named_items
+
+
 def _artifact_item(value, fallback):
     source = value if isinstance(value, dict) else {}
     fallback_source = fallback if isinstance(fallback, dict) else {}
@@ -2492,7 +2578,11 @@ def _normalize_generated(parsed, payload, model_text=""):
         "businessCase": _normalize_business_case(source.get("businessCase"), fallback["businessCase"]),
         "technical": _ensure_string_items(source.get("technical"), fallback["technical"]),
         "executive": _ensure_string_items(source.get("executive"), fallback["executive"]),
-        "stakeholders": _ensure_string_items(source.get("stakeholders"), fallback["stakeholders"]),
+        "stakeholders": _ensure_named_stakeholder_items(
+            source.get("stakeholders"),
+            fallback["stakeholders"],
+            payload,
+        ),
         "gameplan": _ensure_string_items(source.get("gameplan"), fallback["gameplan"]),
         "objections": _ensure_string_items(source.get("objections"), fallback["objections"]),
         "projectAnswer": _clean_string(source.get("projectAnswer")) if _is_useful_project_answer(_clean_string(source.get("projectAnswer"))) else fallback["projectAnswer"],
