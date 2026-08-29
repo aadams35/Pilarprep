@@ -1286,18 +1286,6 @@ Resources:
         Repository: aadams35/Pilarprep
         DataClassification: demo
       Events:
-        CreateMeetingAudioUpload:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref JobsApi
-            Path: /meeting-audio/uploads
-            Method: POST
-        GetMeetingAudioUpload:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref JobsApi
-            Path: /meeting-audio/uploads/{uploadId}
-            Method: GET
         CreateJob:
           Type: HttpApi
           Properties:
@@ -1341,6 +1329,14 @@ Resources:
           Properties:
             ApiId: !Ref JobsApi
             Path: /workspace/meeting-audio/uploads/{uploadId}
+            Method: GET
+            Auth:
+              Authorizer: WorkspaceJwtAuthorizer
+        WorkspaceGetDemoMeetingAudio:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref JobsApi
+            Path: /workspace/meeting-audio/demo
             Method: GET
             Auth:
               Authorizer: WorkspaceJwtAuthorizer
@@ -1475,8 +1471,6 @@ Resources:
             Action: execute-api:Invoke
             Resource:
               - !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${JobsApi}/*/POST/jobs"
-              - !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${JobsApi}/*/POST/meeting-audio/uploads"
-              - !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${JobsApi}/*/GET/meeting-audio/uploads/*"
               - !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${JobsApi}/*/GET/jobs/*"
               - !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${JobsApi}/*/GET/clients"
               - !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${JobsApi}/*/GET/clients/*/latest"

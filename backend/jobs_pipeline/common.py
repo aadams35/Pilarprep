@@ -531,9 +531,10 @@ def validate_job_request(payload: object) -> dict[str, Any]:
         request["meetingId"] = require_identifier(
             request.get("meetingId"), "input.meetingId"
         )
-        request["audioKey"] = optional_string(
-            request.get("audioKey"), "input.audioKey", 500
+        request["audioUploadId"] = require_identifier(
+            request.get("audioUploadId"), "input.audioUploadId"
         )
+        request.pop("audioKey", None)
         expected_version = request.get("expectedApprovedPacketVersion")
         if (
             isinstance(expected_version, bool)

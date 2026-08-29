@@ -761,7 +761,7 @@ const lifecycleRoutes: Record<
   insights: { page: "brief", sectionId: "brief-review-section" },
   discovery: { page: "brief", sectionId: "brief-review-section" },
   "meeting-prep": { page: "project", sectionId: "project-meeting-prep-section" },
-  "follow-up": { page: "project", sectionId: "meeting-workspace-section" },
+  "follow-up": { page: "project", sectionId: "project-follow-up-section" },
 };
 
 function restoreLifecycleStage(value: unknown): LifecycleStageId | null {
@@ -771,7 +771,7 @@ function restoreLifecycleStage(value: unknown): LifecycleStageId | null {
     prepare: "research",
     refine: "insights",
     "sa-ready": "meeting-prep",
-    meet: "follow-up",
+    meet: "meeting-prep",
     update: "follow-up",
     advance: "follow-up",
   }[value] as LifecycleStageId | undefined ?? null;
@@ -1071,6 +1071,7 @@ export default function Home() {
   const [meetingError, setMeetingError] = useState("");
   const [isMeetingProcessing, setIsMeetingProcessing] = useState(false);
   const [isMeetingApproving, setIsMeetingApproving] = useState(false);
+  const [isMeetingAudioDownloading, setIsMeetingAudioDownloading] = useState(false);
   const meetingRequestRef = useRef(false);
   const meetingAbortRef = useRef<AbortController | null>(null);
   const meetingUploadAbortRef = useRef<AbortController | null>(null);
@@ -1322,15 +1323,26 @@ export default function Home() {
       setProjectAnswerKey(
         typeof saved.projectAnswerKey === "string" ? saved.projectAnswerKey : ""
       );
-      const restoredStage =
+      const savedBrief =
+        typeof saved.generatedBrief === "object" && saved.generatedBrief !== null
+          ? (saved.generatedBrief as BriefResponse)
+          : null;
+      const savedMeetingApproved =
+        savedBrief?.metadata?.meetingApprovalStatus === "approved";
+      let restoredStage =
         restoreLifecycleStage(saved.selectedLifecycleStage) ??
         (saved.promoted
-          ? "follow-up"
+          ? savedMeetingApproved
+            ? "follow-up"
+            : "meeting-prep"
           : saved.approved
             ? "meeting-prep"
             : saved.generatedBrief
               ? "insights"
               : "research");
+      if (restoredStage === "follow-up" && !savedMeetingApproved) {
+        restoredStage = "meeting-prep";
+      }
       setSelectedLifecycleStage(restoredStage);
       setActivePage(lifecycleRoutes[restoredStage].page);
       if (typeof saved.gateDecisions === "object" && saved.gateDecisions !== null) {
@@ -2061,15 +2073,15 @@ const industryFocus = useMemo(() => {
         ? "insights"
         : "discovery";
     }
-    if (!promoted) return "meeting-prep";
+    if (!promoted || !meetingUpdateApproved) return "meeting-prep";
     return "follow-up";
-  }, [activeTab, approved, approvalStale, generatedBrief, promoted]);
+  }, [activeTab, approved, approvalStale, generatedBrief, meetingUpdateApproved, promoted]);
   const lifecycleStages = useMemo<LifecycleStage[]>(() => {
     const completed: Record<LifecycleStageId, boolean> = {
       research: Boolean(generatedBrief),
       insights: Boolean(generatedBrief),
       discovery: Boolean(approved && !approvalStale),
-      "meeting-prep": Boolean(promoted),
+      "meeting-prep": meetingUpdateApproved,
       "follow-up": meetingUpdateApproved && confirmedGateCount === opportunityGateDefinitions.length,
     };
     const available: Record<LifecycleStageId, boolean> = {
@@ -2077,14 +2089,14 @@ const industryFocus = useMemo(() => {
       insights: Boolean(generatedBrief),
       discovery: Boolean(generatedBrief),
       "meeting-prep": Boolean(approved && !approvalStale),
-      "follow-up": Boolean(promoted),
+      "follow-up": meetingUpdateApproved,
     };
     const definitions: Array<Omit<LifecycleStage, "status">> = [
       { id: "research", label: "Research", shortLabel: "Research", detail: "Capture approved customer facts, people, values, and sources." },
       { id: "insights", label: "Insights", shortLabel: "Insights", detail: "Review the business scenario, outcomes, risks, and stakeholder signals." },
       { id: "discovery", label: "Discovery", shortLabel: "Discovery", detail: "Validate assumptions, evidence gaps, questions, and architecture considerations." },
-      { id: "meeting-prep", label: "Meeting prep", shortLabel: "Meeting prep", detail: "Approve the packet and align the team before the customer call." },
-      { id: "follow-up", label: "Follow-up", shortLabel: "Follow-up", detail: "Review meeting evidence, update project truth, and prepare the next call." },
+      { id: "meeting-prep", label: "Meet", shortLabel: "Meet", detail: "Align the team, capture the call, and review what the evidence changes." },
+      { id: "follow-up", label: "Follow-up", shortLabel: "Follow-up", detail: "Use approved meeting evidence to prepare the next customer move." },
     ];
 
     return definitions.map((stage) => ({
@@ -2107,7 +2119,6 @@ const industryFocus = useMemo(() => {
     generatedBrief,
     meetingUpdateApproved,
     opportunityGates,
-    promoted,
   ]);
   const currentLifecycleLabel =
     lifecycleStages.find((stage) => stage.id === currentLifecycleStage)?.label || "Prepare";
@@ -2115,19 +2126,21 @@ const industryFocus = useMemo(() => {
     research: meetingUpdateApproved ? "Prepare next call" : "Generate prebrief",
     insights: "Review business insights",
     discovery: "Resolve discovery gaps",
-    "meeting-prep": "Prepare team handoff",
-    "follow-up": meetingUpdateApproved ? "Review next-step gates" : "Open meeting workspace",
+    "meeting-prep": promoted ? "Open meeting workspace" : "Prepare team handoff",
+    "follow-up": "Review next-step gates",
   };
   const projectStagePresentation =
     selectedLifecycleStage === "follow-up"
-      ? meetingUpdateApproved
-        ? { eyebrow: "Follow-on motion", title: "Turn decisions into the next move", detail: "Review the accepted meeting evidence, confirm opportunity gates, and prepare the next customer call." }
-        : meetingResult
+      ? { eyebrow: "Follow-on motion", title: "Turn decisions into the next move", detail: "Review the accepted meeting evidence, confirm opportunity gates, and prepare the next customer call." }
+      : promoted
+        ? meetingResult
           ? { eyebrow: "Change review", title: "Decide what becomes project truth", detail: "Accept, edit, or reject meeting-derived updates before they enter the next-step handoff." }
-          : { eyebrow: "Customer call", title: "Capture the customer conversation", detail: "Process the meeting without changing the approved brief until a human reviews every proposed update." }
-      : { eyebrow: "Meeting preparation", title: "Prepare the team for the customer call", detail: "Share the approved context, assumptions, questions, owners, and meeting goals across everyone joining the call." };
+          : { eyebrow: "Customer call", title: "Capture the customer conversation", detail: "Upload the call and compare it with the approved brief before anything becomes project truth." }
+        : { eyebrow: "Meeting preparation", title: "Prepare the team for the customer call", detail: "Share the approved context, assumptions, questions, owners, and meeting goals across everyone joining the call." };
   const isFollowUpStage = selectedLifecycleStage === "follow-up";
   const isNextStepFollowUp = isFollowUpStage && meetingUpdateApproved;
+  const isMeetingStage =
+    selectedLifecycleStage === "meeting-prep" && promoted && !meetingUpdateApproved;
   const evidenceCoverageLabel = generatedBrief?.evidenceCoverage
     ? `${generatedBrief.evidenceCoverage.coveragePercent}% linked`
     : "Evidence not recorded";
@@ -2154,7 +2167,11 @@ const industryFocus = useMemo(() => {
           ? `Resolve ${validationNeedCount} evidence or assumption gap${validationNeedCount === 1 ? "" : "s"}`
           : "Approve the customer meeting packet"
         : currentLifecycleStage === "meeting-prep"
-          ? "Align owners and evidence requests before the call"
+          ? promoted
+            ? authSession
+              ? "Upload the call and review every proposed update"
+              : "Sign in to upload the private meeting audio"
+            : "Align owners and evidence requests before the call"
           : meetingUpdateApproved
             ? "Confirm gates and prepare the next customer meeting"
             : "Upload the call and review every proposed update";
@@ -2676,6 +2693,7 @@ const industryFocus = useMemo(() => {
     setEvidenceNotice("");
     setEvidenceBusyDocumentId("");
     setIsEvidenceLoading(false);
+    removeMeetingAudio();
     signOutCognito(authConfig);
   }
 
@@ -2715,6 +2733,35 @@ const industryFocus = useMemo(() => {
       return JSON.parse(body) as unknown;
     } catch {
       throw new Error("The Jobs API returned invalid JSON.");
+    }
+  }
+
+  async function workspacePipelineRequest(
+    path: string,
+    method: "GET" | "POST",
+    payload?: unknown,
+    signal?: AbortSignal
+  ) {
+    if (!hostedJobsMode || !authConfig || !authSession) {
+      throw new Error("Sign in to the private workspace to use meeting audio.");
+    }
+    const valid = await validCognitoIdToken(authConfig, authSession);
+    if (valid.session.expiresAt !== authSession.expiresAt) {
+      setAuthSession(valid.session);
+    }
+    const response = await bearerApiFetch(
+      pipelineApiUrl(hostedWorkspaceUrl, "workspace/" + path),
+      valid.token,
+      { method, payload, signal }
+    );
+    const body = await response.text();
+    if (!response.ok) {
+      throw new Error(extractBackendError(body));
+    }
+    try {
+      return JSON.parse(body) as unknown;
+    } catch {
+      throw new Error("The private workspace returned invalid JSON.");
     }
   }
 
@@ -2973,7 +3020,7 @@ const industryFocus = useMemo(() => {
       entry.generatedBrief.metadata?.meetingApprovalStatus === "approved"
         ? "follow-up"
         : entry.promoted
-          ? "follow-up"
+          ? "meeting-prep"
           : entry.approved
             ? "meeting-prep"
             : "insights"
@@ -3518,7 +3565,7 @@ const industryFocus = useMemo(() => {
         signal.addEventListener("abort", cancel, { once: true });
         window.setTimeout(() => signal.removeEventListener("abort", cancel), 1850);
       });
-      const response = await signedPipelineRequest(
+      const response = await workspacePipelineRequest(
         "meeting-audio/uploads/" +
           encodeURIComponent(uploadId) +
           "?clientId=" +
@@ -3561,6 +3608,10 @@ const industryFocus = useMemo(() => {
       setMeetingError("Select and approve the Blue Mesa packet before uploading meeting audio.");
       return;
     }
+    if (!authSession) {
+      setMeetingError("Sign in to the private workspace before uploading meeting audio.");
+      return;
+    }
     meetingUploadAbortRef.current?.abort(
       new DOMException("A new audio file was selected.", "AbortError")
     );
@@ -3574,7 +3625,7 @@ const industryFocus = useMemo(() => {
       const clientId = pipelineClientIdentifier(company);
       const projectId = clientId;
       const sessionId = agentSessionId();
-      const upload = await signedPipelineRequest(
+      const upload = await workspacePipelineRequest(
         "meeting-audio/uploads",
         "POST",
         {
@@ -3648,6 +3699,51 @@ const industryFocus = useMemo(() => {
       if (meetingUploadAbortRef.current === uploadController) {
         meetingUploadAbortRef.current = null;
       }
+    }
+  }
+
+  async function downloadBlueMesaDemoAudio() {
+    if (scenarioId !== "bluemesa" || !approved || !authSession) {
+      setMeetingError("Sign in and approve the BlueMesa packet before downloading the demo audio.");
+      return;
+    }
+    setIsMeetingAudioDownloading(true);
+    setMeetingError("");
+    setMeetingNotice("");
+    try {
+      const clientId = pipelineClientIdentifier(company);
+      const sessionId = agentSessionId();
+      const response = await workspacePipelineRequest(
+        "meeting-audio/demo?clientId=" +
+          encodeURIComponent(clientId) +
+          "&projectId=" +
+          encodeURIComponent(clientId) +
+          "&sessionId=" +
+          encodeURIComponent(sessionId),
+        "GET"
+      );
+      if (
+        typeof response !== "object" ||
+        response === null ||
+        typeof (response as Record<string, unknown>).downloadUrl !== "string"
+      ) {
+        throw new Error("AWS did not return the BlueMesa demo audio.");
+      }
+      const record = response as { downloadUrl: string; fileName?: string };
+      const anchor = document.createElement("a");
+      anchor.href = record.downloadUrl;
+      anchor.download = record.fileName || "PilarPrep-BlueMesa-Discovery-Meeting.mp3";
+      anchor.rel = "noopener";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setMeetingNotice("Demo MP3 download started. Select that file when you are ready to process the call.");
+    } catch (error) {
+      setMeetingError(
+        error instanceof Error ? error.message : "The BlueMesa demo audio could not be downloaded."
+      );
+    } finally {
+      setIsMeetingAudioDownloading(false);
     }
   }
 
@@ -3725,7 +3821,7 @@ const industryFocus = useMemo(() => {
       setMeetingDecisions({});
       setMeetingJobStatus("review-ready");
       setMeetingNotice("Transcript analysis is ready. Review every proposed update before approval.");
-      setSelectedLifecycleStage("follow-up");
+      setSelectedLifecycleStage("meeting-prep");
     } catch (error) {
       setMeetingJobStatus("failed");
       setMeetingError(
@@ -3973,7 +4069,11 @@ const industryFocus = useMemo(() => {
     if (stageId === "discovery") setActiveTab("technical");
     setSelectedLifecycleStage(stageId);
     navigateToPage(route.page);
-    setPendingSectionId(route.sectionId);
+    setPendingSectionId(
+      stageId === "meeting-prep" && promoted
+        ? "meeting-workspace-section"
+        : route.sectionId
+    );
   }
 
   function updateGateStatus(id: string, status: OpportunityGateStatus) {
@@ -5589,12 +5689,14 @@ const industryFocus = useMemo(() => {
             </div>
           </div>
 
-          {isFollowUpStage && !meetingUpdateApproved ? (
+          {isMeetingStage ? (
           <div id="meeting-workspace-section" className="project-stage-panel">
           <MeetingIntelligence
             isBlueMesa={scenarioId === "bluemesa"}
             isApproved={approved && !approvalStale}
             isHosted={hostedJobsMode}
+            isAuthenticated={Boolean(authSession)}
+            authAvailable={workspaceLoginAvailable}
             result={meetingResult}
             decisions={meetingDecisions}
             status={meetingJobStatus}
@@ -5602,7 +5704,10 @@ const industryFocus = useMemo(() => {
             notice={meetingNotice}
             isProcessing={isMeetingProcessing}
             isApproving={isMeetingApproving}
+            isDownloadingDemo={isMeetingAudioDownloading}
             audio={meetingAudio}
+            onSignIn={() => void startWorkspaceLogin()}
+            onDownloadDemoAudio={() => void downloadBlueMesaDemoAudio()}
             onUploadAudio={(file, consentAcknowledged) =>
               void uploadMeetingAudio(file, consentAcknowledged)
             }
@@ -5708,9 +5813,9 @@ const industryFocus = useMemo(() => {
           <details
             className={cx(
               "project-handoff-details",
-              selectedLifecycleStage === "meeting-prep" && "project-handoff-details-always-open"
+              selectedLifecycleStage === "meeting-prep" && !promoted && "project-handoff-details-always-open"
             )}
-            open={selectedLifecycleStage === "meeting-prep" ? true : undefined}
+            open={selectedLifecycleStage === "meeting-prep" && !promoted ? true : undefined}
           >
             {isNextStepFollowUp ? (
               <summary className="advance-handoff-summary">

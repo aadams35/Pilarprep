@@ -1,171 +1,221 @@
 {
   "scenarioId": "blue-mesa-payments",
   "meetingId": "blue-mesa-discovery",
-  "title": "Blue Mesa payroll integration discovery",
+  "title": "BlueMesa payroll partner discovery",
   "synthetic": true,
-  "estimatedMinutes": 6,
+  "estimatedMinutes": 8,
   "speakers": {
     "spk_0": "Maya Chen, Account Executive",
     "spk_1": "Jordan Lee, Solutions Architect",
-    "spk_2": "Dev Malik, VP Infrastructure and Resilience",
-    "spk_3": "Rachel Kim, Chief Risk and Compliance Officer"
+    "spk_2": "Ariana Cole, Chief Digital Officer",
+    "spk_3": "Dev Malik, VP Infrastructure and Resilience",
+    "spk_4": "Rachel Kim, Chief Risk and Compliance Officer",
+    "spk_5": "Priya Shah, Director of Payment Operations"
   },
   "segments": [
     {
       "id": "segment-1",
       "speakerLabel": "spk_0",
       "voiceId": "Joanna",
-      "text": "This is a synthetic PilarPrep demonstration for Blue Mesa Payments. No real customer, employee, payment, or payroll data is used. Today we want to confirm the business objective, correct anything we assumed in the prebrief, and leave with owners for the next technical session."
+      "text": "This is Maya Chen, the account executive. This is a synthetic PilarPrep demonstration for BlueMesa Payments. No real customer, employee, payment, or payroll data is used. Our goal is to confirm what the prebrief got right, correct what it got wrong, and leave unresolved items clearly assigned."
     },
     {
       "id": "segment-2",
-      "speakerLabel": "spk_2",
-      "voiceId": "Matthew",
-      "text": "The first correction is important. Blue Mesa is already operating on AWS. Our payment APIs run on EKS, operational data is in RDS for PostgreSQL, and payment events move through MSK. This is not an on premises migration program."
+      "speakerLabel": "spk_1",
+      "voiceId": "Stephen",
+      "text": "This is Jordan Lee, the solutions architect. I will focus on the existing platform, interface boundaries, reliability evidence, security controls, and the decisions required before a design can be approved."
     },
     {
       "id": "segment-3",
-      "speakerLabel": "spk_1",
-      "voiceId": "Stephen",
-      "text": "Understood. I will treat the current AWS environment as confirmed. The architecture question is how payroll integration fits the existing account, identity, event, ledger, and operating model, not how to move the estate into AWS."
+      "speakerLabel": "spk_2",
+      "voiceId": "Danielle",
+      "text": "This is Ariana Cole, Chief Digital Officer and executive sponsor. I want faster payroll partner onboarding, but not at the expense of settlement confidence, merchant trust, or an uncontrolled first release."
     },
     {
       "id": "segment-4",
-      "speakerLabel": "spk_0",
-      "voiceId": "Joanna",
-      "text": "The business objective is to onboard two payroll design partners this quarter. Today partner onboarding averages about twelve weeks. The target is four weeks without weakening reconciliation, settlement controls, or evidence available to risk reviewers."
+      "speakerLabel": "spk_3",
+      "voiceId": "Matthew",
+      "text": "This is Dev Malik, Vice President of Infrastructure and Resilience. I am the technical authority for the existing AWS payment platform and the production readiness evidence."
     },
     {
       "id": "segment-5",
-      "speakerLabel": "spk_2",
-      "voiceId": "Matthew",
-      "text": "Payroll integration is the primary objective for this phase. We expect both real time APIs and scheduled encrypted files because the providers are not consistent. We need one status model even when the partner interfaces differ."
+      "speakerLabel": "spk_4",
+      "voiceId": "Ruth",
+      "text": "This is Rachel Kim, Chief Risk and Compliance Officer. I am the control approver for payroll data handling, privileged access, retention, and any risk exception."
     },
     {
       "id": "segment-6",
-      "speakerLabel": "spk_1",
-      "voiceId": "Stephen",
-      "text": "For discovery, I need to understand file cutoffs, API rate limits, correction flows, duplicate submissions, identity, and how each provider receives status. We should also decide where idempotency is enforced before any payment instruction reaches the existing ledger."
+      "speakerLabel": "spk_5",
+      "voiceId": "Salli",
+      "text": "This is Priya Shah, Director of Payment Operations. I own reconciliation operations, exception handling, payroll cutoff readiness, and the runbooks the support team will use."
     },
     {
       "id": "segment-7",
-      "speakerLabel": "spk_3",
-      "voiceId": "Ruth",
-      "text": "From risk, payroll data changes the conversation. We need field level classification, least privilege, encryption, log redaction, and evidence showing who accessed or changed an instruction. Please do not assume our current payment retention rule automatically applies."
+      "speakerLabel": "spk_0",
+      "voiceId": "Joanna",
+      "text": "The prebrief says BlueMesa already runs the payment workload on AWS, wants two payroll design partners, expects a mix of API and encrypted file interfaces, and will not replace the ledger. It also assumes both partners prefer API first, seven year retention applies, Platform Engineering has spare capacity, and implementation funding is approved. Let us test each point."
     },
     {
       "id": "segment-8",
-      "speakerLabel": "spk_0",
-      "voiceId": "Joanna",
-      "text": "That sounds like an unresolved decision. Is the open question whether payroll integration evidence follows the seven year settlement retention schedule, or whether payroll records have a separate shorter schedule?"
+      "speakerLabel": "spk_2",
+      "voiceId": "Danielle",
+      "text": "The business objective is correct. Current onboarding averages about twelve weeks. For the first two design partners, success means reaching four weeks while preserving settlement accuracy, reconciliation ownership, and visible control evidence."
     },
     {
       "id": "segment-9",
       "speakerLabel": "spk_3",
-      "voiceId": "Ruth",
-      "text": "Correct. Retention is unresolved. I will own a decision with legal and records management. My target is next Friday, and I depend on the team providing a field inventory and the proposed audit evidence before that review."
+      "voiceId": "Matthew",
+      "text": "The current platform description is also correct. Production payment APIs run on Amazon EKS, operational data is in Amazon RDS for PostgreSQL, payment events move through Amazon MSK, and evidence archives use Amazon S3. This is an extension of an existing AWS platform, not an on premises migration."
     },
     {
       "id": "segment-10",
-      "speakerLabel": "spk_2",
-      "voiceId": "Matthew",
-      "text": "Availability also needs precision. The partner facing intake should target ninety nine point nine five percent monthly availability during payroll windows. We cannot yet claim an RTO or RPO. Those must come from a dependency and failure mode review."
+      "speakerLabel": "spk_1",
+      "voiceId": "Stephen",
+      "text": "I will mark the existing AWS estate as confirmed. The architecture question is how payroll partner traffic fits the current identity, event, database, ledger, and operating boundaries."
     },
     {
       "id": "segment-11",
-      "speakerLabel": "spk_1",
-      "voiceId": "Stephen",
-      "text": "I will capture ninety nine point nine five as a requirement, and RTO and RPO as open discovery rather than invented targets. We should test provider timeout, duplicate file, delayed acknowledgement, regional impairment, and reconciliation backlog scenarios."
+      "speakerLabel": "spk_5",
+      "voiceId": "Salli",
+      "text": "The mixed interface requirement is confirmed. Operations needs one status and reconciliation model across real time APIs and scheduled encrypted files. We cannot make the support process depend on which interface a partner selected."
     },
     {
       "id": "segment-12",
       "speakerLabel": "spk_2",
-      "voiceId": "Matthew",
-      "text": "For ownership, Payment Operations owns reconciliation exceptions after an instruction is accepted. Priya Shah is the operational lead. Platform Engineering owns interface availability and replay tooling. Partners own source file corrections before acceptance."
+      "voiceId": "Danielle",
+      "text": "The ledger boundary is correct too. Replacing the settlement ledger is outside this release. We can add validation, adapters, status events, and reconciliation workflows, but we are not redesigning the accounting core."
     },
     {
       "id": "segment-13",
       "speakerLabel": "spk_0",
       "voiceId": "Joanna",
-      "text": "That gives us a much clearer operating model. Priya owns the exception queue and daily reconciliation outcomes, while Platform Engineering owns the integration runtime. We should make that division visible in the handoff."
+      "text": "That gives us four confirmed points. Now I want to check the assumption that both design partners will use an API first integration."
     },
     {
       "id": "segment-14",
       "speakerLabel": "spk_3",
-      "voiceId": "Ruth",
-      "text": "There is one more security concern. A broad support role must not be able to read raw payroll fields. Tokenized identifiers should be the default in logs and dashboards, and emergency access needs approval plus an audit trail."
+      "voiceId": "Matthew",
+      "text": "That assumption is wrong. One partner supports modern APIs. The other partner is batch only for the pilot and requires an encrypted file, a cutoff window, and a separate acknowledgement file. The brief must not describe both partners as API first."
     },
     {
       "id": "segment-15",
       "speakerLabel": "spk_1",
       "voiceId": "Stephen",
-      "text": "Agreed. We can evaluate KMS encryption, scoped IAM roles, Secrets Manager for partner credentials, CloudTrail for control evidence, and CloudWatch for operational signals. Those are options pending validation, not a final architecture decision."
+      "text": "That correction changes the technical brief. We need idempotency before ledger submission, duplicate file handling, late acknowledgement behavior, file integrity checks, and a common status model across both paths."
     },
     {
       "id": "segment-16",
-      "speakerLabel": "spk_2",
-      "voiceId": "Matthew",
-      "text": "The core ledger replacement is explicitly out of scope. We can add adapters, validation, status events, and reconciliation workflows, but the first release cannot redesign settlement or replace the ledger database."
+      "speakerLabel": "spk_5",
+      "voiceId": "Salli",
+      "text": "For the batch partner, a rejected row cannot make the entire payroll file disappear from view. Operations needs row level status, a reconciliation total, and a clear owner for correction before the next payroll cutoff."
     },
     {
       "id": "segment-17",
-      "speakerLabel": "spk_0",
-      "voiceId": "Joanna",
-      "text": "For success measures, I have two design partners, onboarding reduced from twelve to four weeks, no duplicate funded payment caused by integration retry, and reconciliation exceptions visible to Payment Operations before the next payroll cutoff."
+      "speakerLabel": "spk_4",
+      "voiceId": "Ruth",
+      "text": "The seven year retention assumption is also wrong. That period applies to specific settlement evidence, not automatically to every payroll field or uploaded partner file. We have not approved a payroll retention schedule."
     },
     {
       "id": "segment-18",
-      "speakerLabel": "spk_3",
-      "voiceId": "Ruth",
-      "text": "Add one more measure: one hundred percent of privileged access to unmasked payroll data must be attributable in the audit evidence. I am not asking for a certification claim; I am asking for evidence that supports our internal control review."
+      "speakerLabel": "spk_5",
+      "voiceId": "Salli",
+      "text": "Operations needs that decision before writing purge and replay procedures. We may retain transaction evidence while removing raw payroll fields earlier, but the exact separation is not settled."
     },
     {
       "id": "segment-19",
-      "speakerLabel": "spk_1",
-      "voiceId": "Stephen",
-      "text": "Let me summarize the corrected assumption. The prebrief language about migrating from on premises must be removed. Blue Mesa already runs this workload family on AWS, and the initiative extends the platform for payroll with a bounded integration and controls scope."
+      "speakerLabel": "spk_4",
+      "voiceId": "Ruth",
+      "text": "Retention remains unresolved. I own the decision with Legal and Records Management. Within five business days, the team must give me a field inventory, purpose, proposed retention period, and the audit evidence that depends on each field."
     },
     {
       "id": "segment-20",
-      "speakerLabel": "spk_2",
-      "voiceId": "Matthew",
-      "text": "Yes. Also avoid saying everything is cloud native. The payment services are on AWS, but some partner integrations are scheduled files and the ledger has legacy constraints. Existing on AWS does not mean every component is modern."
+      "speakerLabel": "spk_0",
+      "voiceId": "Joanna",
+      "text": "The prebrief also assumes Platform Engineering can absorb this work without dedicated staffing. Dev, is that accurate?"
     },
     {
       "id": "segment-21",
-      "speakerLabel": "spk_1",
-      "voiceId": "Stephen",
-      "text": "My action is to produce a current state integration diagram and failure mode worksheet by Wednesday. Dev, I need account boundaries, MSK topic ownership, RDS recovery evidence, current deployment controls, and the interface inventory as dependencies."
+      "speakerLabel": "spk_3",
+      "voiceId": "Matthew",
+      "text": "No. Omar Fields leads Platform Engineering, and his team has no spare delivery capacity this quarter. He will support a discovery workshop, but implementation needs a funded allocation or a delivery partner. Treat capacity as a gate, not as an available resource."
     },
     {
       "id": "segment-22",
       "speakerLabel": "spk_2",
-      "voiceId": "Matthew",
-      "text": "I own providing those materials by Tuesday afternoon. Priya will document the reconciliation exception process and daily cutoffs by Thursday. Her dependency is a sample synthetic partner file and the current status code list."
+      "voiceId": "Danielle",
+      "text": "Funding needs correction as well. Marcus Vale, our Chief Financial Officer, approved discovery funding only. Full implementation funding has not been approved. He needs a bounded cost range, expected onboarding benefit, and named operational ownership before the investment gate."
     },
     {
       "id": "segment-23",
-      "speakerLabel": "spk_0",
-      "voiceId": "Joanna",
-      "text": "I will coordinate the two design partners and confirm their certification windows by Friday. That depends on legal approving the synthetic test data package and on the SA listing the minimum interface evidence we need from each partner."
+      "speakerLabel": "spk_1",
+      "voiceId": "Stephen",
+      "text": "I will record two separate corrections: capacity is not committed, and implementation funding is pending. The open gate is whether the pilot scope and value case justify dedicated engineering capacity."
     },
     {
       "id": "segment-24",
-      "speakerLabel": "spk_3",
-      "voiceId": "Ruth",
-      "text": "I will return the retention decision next Friday. Until then, the design should separate retention configuration and avoid hard coding seven years. The open decision should be visible as a delivery gate, not buried as an assumption."
+      "speakerLabel": "spk_5",
+      "voiceId": "Salli",
+      "text": "The operating ownership is clear enough to confirm. Payment Operations owns reconciliation exceptions after an instruction is accepted. Platform Engineering owns interface availability and replay tooling. The payroll partner owns source corrections before acceptance."
     },
     {
       "id": "segment-25",
-      "speakerLabel": "spk_1",
-      "voiceId": "Stephen",
-      "text": "The next meeting should be a ninety minute architecture and control workshop with Dev, Priya, Rachel, Platform Engineering, and the Solutions Architect. We will validate the current state, choose the first interface pattern, define recovery evidence, and close the retention and ownership gaps."
+      "speakerLabel": "spk_4",
+      "voiceId": "Ruth",
+      "text": "For security, broad support roles must not read raw payroll fields. Tokenized identifiers should be the default in logs and dashboards. Emergency access requires approval and attributable audit evidence. That is a requirement, not an optional recommendation."
     },
     {
       "id": "segment-26",
+      "speakerLabel": "spk_3",
+      "voiceId": "Matthew",
+      "text": "Recovery targets are still open. We have not approved an RTO or RPO for this new interface. We need the dependency map and failure mode review before committing to numbers, including regional impairment, delayed files, duplicate submissions, and reconciliation backlog."
+    },
+    {
+      "id": "segment-27",
+      "speakerLabel": "spk_1",
+      "voiceId": "Stephen",
+      "text": "I will keep RTO and RPO as unresolved questions. The next technical session should produce candidate targets and evidence, not invent a service level in advance."
+    },
+    {
+      "id": "segment-28",
       "speakerLabel": "spk_0",
       "voiceId": "Joanna",
-      "text": "We are aligned. PilarPrep should propose these as meeting updates, show the speaker and timestamp for each, and wait for human review. Only accepted or edited items should update project state and generate the implementation handoff."
+      "text": "Partner timing is unresolved too. Elena Torres, the Payroll Partnerships Lead, is confirming certification windows. Noah Grant in Strategic Procurement is clarifying vendor responsibilities. We do not yet have a reliable production date."
+    },
+    {
+      "id": "segment-29",
+      "speakerLabel": "spk_2",
+      "voiceId": "Danielle",
+      "text": "The decision today is to continue a bounded discovery for two design partners. No production traffic is approved. The next gate requires interface evidence, retention direction, recovery options, capacity, and a costed implementation recommendation."
+    },
+    {
+      "id": "segment-30",
+      "speakerLabel": "spk_3",
+      "voiceId": "Matthew",
+      "text": "I own the current state integration diagram, interface inventory, account boundaries, event ownership, and existing recovery evidence within three business days. Jordan depends on that package for the failure mode workshop."
+    },
+    {
+      "id": "segment-31",
+      "speakerLabel": "spk_5",
+      "voiceId": "Salli",
+      "text": "I own the reconciliation exception flow, payroll cutoffs, status codes, and a synthetic batch example within four business days. I depend on Elena confirming the batch partner's acknowledgement format."
+    },
+    {
+      "id": "segment-32",
+      "speakerLabel": "spk_4",
+      "voiceId": "Ruth",
+      "text": "I own the retention decision path and privileged access evidence checklist within five business days. My dependencies are the field inventory and confirmation of which records support settlement controls."
+    },
+    {
+      "id": "segment-33",
+      "speakerLabel": "spk_0",
+      "voiceId": "Joanna",
+      "text": "To summarize, the prebrief was right about the existing AWS platform, business target, mixed interfaces, and ledger boundary. It was wrong about API only partners, automatic seven year retention, spare platform capacity, and approved implementation funding. Retention, recovery targets, certification timing, and the investment gate remain open."
+    },
+    {
+      "id": "segment-34",
+      "speakerLabel": "spk_1",
+      "voiceId": "Stephen",
+      "text": "PilarPrep should show those three groups separately with speaker and timestamp evidence. It must wait for human review before changing the brief or project memory. Accepted updates should then drive the follow up brief and implementation handoff."
     }
   ]
 }

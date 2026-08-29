@@ -26,13 +26,11 @@ from jobs_pipeline.common import (
     stable_identifier,
 )
 from jobs_pipeline.meeting_contracts import (
-    DEFAULT_AUDIO_KEY,
     SCENARIO_ID,
     TRANSCRIPT_PREFIX,
     MeetingConflictError,
     accepted_changes,
     assert_public_demo_scope,
-    safe_audio_key,
     transcript_evidence,
 )
 
@@ -946,29 +944,24 @@ def start_transcription(
         raise MeetingConflictError(
             "The approved brief changed before meeting processing; reload it."
         )
-    audio_upload_id = str(inputs.get("audioUploadId") or "")
-    if audio_upload_id:
-        resolved_upload = _resolve_audio_upload(
-            scope,
-            inputs,
-            scenario_id,
-            meeting_id,
-            job_id=job_id,
-            input_key=input_key,
-            input_version=input_version,
-            trace_id=trace_id,
-            approved_packet_version=approved_packet_version,
-        )
-        if resolved_upload is None:
-            return {
-                "deferred": True,
-                "waitingForScan": True,
-                "meetingId": meeting_id,
-            }
-        audio_upload_id, audio_key, media_format = resolved_upload
-    else:
-        audio_key = safe_audio_key(inputs.get("audioKey"))
-        media_format = "mp3"
+    resolved_upload = _resolve_audio_upload(
+        scope,
+        inputs,
+        scenario_id,
+        meeting_id,
+        job_id=job_id,
+        input_key=input_key,
+        input_version=input_version,
+        trace_id=trace_id,
+        approved_packet_version=approved_packet_version,
+    )
+    if resolved_upload is None:
+        return {
+            "deferred": True,
+            "waitingForScan": True,
+            "meetingId": meeting_id,
+        }
+    audio_upload_id, audio_key, media_format = resolved_upload
     job_name = f"pillarprep-{job_id}"
     output_key = _transcript_output_key(job_name)
     timestamp = now_iso()
@@ -1025,7 +1018,7 @@ def start_transcription(
         "OutputKey": output_key,
         "Settings": {
             "ShowSpeakerLabels": True,
-            "MaxSpeakerLabels": 4,
+            "MaxSpeakerLabels": 6,
         },
         "Tags": [
             {"Key": "Project", "Value": "PilarPrep"},

@@ -40,7 +40,7 @@ test("server-renders the PilarPrep console", async () => {
   assert.match(html, />Research</);
   assert.match(html, />Insights</);
   assert.match(html, />Discovery</);
-  assert.match(html, />Meeting prep</);
+  assert.match(html, />Meet</);
   assert.match(html, />Follow-up</);
   assert.doesNotMatch(html, />Prepare</);
   assert.doesNotMatch(html, />Refine</);

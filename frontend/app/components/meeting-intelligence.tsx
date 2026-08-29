@@ -28,6 +28,8 @@ type MeetingIntelligenceProps = {
   isBlueMesa: boolean;
   isApproved: boolean;
   isHosted: boolean;
+  isAuthenticated: boolean;
+  authAvailable: boolean;
   result: MeetingProcessResult | null;
   decisions: MeetingDecisionMap;
   status: PipelineJobState | null;
@@ -35,7 +37,10 @@ type MeetingIntelligenceProps = {
   notice: string;
   isProcessing: boolean;
   isApproving: boolean;
+  isDownloadingDemo: boolean;
   audio: MeetingAudioSelection;
+  onSignIn: () => void;
+  onDownloadDemoAudio: () => void;
   onUploadAudio: (file: File, consentAcknowledged: boolean) => void;
   onRemoveAudio: () => void;
   onProcess: () => void;
@@ -83,10 +88,27 @@ function audioStatusLabel(status: MeetingAudioStatus) {
   return "Upload failed";
 }
 
+function reviewCategoryLabel(value: string) {
+  return value
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/^./, (character) => character.toUpperCase());
+}
+
+function reviewStatus(item: { category: string; supportStatus: string }) {
+  const normalized = `${item.category} ${item.supportStatus}`.toLowerCase();
+  if (normalized.includes("correct")) return { label: "Corrected", kind: "corrected" };
+  if (normalized.includes("unresolved") || normalized.includes("open")) {
+    return { label: "Unresolved", kind: "unresolved" };
+  }
+  return { label: "Transcript supported", kind: "supported" };
+}
+
 export function MeetingIntelligence({
   isBlueMesa,
   isApproved,
   isHosted,
+  isAuthenticated,
+  authAvailable,
   result,
   decisions,
   status,
@@ -94,7 +116,10 @@ export function MeetingIntelligence({
   notice,
   isProcessing,
   isApproving,
+  isDownloadingDemo,
   audio,
+  onSignIn,
+  onDownloadDemoAudio,
   onUploadAudio,
   onRemoveAudio,
   onProcess,
@@ -107,9 +132,14 @@ export function MeetingIntelligence({
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
   const [consentError, setConsentError] = useState("");
+  const canUsePrivateAudio = isBlueMesa && isApproved && isHosted && isAuthenticated;
 
   function selectAudio(file: File | undefined) {
     if (!file) return;
+    if (!canUsePrivateAudio) {
+      setConsentError("Sign in to the private workspace before selecting meeting audio.");
+      return;
+    }
     if (!consentAcknowledged) {
       setConsentError("Confirm recording authorization before choosing audio.");
       return;
@@ -135,6 +165,7 @@ export function MeetingIntelligence({
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setIsDraggingAudio(false);
+    if (!canUsePrivateAudio || !consentAcknowledged) return;
     selectAudio(event.dataTransfer.files?.[0]);
   }
 
@@ -146,7 +177,7 @@ export function MeetingIntelligence({
   const acceptedCount = Object.values(decisions).filter(
     (item) => item.decision === "accepted" || item.decision === "edited"
   ).length;
-  const canProcess = isBlueMesa && isApproved && isHosted && audioReady && !isProcessing && !isApproving;
+  const canProcess = canUsePrivateAudio && audioReady && !isProcessing && !isApproving;
   const canApprove = allReviewed && acceptedCount > 0 && !isProcessing && !isApproving;
   let activeWorkflowStep = 1;
   if (audio.status === "scanning" || status === "waiting_for_scan") {
@@ -190,7 +221,7 @@ export function MeetingIntelligence({
           <p>Meeting intelligence</p>
           <h2 id="meeting-intelligence-title">Turn the conversation into governed project context</h2>
           <span>
-            Upload the synthetic Blue Mesa call, compare it with the approved brief, then choose what becomes project truth.
+            Upload the synthetic BlueMesa call, compare it with the approved brief, then choose what becomes project truth.
           </span>
         </div>
         <div className="meeting-demo-badge">
@@ -218,7 +249,7 @@ export function MeetingIntelligence({
 
       {!isBlueMesa ? (
         <div className="meeting-gate-note">
-          Select the <strong>Blue Mesa Payments</strong> scenario to run the bounded meeting demo.
+          Meeting audio is currently available only in the bounded <strong>BlueMesa Payments</strong> demo. Your custom scenario remains unchanged.
         </div>
       ) : !isApproved ? (
         <div className="meeting-gate-note">
@@ -228,13 +259,25 @@ export function MeetingIntelligence({
         <div className="meeting-gate-note">
           The live AWS jobs endpoint is required for transcription and AgentCore analysis.
         </div>
+      ) : !authAvailable ? (
+        <div className="meeting-gate-note">
+          Private meeting upload is not configured in this environment.
+        </div>
+      ) : !isAuthenticated ? (
+        <div className="meeting-gate-note meeting-sign-in-gate">
+          <div>
+            <strong>Sign in before uploading meeting audio</strong>
+            <span>The recording, transcript, and review are isolated to your private workspace.</span>
+          </div>
+          <button type="button" onClick={onSignIn}>Sign in</button>
+        </div>
       ) : null}
 
       <label className="meeting-upload-consent">
         <input
           type="checkbox"
           checked={consentAcknowledged}
-          disabled={audio.status !== "empty"}
+          disabled={!canUsePrivateAudio || audio.status !== "empty"}
           onChange={(event) => {
             setConsentAcknowledged(event.target.checked);
             setConsentError("");
@@ -248,8 +291,11 @@ export function MeetingIntelligence({
 
       <div
         className={`meeting-audio-upload ${isDraggingAudio ? "meeting-audio-upload-dragging" : ""}`}
-        aria-disabled={!consentAcknowledged}
-        onDragEnter={(event) => { event.preventDefault(); setIsDraggingAudio(true); }}
+        aria-disabled={!canUsePrivateAudio || !consentAcknowledged}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          if (canUsePrivateAudio && consentAcknowledged) setIsDraggingAudio(true);
+        }}
         onDragOver={(event) => event.preventDefault()}
         onDragLeave={() => setIsDraggingAudio(false)}
         onDrop={handleDrop}
@@ -265,15 +311,25 @@ export function MeetingIntelligence({
           <div className="meeting-audio-empty">
             <div>
               <strong>Upload the meeting recording</strong>
-              <span>Choose or drop the synthetic MP3, WAV, or M4A file. Nothing is preloaded.</span>
+              <span>Download the BlueMesa demo call or choose your local MP3, WAV, or M4A file. Nothing is preloaded.</span>
             </div>
-            <button
-              type="button"
-              disabled={!isBlueMesa || !isApproved || !isHosted || !consentAcknowledged}
-              onClick={() => inputRef.current?.click()}
-            >
-              Choose audio
-            </button>
+            <div className="meeting-audio-actions">
+              <button
+                className="meeting-audio-download"
+                type="button"
+                disabled={!canUsePrivateAudio || isDownloadingDemo}
+                onClick={onDownloadDemoAudio}
+              >
+                {isDownloadingDemo ? "Preparing MP3..." : "Get demo MP3"}
+              </button>
+              <button
+                type="button"
+                disabled={!canUsePrivateAudio || !consentAcknowledged}
+                onClick={() => inputRef.current?.click()}
+              >
+                Choose audio
+              </button>
+            </div>
           </div>
         ) : (
           <div className="meeting-audio-file">
@@ -286,7 +342,7 @@ export function MeetingIntelligence({
               </span>
             </div>
             <div>
-              <button type="button" disabled={audio.status === "uploading" || isProcessing} onClick={() => inputRef.current?.click()}>Replace</button>
+              <button type="button" disabled={!canUsePrivateAudio || audio.status === "uploading" || isProcessing} onClick={() => inputRef.current?.click()}>Replace</button>
               <button type="button" disabled={audio.status === "uploading" || isProcessing} onClick={onRemoveAudio}>Remove</button>
             </div>
           </div>
@@ -328,6 +384,45 @@ export function MeetingIntelligence({
             </dl>
           </div>
 
+          <div className="meeting-evidence-outcomes" aria-label="Brief comparison outcomes">
+            {[
+              {
+                key: "confirmed",
+                title: "Confirmed by the call",
+                detail: "What the prebrief got right",
+                items: result.analysis.confirmedFacts,
+              },
+              {
+                key: "corrected",
+                title: "Corrected by the call",
+                detail: "What the prebrief needs to change",
+                items: result.analysis.correctedAssumptions,
+              },
+              {
+                key: "unresolved",
+                title: "Still unresolved",
+                detail: "What the next conversation must close",
+                items: result.analysis.openQuestions,
+              },
+            ].map((group) => (
+              <article className={`meeting-evidence-outcome meeting-evidence-outcome-${group.key}`} key={group.key}>
+                <div>
+                  <span>{group.items.length}</span>
+                  <div><strong>{group.title}</strong><small>{group.detail}</small></div>
+                </div>
+                {group.items.length ? (
+                  <ul>
+                    {group.items.slice(0, 3).map((item) => (
+                      <li key={item.id}>{item.meetingCorrection || item.statement}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No transcript-grounded items in this category.</p>
+                )}
+              </article>
+            ))}
+          </div>
+
           <div className="meeting-review-columns">
             <div className="meeting-change-review">
               <div className="meeting-section-heading">
@@ -347,11 +442,15 @@ export function MeetingIntelligence({
                 {result.reviewItems.map((item) => {
                   const decision = decisions[item.id];
                   const isEditing = decision?.decision === "edited";
+                  const status = reviewStatus(item);
                   return (
                     <article className="meeting-review-item" key={item.id}>
                       <div className="meeting-review-item-heading">
-                        <span>{item.category}</span>
-                        <small>{Math.round(item.confidence * 100)}% confidence</small>
+                        <span>{reviewCategoryLabel(item.category)}</span>
+                        <div>
+                          <em className={`meeting-support-status meeting-support-status-${status.kind}`}>{status.label}</em>
+                          <small>{Math.round(item.confidence * 100)}% confidence</small>
+                        </div>
                       </div>
                       <div className="meeting-content-comparison">
                         <div><b>Approved brief</b><p>{item.originalContent || "No matching approved content."}</p></div>

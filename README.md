@@ -18,7 +18,7 @@ PilarPrep creates one governed workflow:
 2. Generate business, technical, executive, stakeholder, game-plan, and objection briefs.
 3. Refine one selected brief without changing unrelated sections.
 4. Approve the packet and prepare a role-aware pre-call handoff.
-5. Upload a synthetic meeting recording, transcribe it, and compare it with the approved packet.
+5. Sign in, download or choose the synthetic BlueMesa recording, upload it, and compare the transcript with the approved packet.
 6. Require human review before meeting-derived changes become project truth.
 7. Produce a follow-on handoff and catch-up view for Sales, SAs, PMs, executives, delivery teams, and new project members.
 
@@ -52,6 +52,7 @@ The application is serverless and event-driven. A private S3 origin serves the R
 - AgentCore and Strands handoff and catch-up workflows
 - Agentic RAG grounded in approved synthetic evidence
 - Human-reviewed meeting intelligence using Amazon Transcribe
+- Signed-in, BlueMesa-only audio upload with malware scanning and no preloaded recording
 - Latest packet retrieval plus versioned approved JSON and DOCX artifacts
 - IAM-scoped guest demo and Cognito user-pool workspace paths
 
@@ -141,12 +142,13 @@ Read [DEPLOYMENT.md](DEPLOYMENT.md) before deploying. Never deploy with AWS acco
 
 - Frontend S3 public access is blocked; CloudFront uses Origin Access Control.
 - Production traffic is HTTPS-only.
-- Browser API requests are IAM-authorized and signed with temporary credentials.
+- Guest demo requests are IAM-authorized with temporary credentials; private workspace requests use Cognito User Pool JWTs.
 - Server-side scope is derived from the caller, not trusted from browser tenant fields.
 - SQS messages contain routing and object pointers rather than full customer packets.
 - Private S3 stores artifacts and meeting audio with scoped access.
 - GuardDuty Malware Protection scans quarantined meeting audio before Transcribe can read it.
 - Transcribe preserves names and speaker context in short-lived private transcripts; Bedrock Guardrails screen transcript content before AI analysis.
+- Meeting audio is available only after sign-in, only for the synthetic BlueMesa workflow, and only after the user explicitly selects a local file.
 - DynamoDB conditional writes protect versions, approvals, and idempotency.
 - Bedrock Guardrails and deterministic validation protect model inputs and outputs.
 - Meeting-derived changes require explicit human review.

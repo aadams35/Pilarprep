@@ -48,8 +48,22 @@ REQUIRED_ITEM_FIELDS = (
 SPEAKER_NAMES = {
     "spk_0": "Maya Chen, Account Executive",
     "spk_1": "Jordan Lee, Solutions Architect",
-    "spk_2": "Dev Malik, VP Infrastructure and Resilience",
-    "spk_3": "Rachel Kim, Chief Risk and Compliance Officer",
+    "spk_2": "Ariana Cole, Chief Digital Officer",
+    "spk_3": "Dev Malik, VP Infrastructure and Resilience",
+    "spk_4": "Rachel Kim, Chief Risk and Compliance Officer",
+    "spk_5": "Priya Shah, Director of Payment Operations",
+}
+
+CANONICAL_STATUS_BY_FIELD = {
+    "confirmedFacts": "confirmed",
+    "correctedAssumptions": "corrected",
+    "openQuestions": "unresolved",
+    "decisions": "new",
+    "requirements": "new",
+    "risks": "new",
+    "scopeChanges": "new",
+    "actions": "new",
+    "stakeholderSignals": "new",
 }
 
 
@@ -76,13 +90,6 @@ def assert_public_demo_scope(
         raise RetrievalScopeError(
             "Meeting evidence is limited to the Blue Mesa public demo"
         )
-
-
-def safe_audio_key(value: object) -> str:
-    key = str(value or DEFAULT_AUDIO_KEY)
-    if key != DEFAULT_AUDIO_KEY:
-        raise RetrievalScopeError("Arbitrary public audio is not permitted")
-    return key
 
 
 def _speaker_segments(transcript: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -427,6 +434,7 @@ def validate_analysis(
                     f"{field}[{index}].{string_field}",
                     maximum=maximum,
                 )
+            item["status"] = CANONICAL_STATUS_BY_FIELD[field]
             start = as_float(item.get("timestampStart"), -1)
             end = as_float(item.get("timestampEnd"), -1)
             if start < 0 or end < start or end > duration + 1:

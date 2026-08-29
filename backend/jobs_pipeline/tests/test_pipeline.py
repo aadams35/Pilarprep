@@ -117,6 +117,15 @@ BLUE_SCOPE = {
     "identityType": "guest",
 }
 
+AUTH_BLUE_SCOPE = {
+    "tenantId": common.identity_tenant_id("personal", "workspace-user-1"),
+    "clientId": "bluemesa-payments",
+    "projectId": "bluemesa-payments",
+    "userId": common.stable_identifier("user", ["workspace-user-1"]),
+    "sessionId": "session-blue-mesa",
+    "identityType": "authenticated",
+}
+
 def iam_event(method="POST", path="/jobs", *, body=None, query=None):
     return {
         "rawPath": path,
@@ -1466,14 +1475,14 @@ class JobsApiTests(unittest.TestCase):
             "sizeBytes": 4096,
             "consentAcknowledged": True,
         }
-        event = iam_event(
-            path="/meeting-audio/uploads", body=payload
+        event = jwt_event(
+            path="/workspace/meeting-audio/uploads", body=payload
         )
         clients = {"dynamodb": FakeDynamo(), "s3": FakeS3()}
         with (
             patch.object(api, "PROJECT_TABLE", "project-state"),
             patch.object(api, "MEETING_EVIDENCE_BUCKET", "private-meeting-audio"),
-            patch.object(api, "derive_scope", return_value=BLUE_SCOPE),
+            patch.object(api, "derive_scope", return_value=AUTH_BLUE_SCOPE),
             patch.object(api, "aws_client", side_effect=lambda name: clients[name]),
             patch.object(api, "s3_encryption_args", return_value={"ServerSideEncryption": "AES256"}),
         ):
@@ -1486,7 +1495,10 @@ class JobsApiTests(unittest.TestCase):
         key = calls["posts"][0]["Key"]
         self.assertTrue(key.startswith("audio/uploads/"))
         self.assertNotIn("audioKey", body)
-        self.assertEqual(calls["items"][0]["Item"]["ownerId"]["S"], BLUE_SCOPE["userId"])
+        self.assertEqual(
+            calls["items"][0]["Item"]["ownerId"]["S"],
+            AUTH_BLUE_SCOPE["userId"],
+        )
         self.assertTrue(
             calls["items"][0]["Item"]["consentAcknowledged"]["BOOL"]
         )
@@ -1506,12 +1518,74 @@ class JobsApiTests(unittest.TestCase):
         with (
             patch.object(api, "PROJECT_TABLE", "project-state"),
             patch.object(api, "MEETING_EVIDENCE_BUCKET", "private-meeting-audio"),
-            patch.object(api, "derive_scope", return_value=BLUE_SCOPE),
+            patch.object(api, "derive_scope", return_value=AUTH_BLUE_SCOPE),
             self.assertRaisesRegex(ValueError, "authorized to process"),
         ):
             api._create_meeting_audio_upload(
-                iam_event(path="/meeting-audio/uploads", body=payload)
+                jwt_event(path="/workspace/meeting-audio/uploads", body=payload)
             )
+
+    def test_guest_meeting_audio_upload_is_denied(self):
+        payload = {
+            "clientId": BLUE_SCOPE["clientId"],
+            "projectId": BLUE_SCOPE["projectId"],
+            "sessionId": BLUE_SCOPE["sessionId"],
+            "scenarioId": meeting_contracts.SCENARIO_ID,
+            "meetingId": meeting_contracts.DEFAULT_MEETING_ID,
+            "fileName": "blue-mesa-call.mp3",
+            "contentType": "audio/mpeg",
+            "sizeBytes": 4096,
+            "consentAcknowledged": True,
+        }
+        event = iam_event(path="/meeting-audio/uploads", body=payload)
+        with (
+            patch.object(api, "PROJECT_TABLE", "project-state"),
+            patch.object(api, "MEETING_EVIDENCE_BUCKET", "private-meeting-audio"),
+            patch.object(api, "metric"),
+        ):
+            result = api.handler(event, None)
+
+        self.assertEqual(result["statusCode"], 403)
+        self.assertEqual(
+            json.loads(result["body"])["error"],
+            "This resource is not available",
+        )
+
+    def test_authenticated_user_can_download_the_blue_mesa_demo_audio(self):
+        calls = []
+
+        class FakeS3:
+            def head_object(self, **kwargs):
+                calls.append(("head", kwargs))
+                return {"ContentLength": 4096}
+
+            def generate_presigned_url(self, operation, **kwargs):
+                calls.append((operation, kwargs))
+                return "https://private-download.example/audio"
+
+        event = jwt_event(
+            method="GET",
+            path="/workspace/meeting-audio/demo",
+            query={
+                "clientId": AUTH_BLUE_SCOPE["clientId"],
+                "projectId": AUTH_BLUE_SCOPE["projectId"],
+                "sessionId": AUTH_BLUE_SCOPE["sessionId"],
+            },
+        )
+        with (
+            patch.object(api, "MEETING_EVIDENCE_BUCKET", "private-meeting-audio"),
+            patch.object(api, "_scope_from_query", return_value=AUTH_BLUE_SCOPE),
+            patch.object(api, "aws_client", return_value=FakeS3()),
+        ):
+            result = api._get_demo_meeting_audio(event)
+
+        body = json.loads(result["body"])
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(
+            body["fileName"], "PilarPrep-BlueMesa-Discovery-Meeting.mp3"
+        )
+        self.assertEqual(body["downloadUrl"], "https://private-download.example/audio")
+        self.assertEqual(calls[0][1]["Key"], meeting_contracts.DEFAULT_AUDIO_KEY)
 
 
     def test_custom_scenario_meeting_audio_is_denied_without_server_error(self):
@@ -1526,11 +1600,11 @@ class JobsApiTests(unittest.TestCase):
             "sizeBytes": 4096,
         }
         custom_scope = {
-            **SCOPE,
+            **AUTH_BLUE_SCOPE,
             "clientId": "custom-demo",
             "projectId": "custom-demo",
         }
-        event = iam_event(path="/meeting-audio/uploads", body=payload)
+        event = jwt_event(path="/workspace/meeting-audio/uploads", body=payload)
         with (
             patch.object(api, "PROJECT_TABLE", "project-state"),
             patch.object(api, "MEETING_EVIDENCE_BUCKET", "private-meeting-audio"),
@@ -2802,7 +2876,7 @@ class MeetingWorkflowTests(unittest.TestCase):
             "input": {
                 "scenarioId": meeting_contracts.SCENARIO_ID,
                 "meetingId": meeting_contracts.DEFAULT_MEETING_ID,
-                "audioKey": meeting_contracts.DEFAULT_AUDIO_KEY,
+                "audioUploadId": "upload-meeting-0001",
                 "expectedApprovedPacketVersion": 4,
                 "enablePiiRedaction": False,
             },
@@ -2815,13 +2889,21 @@ class MeetingWorkflowTests(unittest.TestCase):
         with self.assertRaises(common.AuthorizationError):
             common.validate_job_request(request)
 
-    def test_audio_key_is_fixed_to_the_private_synthetic_asset(self):
-        self.assertEqual(
-            meeting_contracts.safe_audio_key(None),
-            meeting_contracts.DEFAULT_AUDIO_KEY,
-        )
-        with self.assertRaises(meeting_contracts.RetrievalScopeError):
-            meeting_contracts.safe_audio_key("audio/customer-upload.mp3")
+    def test_meeting_request_requires_an_explicit_audio_upload(self):
+        request = {
+            "action": "meeting.process",
+            "clientId": BLUE_SCOPE["clientId"],
+            "projectId": BLUE_SCOPE["projectId"],
+            "sessionId": BLUE_SCOPE["sessionId"],
+            "idempotencyKey": "meeting-process-no-upload",
+            "input": {
+                "scenarioId": meeting_contracts.SCENARIO_ID,
+                "meetingId": meeting_contracts.DEFAULT_MEETING_ID,
+                "expectedApprovedPacketVersion": 4,
+            },
+        }
+        with self.assertRaisesRegex(ValueError, "audioUploadId"):
+            common.validate_job_request(request)
 
     def test_meeting_dynamodb_serializer_converts_nested_floats(self):
         encoded = meeting._typed(
@@ -2866,6 +2948,7 @@ class MeetingWorkflowTests(unittest.TestCase):
             "input": {
                 "scenarioId": "blue-mesa-payments",
                 "meetingId": "blue-mesa-discovery",
+                "audioUploadId": "upload-meeting-0001",
                 "expectedApprovedPacketVersion": 4,
             }
         }
@@ -2875,6 +2958,15 @@ class MeetingWorkflowTests(unittest.TestCase):
             patch.object(meeting, "PROJECT_TABLE", "project-state"),
             patch.object(
                 meeting, "aws_client", side_effect=lambda name: clients[name]
+            ),
+            patch.object(
+                meeting,
+                "_resolve_audio_upload",
+                return_value=(
+                    "upload-meeting-0001",
+                    "audio/uploads/private/meeting.mp3",
+                    "mp3",
+                ),
             ),
             patch.object(meeting, "_status_job"),
         ):
@@ -2899,6 +2991,10 @@ class MeetingWorkflowTests(unittest.TestCase):
             )
         )
         self.assertNotIn("ContentRedaction", captured["request"])
+        self.assertEqual(
+            captured["request"]["Settings"]["MaxSpeakerLabels"],
+            6,
+        )
 
     def test_human_review_promotes_agent_analysis_without_second_model_call(self):
         promotion_idempotency = common.stable_identifier(
@@ -3152,6 +3248,10 @@ class MeetingWorkflowTests(unittest.TestCase):
             "already operates",
             validated["correctedAssumptions"][0]["statement"],
         )
+        self.assertEqual(
+            validated["correctedAssumptions"][0]["status"], "corrected"
+        )
+        self.assertEqual(validated["requirements"][0]["status"], "new")
         self.assertEqual(len(validated["actions"]), 2)
 
         one_action = json.loads(json.dumps(analysis))
@@ -4218,7 +4318,7 @@ class AudioSecurityTests(unittest.TestCase):
             "input": {
                 "scenarioId": meeting_contracts.SCENARIO_ID,
                 "meetingId": meeting_contracts.DEFAULT_MEETING_ID,
-                "audioKey": meeting_contracts.DEFAULT_AUDIO_KEY,
+                "audioUploadId": "upload-meeting-0001",
                 "expectedApprovedPacketVersion": 4,
                 "enablePiiRedaction": False,
             },

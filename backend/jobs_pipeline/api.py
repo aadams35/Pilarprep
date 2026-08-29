@@ -8,7 +8,11 @@ from typing import Any, Mapping
 from uuid import uuid4
 
 from jobs_pipeline import evidence as evidence_store
-from jobs_pipeline.meeting_contracts import SCENARIO_ID, assert_public_demo_scope
+from jobs_pipeline.meeting_contracts import (
+    DEFAULT_AUDIO_KEY,
+    SCENARIO_ID,
+    assert_public_demo_scope,
+)
 from botocore.exceptions import ClientError
 
 from jobs_pipeline.common import (
@@ -713,11 +717,19 @@ def _meeting_upload_key(scope: Mapping[str, str], upload_id: str) -> dict[str, d
     }
 
 
+def _require_authenticated_workspace(scope: Mapping[str, str]) -> None:
+    if scope.get("identityType") != "authenticated":
+        raise AuthorizationError(
+            "Meeting audio requires a verified PilarPrep workspace"
+        )
+
+
 def _create_meeting_audio_upload(event: Mapping[str, Any]) -> dict[str, Any]:
     if not (PROJECT_TABLE and MEETING_EVIDENCE_BUCKET):
         return response(event, 503, {"error": "Meeting audio upload is not configured"})
     payload = read_json_body(event)
     scope = derive_scope(event, payload)
+    _require_authenticated_workspace(scope)
     scenario_id = require_identifier(payload.get("scenarioId"), "scenarioId")
     assert_public_demo_scope(scope, scenario_id)
     if payload.get("consentAcknowledged") is not True:
@@ -821,6 +833,7 @@ def _get_meeting_audio_upload(
         return response(event, 503, {"error": "Meeting audio upload is not configured"})
     safe_upload_id = require_identifier(upload_id, "uploadId")
     scope = _scope_from_query(event)
+    _require_authenticated_workspace(scope)
     item = deserialize_item(
         aws_client("dynamodb").get_item(
             TableName=PROJECT_TABLE,
@@ -858,6 +871,50 @@ def _get_meeting_audio_upload(
     )
 
 
+def _get_demo_meeting_audio(event: Mapping[str, Any]) -> dict[str, Any]:
+    if not MEETING_EVIDENCE_BUCKET:
+        return response(event, 503, {"error": "Meeting audio is not configured"})
+    scope = _scope_from_query(event)
+    _require_authenticated_workspace(scope)
+    assert_public_demo_scope(scope, SCENARIO_ID)
+    s3 = aws_client("s3")
+    try:
+        s3.head_object(Bucket=MEETING_EVIDENCE_BUCKET, Key=DEFAULT_AUDIO_KEY)
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in {
+            "404",
+            "NoSuchKey",
+            "NotFound",
+        }:
+            raise LookupError(
+                "The BlueMesa demo recording is not available"
+            ) from exc
+        raise
+    file_name = "PilarPrep-BlueMesa-Discovery-Meeting.mp3"
+    download_url = s3.generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": MEETING_EVIDENCE_BUCKET,
+            "Key": DEFAULT_AUDIO_KEY,
+            "ResponseContentType": "audio/mpeg",
+            "ResponseContentDisposition": (
+                f'attachment; filename="{file_name}"'
+            ),
+        },
+        ExpiresIn=900,
+    )
+    return response(
+        event,
+        200,
+        {
+            "downloadUrl": download_url,
+            "fileName": file_name,
+            "expiresIn": 900,
+            "scenarioId": SCENARIO_ID,
+        },
+    )
+
+
 def _get_idempotent_job(scope: Mapping[str, str], key: str) -> str:
     item = aws_client("dynamodb").get_item(
         TableName=PROJECT_TABLE,
@@ -873,6 +930,13 @@ def _start_job(event: Mapping[str, Any]) -> dict[str, Any]:
         return response(event, 503, {"error": "The job pipeline is not configured"})
     payload = validate_job_request(read_json_body(event))
     scope = derive_scope(event, payload)
+    if (
+        payload["action"] in {"meeting.process", "meeting.approve"}
+        and scope.get("identityType") != "authenticated"
+    ):
+        raise AuthorizationError(
+            "Meeting intelligence requires a verified PilarPrep workspace"
+        )
     if (
         payload["action"].startswith("evidence.")
         and scope.get("identityType") != "authenticated"
@@ -1358,6 +1422,8 @@ def handler(event: object, _context: Any) -> dict[str, Any]:
             return response(event, 204, {})
         if method == "POST" and path == "/workspace/operations/dlq/replay":
             return _replay_dlq(event)
+        if method == "GET" and path == "/workspace/meeting-audio/demo":
+            return _get_demo_meeting_audio(event)
         if method == "POST" and path.endswith("/meeting-audio/uploads"):
             return _create_meeting_audio_upload(event)
         if method == "GET" and "/meeting-audio/uploads/" in path:

@@ -27,10 +27,22 @@ function normalizedDomain(value: string) {
 }
 
 export function cognitoAuthConfigured(config: CognitoAuthConfig | null) {
+  let redirectIsAllowed = false;
+  if (config?.redirectUri) {
+    try {
+      const redirect = new URL(config.redirectUri);
+      redirectIsAllowed =
+        redirect.protocol === "https:" ||
+        (redirect.protocol === "http:" &&
+          ["localhost", "127.0.0.1", "::1"].includes(redirect.hostname));
+    } catch {
+      redirectIsAllowed = false;
+    }
+  }
   return Boolean(
     config?.clientId &&
       config.domain.startsWith("https://") &&
-      config.redirectUri.startsWith("https://")
+      redirectIsAllowed
   );
 }
 

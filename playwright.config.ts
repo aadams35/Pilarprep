@@ -24,9 +24,14 @@ export default defineConfig({
       ...process.env,
       VITE_PILLARPREP_JOBS_API_URL:
         "https://test.execute-api.us-east-1.amazonaws.com",
+      VITE_PILLARPREP_WORKSPACE_API_URL:
+        "https://test.execute-api.us-east-1.amazonaws.com",
       VITE_PILLARPREP_BACKEND_REGION: "us-east-1",
       VITE_PILLARPREP_COGNITO_IDENTITY_POOL_ID:
         "us-east-1:11111111-1111-4111-8111-111111111111",
+      VITE_PILLARPREP_COGNITO_USER_POOL_CLIENT_ID: "test-workspace-client",
+      VITE_PILLARPREP_COGNITO_LOGIN_DOMAIN:
+        "https://auth.pilarprep.test",
     },
   },
 });

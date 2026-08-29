@@ -197,7 +197,7 @@ sequenceDiagram
 
 Stable values carried through the continuation are scenarioId, meetingId, jobId, sessionId, traceId, inputVersion, and expected approved packet version. Conditional continuation claims suppress duplicate analysis.
 
-The prepared MP3 is a durable synthetic demo asset. User uploads and full Transcribe output expire. Only a scoped IAM-authenticated Blue Mesa workflow can obtain upload authorization; callers cannot select an arbitrary bucket or object key.
+The prepared MP3 is a durable synthetic demo asset that a signed-in user may download for the rehearsal. It is never preloaded into the meeting workspace: the user must explicitly choose and upload a local MP3, WAV, or M4A file. Uploaded copies and full Transcribe output expire. Only the JWT-authenticated BlueMesa workspace can obtain upload authorization; callers cannot select an arbitrary bucket or object key.
 
 ## 8. Meeting-Analysis Schema
 
@@ -258,11 +258,11 @@ Rejected changes stay in immutable audit metadata and never enter meeting notes,
 ## 10. Security Controls
 
 - Synthetic Blue Mesa data only.
-- Fixed scenario, meeting, client, and audio key enforced server-side.
+- Fixed scenario, meeting, and client plus a server-issued scanned upload record enforced server-side.
 - Private S3 with all four public access block settings.
 - CloudFront Origin Access Control and SigV4 origin reads.
 - HTTPS redirect, TLS-only bucket policies, and HTTPS-only production origin validation.
-- IAM-authorized Jobs API using short-lived Cognito credentials.
+- IAM-authorized guest jobs plus a JWT-authorized private workspace for meeting audio and meeting processing.
 - No browser access to Bedrock, Transcribe, DynamoDB, evidence S3, S3 Vectors, or the Knowledge Base.
 - CORS restricted to configured HTTPS PilarPrep origins.
 - API Gateway throttle: four requests per second with burst eight.
@@ -408,7 +408,7 @@ PilarPrep turns an approved customer prebrief and a synthetic meeting into gover
 
 The frontend is a private-S3 static React app behind CloudFront. Public demo visitors receive short-lived Cognito credentials and SigV4-sign an IAM-authorized Jobs API request, so there is no browser API key and no direct browser access to AI or data services.
 
-The Jobs API writes a scoped job and a private input pointer, then SQS invokes one unified worker. For meeting processing, the worker can only use one fixed synthetic Blue Mesa MP3. It starts Amazon Transcribe with speaker labels and stores a continuation record. EventBridge sends completion back to the same queue, where a conditional lease makes duplicate completion events harmless.
+The Jobs API writes a scoped job and a private input pointer, then SQS invokes one unified worker. For meeting processing, the worker accepts only a signed-in BlueMesa upload that has a clean GuardDuty malware-scan record. It starts Amazon Transcribe with speaker labels and stores a continuation record. EventBridge sends completion back to the same queue, where a conditional lease makes duplicate completion events harmless.
 
 The worker then invokes AgentCore. A bounded Strands orchestration has at most three tool calls and two retrieval rounds. It loads the latest approved brief, current state, and a Bedrock Knowledge Base backed by S3 Vectors. Retrieval is filtered and post-filtered to the approved public-demo Blue Mesa corpus. Nova Pro returns a strict schema, and deterministic validation proves the timestamps and evidence are real, payroll is represented, and the confirmed existing-AWS state is not turned back into an on-premises migration story.
 

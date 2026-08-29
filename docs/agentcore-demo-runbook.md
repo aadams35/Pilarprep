@@ -14,7 +14,8 @@ Show that PilarPrep does more than generate a meeting brief. It turns an approve
 - `npm.cmd run verify:demo` and `npm.cmd run lint` pass.
 - The CloudFront build points to the current brief and AgentCore APIs.
 - The UI model selector is set to Nova Pro for the final run.
-- BlueMesa is the only client assigned to the public demo identity.
+- BlueMesa is the only scenario with meeting audio, and the presenter can sign in to the private workspace.
+- `PilarPrep-BlueMesa-Discovery-Meeting.mp3` is available locally for an explicit upload; no audio is preloaded.
 - The BlueMesa brief is generated, reviewed, and approved once before the live presentation.
 - CloudWatch dashboard is open in a separate tab.
 - One fallback rehearsal has been completed with `-DisableAgentCore` or a local mock.
@@ -24,27 +25,27 @@ Show that PilarPrep does more than generate a meeting brief. It turns an approve
 
 ## BlueMesa scenario
 
-BlueMesa Payments is consolidating merchant dispute processing and customer reporting after two acquisitions. Its platform mixes on-premises systems with aging integrations, and leadership wants a phased AWS modernization before holiday transaction volume increases.
+BlueMesa Payments already runs its payment platform on AWS and wants to add governed payroll-partner onboarding through real-time APIs and encrypted batch files. The team must improve partner onboarding without replacing the ledger or weakening settlement accuracy, reconciliation ownership, privileged-access evidence, or payroll-window availability.
 
 Concerns:
 
-- PCI evidence and tenant/identity separation
-- Brittle overnight settlement jobs
-- Unclear failover ownership
-- Recovery objectives that have not been demonstrated
-- Customer-visible disruption during cutover
-- Merchant trust and low-drama change management
-- Faster delivery only when customer impact stays protected
+- Mixed real-time API and encrypted batch-file interfaces
+- Idempotency, reconciliation ownership, and payroll status events
+- Payroll-data classification, retention, and privileged-access evidence
+- Partner certification, recovery objectives, and payroll-window availability
+- Discovery funding without assumed implementation capacity
+- Faster onboarding only when settlement confidence stays protected
 
 Stakeholders:
 
 - Ariana Cole, Chief Digital Officer
 - Dev Malik, VP Infrastructure and Resilience
 - Rachel Kim, Chief Risk and Compliance Officer
+- Priya Shah, Director of Payment Operations
 
 Approved meeting outcome used for the live handoff:
 
-> BlueMesa approved a bounded settlement-recovery pilot. Dev owns dependency mapping and recovery evidence, Rachel owns PCI and identity-control evidence, and Ariana is the executive gate for any customer-traffic cutover. No production migration is approved until rollback, RTO/RPO, and customer-impact measures are demonstrated.
+> The synthetic call confirms that BlueMesa is already on AWS, keeps ledger replacement out of scope, and targets two payroll partners with onboarding reduced from twelve weeks to four. It corrects the assumptions that both partners are API-first, seven-year payroll retention is approved, spare platform capacity exists, and full implementation funding is committed. Retention, RTO/RPO, certification dates, and the investment gate remain unresolved.
 
 ## 15-minute story
 
@@ -60,17 +61,18 @@ Generate the brief with Nova Pro. Open the technical and executive views. Point 
 
 Apply one refinement, regenerate, and approve the final pre-brief. Say: "Approval is the boundary. Loop 2 reads the approved artifact, not an unreviewed browser draft."
 
-### 5:00-9:00 - AgentCore handoff
+### 5:00-9:00 - Meeting evidence and AgentCore handoff
 
-Enter the approved meeting outcome above and generate the handoff. Show:
+Open `Meet`, sign in, choose the synthetic BlueMesa MP3, and process the call. Show:
 
-- A role-aware implementation narrative
-- A two-week plan with named owners
-- Risk, stakeholder, decision, action, milestone, and open-question registers
-- A customer follow-up email
-- The latest DOCX handoff link
+- The malware-scan and transcription lifecycle
+- What the approved brief got right
+- What the call corrected
+- What remains unresolved
+- Speaker and timestamp evidence for each proposed update
+- Accept, edit, and reject controls before the follow-on handoff
 
-Say: "The Strands agent first read the approved brief and DynamoDB state through AgentCore Gateway. The model never received S3 or DynamoDB credentials. One confirmed, schema-validated update advanced the project version, then the latest handoff replaced the prior artifact."
+Say: "The call does not overwrite the brief. Transcribe captures the private conversation, Guardrails screen the transcript, and the Strands workflow compares it with the approved packet. Only the changes a person accepts or edits become governed project context."
 
 ### 9:00-11:00 - Second request and memory
 

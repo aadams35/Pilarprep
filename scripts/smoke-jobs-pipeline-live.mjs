@@ -363,7 +363,7 @@ if (unauthorized.status !== 403) {
 }
 
 if (customScenario) {
-  const customAudio = await signedFetch(
+  const retiredGuestAudio = await signedFetch(
     apiUrl + "/meeting-audio/uploads",
     "POST",
     credentials,
@@ -378,11 +378,23 @@ if (customScenario) {
       sizeBytes: 1024,
     }
   );
-  if (customAudio.status !== 403) {
+  if (retiredGuestAudio.status !== 404) {
     throw new Error(
-      "Custom meeting-audio request returned HTTP " +
-        customAudio.status +
-        ", expected 403."
+      "Retired guest meeting-audio route returned HTTP " +
+        retiredGuestAudio.status +
+        ", expected 404."
+    );
+  }
+
+  const unsignedWorkspaceAudio = await fetch(
+    apiUrl + "/workspace/meeting-audio/uploads",
+    { method: "POST" }
+  );
+  if (unsignedWorkspaceAudio.status !== 401) {
+    throw new Error(
+      "Unsigned workspace meeting-audio route returned HTTP " +
+        unsignedWorkspaceAudio.status +
+        ", expected 401."
     );
   }
 }

@@ -1,6 +1,3 @@
-import { Sha256 } from "@aws-crypto/sha256-js";
-import { HttpRequest } from "@smithy/protocol-http";
-import { SignatureV4 } from "@smithy/signature-v4";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -9,8 +6,16 @@ const region = process.env.AWS_REGION ?? "us-east-1";
 const backendStack = process.env.PILLARPREP_BACKEND_STACK ?? "pillarprep-bedrock";
 const jobsStack = process.env.PILLARPREP_JOBS_STACK ?? "pillarprep-jobs";
 const origin = process.env.PILLARPREP_PUBLIC_ORIGIN ?? "https://pilarprep.app";
+const workspaceIdToken =
+  process.env.PILLARPREP_WORKSPACE_ID_TOKEN?.trim() ?? "";
 const reuseApprovedBrief =
   process.env.PILLARPREP_REUSE_APPROVED_BRIEF === "true";
+
+if (!workspaceIdToken) {
+  throw new Error(
+    "PILLARPREP_WORKSPACE_ID_TOKEN is required. Sign in to PilarPrep and provide a current Cognito ID token through the environment; never commit the token."
+  );
+}
 
 function awsJson(args) {
   const output = execFileSync(
@@ -35,77 +40,21 @@ function stackOutputs(stackName) {
   );
 }
 
-async function cognitoRequest(target, payload) {
-  const response = await fetch(
-    `https://cognito-identity.${region}.amazonaws.com/`,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-amz-json-1.1",
-        "x-amz-target": `AWSCognitoIdentityService.${target}`,
-      },
-      body: JSON.stringify(payload),
-    }
-  );
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(
-      `Cognito ${target} returned HTTP ${response.status}: ${text}`
-    );
-  }
-  return JSON.parse(text);
-}
-
-async function cognitoCredentials(identityPoolId) {
-  const identity = await cognitoRequest("GetId", { IdentityPoolId: identityPoolId });
-  const response = await cognitoRequest("GetCredentialsForIdentity", {
-    IdentityId: identity.IdentityId,
-  });
-  const values = response.Credentials;
-  if (!values?.AccessKeyId || !values.SecretKey) {
-    throw new Error("Cognito did not return usable temporary credentials.");
-  }
-  return {
-    accessKeyId: values.AccessKeyId,
-    secretAccessKey: values.SecretKey,
-    sessionToken: values.SessionToken,
-  };
-}
-
-async function signedFetch(url, method, credentials, payload) {
-  const endpoint = new URL(url);
+async function workspaceFetch(url, method, token, payload) {
   const body = payload === undefined ? undefined : JSON.stringify(payload);
-  const signer = new SignatureV4({
-    credentials,
-    region,
-    service: "execute-api",
-    sha256: Sha256,
-  });
-  const request = new HttpRequest({
-    protocol: endpoint.protocol,
-    hostname: endpoint.hostname,
+  return fetch(url, {
     method,
-    path: endpoint.pathname,
-    query: Object.fromEntries(endpoint.searchParams.entries()),
     headers: {
       accept: "application/json",
+      authorization: `Bearer ${token}`,
       ...(body === undefined ? {} : { "content-type": "application/json" }),
-      host: endpoint.host,
     },
     ...(body === undefined ? {} : { body }),
   });
-  const signed = await signer.sign(request);
-  const headers = { ...signed.headers };
-  delete headers.host;
-  return fetch(url, {
-    method,
-    headers,
-    ...(body === undefined ? {} : { body }),
-  });
 }
 
-async function signedJson(url, method, credentials, payload, label) {
-  const response = await signedFetch(url, method, credentials, payload);
+async function workspaceJson(url, method, token, payload, label) {
+  const response = await workspaceFetch(url, method, token, payload);
   const text = await response.text();
   let body;
   try {
@@ -124,12 +73,12 @@ async function signedJson(url, method, credentials, payload, label) {
 const sleep = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-async function runJob(apiUrl, credentials, envelope, label, terminalStatuses) {
+async function runJob(apiUrl, token, envelope, label, terminalStatuses) {
   const startedAt = Date.now();
-  const accepted = await signedJson(
-    `${apiUrl}/jobs`,
+  const accepted = await workspaceJson(
+    `${apiUrl}/workspace/jobs`,
     "POST",
-    credentials,
+    token,
     envelope,
     label
   );
@@ -152,10 +101,10 @@ async function runJob(apiUrl, credentials, envelope, label, terminalStatuses) {
       projectId: envelope.projectId,
       sessionId: envelope.sessionId,
     });
-    const polled = await signedJson(
-      `${apiUrl}/jobs/${accepted.body.jobId}?${query}`,
+    const polled = await workspaceJson(
+      `${apiUrl}/workspace/jobs/${accepted.body.jobId}?${query}`,
       "GET",
-      credentials,
+      token,
       undefined,
       `${label} poll`
     );
@@ -205,12 +154,10 @@ function assertLiveProvider(result, provider, label) {
 const backend = stackOutputs(backendStack);
 const jobs = stackOutputs(jobsStack);
 const apiUrl = jobs.JobsApiUrl;
-const identityPoolId = backend.DemoIdentityPoolId;
 const artifactBucket = backend.ArtifactBucketName;
 const evidenceBucket = jobs.MeetingEvidenceBucketName;
 if (
   !apiUrl?.startsWith("https://") ||
-  !identityPoolId ||
   !artifactBucket ||
   !evidenceBucket ||
   !jobs.BlueMesaKnowledgeBaseId
@@ -218,13 +165,13 @@ if (
   throw new Error("Required PilarPrep stack outputs are missing.");
 }
 
-const cors = await fetch(`${apiUrl}/jobs`, {
+const cors = await fetch(`${apiUrl}/workspace/jobs`, {
   method: "OPTIONS",
   headers: {
     origin,
     "access-control-request-method": "POST",
     "access-control-request-headers":
-      "authorization,content-type,x-amz-date,x-amz-security-token",
+      "authorization,content-type",
   },
 });
 if (
@@ -234,14 +181,13 @@ if (
   throw new Error("Jobs API CORS does not allow the public HTTPS origin.");
 }
 
-const unsigned = await fetch(`${apiUrl}/clients`);
-if (unsigned.status !== 403) {
+const unsigned = await fetch(`${apiUrl}/workspace/clients`);
+if (unsigned.status !== 401) {
   throw new Error(
-    `Unsigned Jobs API request returned HTTP ${unsigned.status}, expected 403.`
+    `Unsigned workspace request returned HTTP ${unsigned.status}, expected 401.`
   );
 }
 
-const credentials = await cognitoCredentials(identityPoolId);
 const clientId = "bluemesa-payments";
 const projectId = clientId;
 const sessionId = `session-meeting-smoke-${randomUUID()}`;
@@ -305,10 +251,10 @@ let approvalDurationMs = 0;
 if (reuseApprovedBrief) {
   const startedAt = Date.now();
   const query = new URLSearchParams({ projectId, sessionId });
-  const latest = await signedJson(
-    `${apiUrl}/clients/${clientId}/latest?${query}`,
+  const latest = await workspaceJson(
+    `${apiUrl}/workspace/clients/${clientId}/latest?${query}`,
     "GET",
-    credentials,
+    workspaceIdToken,
     undefined,
     "Latest approved Blue Mesa brief"
   );
@@ -320,7 +266,7 @@ if (reuseApprovedBrief) {
 } else {
   const generation = await runJob(
     apiUrl,
-    credentials,
+    workspaceIdToken,
     {
       action: "brief.generate",
       clientId,
@@ -344,7 +290,7 @@ if (reuseApprovedBrief) {
 
   const approval = await runJob(
     apiUrl,
-    credentials,
+    workspaceIdToken,
     {
       action: "brief.approve",
       clientId,
@@ -380,10 +326,10 @@ if (reuseApprovedBrief) {
 const audioBytes = await readFile(
   new URL("../demo-assets/blue-mesa-discovery.mp3", import.meta.url)
 );
-const uploadTarget = await signedJson(
-  `${apiUrl}/meeting-audio/uploads`,
+const uploadTarget = await workspaceJson(
+  `${apiUrl}/workspace/meeting-audio/uploads`,
   "POST",
-  credentials,
+  workspaceIdToken,
   {
     clientId,
     projectId,
@@ -426,7 +372,7 @@ if (!audioUpload.ok) {
 
 const meeting = await runJob(
   apiUrl,
-  credentials,
+  workspaceIdToken,
   {
     action: "meeting.process",
     clientId,
@@ -531,7 +477,7 @@ const dispositions = review.reviewItems.map((item, index, items) => {
 
 const meetingApproval = await runJob(
   apiUrl,
-  credentials,
+  workspaceIdToken,
   {
     action: "meeting.approve",
     clientId,
@@ -566,7 +512,7 @@ if (
 
 const catchup = await runJob(
   apiUrl,
-  credentials,
+  workspaceIdToken,
   {
     action: "catchup.generate",
     clientId,

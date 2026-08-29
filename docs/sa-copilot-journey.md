@@ -12,8 +12,8 @@ PilarPrep presents one client workspace with five stages:
 | Research | Capture approved facts, people, values, documents, and URLs | Customer intake, stakeholder profiles, evidence workspace, Knowledge Base ingestion |
 | Insights | Align on the business scenario, desired outcomes, risks, and priorities | Business case, executive brief, ranked AWS pillars |
 | Discovery | Expose assumptions, unknowns, evidence gaps, and architecture questions | Technical brief, discovery questions, source statuses, refinement |
-| Meeting prep | Approve the packet and align everyone before the call | Decision-maker lens, objection prep, game plan, pre-call handoff |
-| Follow-up | Review meeting evidence, update project truth, and plan the next conversation | Audio workflow, transcription, proposed changes, human review, handoff, catch-up |
+| Meet | Align the team, upload the synthetic call, and review what the evidence changes | Pre-call handoff, private audio upload, transcription, proposed changes, human review |
+| Follow-up | Use approved meeting evidence to plan the next conversation | Governed handoff, catch-up, opportunity gates, and next-call preparation |
 
 The journey header shows the current client, packet version, evidence coverage,
 validation needs, latest output, and next recommended action. Old saved stage IDs are
@@ -23,9 +23,9 @@ mapped to the new five-stage model when browser state is restored.
 
 1. Research and approved evidence ground a new packet.
 2. The user reviews Insights and Discovery, then refines one selected tab at a time.
-3. Approval creates the pre-call handoff and opens Meeting prep.
-4. In Follow-up, meeting audio remains read-only until every proposed update is
-   accepted, edited, or rejected.
+3. Approval creates the pre-call handoff and opens Meet.
+4. A signed-in user explicitly uploads the synthetic BlueMesa call. Meeting-derived
+   updates remain proposed until every item is accepted, edited, or rejected.
 5. Only accepted or edited statements become durable meeting context and project
    memory.
 6. Prepare next call returns to Research with the approved packet and accepted meeting
@@ -105,7 +105,8 @@ workspace because they are operational context.
 ## Compatibility
 
 Blue Mesa, custom scenarios, saved briefs, target-isolated refinement, handoff,
-catch-up, audio, JSON, and DOCX use their existing contracts. New provenance fields are
+catch-up, JSON, and DOCX use their existing contracts. Audio is intentionally limited
+to a signed-in BlueMesa workspace. New provenance fields are
 optional at the migration boundary. Legacy packets remain readable and display
 Evidence not recorded.
 
@@ -139,8 +140,8 @@ Evidence not recorded.
 
 ## Verification
 
-The implementation passed 66 Bedrock Lambda tests, 118 jobs-pipeline tests, 79
-AgentCore tests with one expected skip, 46 frontend and contract tests, 12 Playwright
-tests, lint, production builds, strict SAM validation, and the brief-quality
-evaluation. The live AWS smoke test completed through Bedrock, SQS, AgentCore,
-DynamoDB, S3, and the public HTTPS application.
+The current implementation passed 67 Bedrock Lambda tests, 120 jobs-pipeline tests,
+79 AgentCore tests with one expected skip, 48 frontend and contract tests, and 13
+Playwright workflows. Lint and production builds also pass. The deployed routes deny
+unsigned workspace audio requests and direct S3 access; the signed-in browser workflow
+is covered end to end by Playwright.

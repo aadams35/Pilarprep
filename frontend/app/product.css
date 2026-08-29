@@ -2291,6 +2291,34 @@ textarea:focus-visible {
   color: var(--pp-ink-soft);
 }
 
+.meeting-sign-in-gate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-color: #9fc3d8;
+  background: #eef7fc;
+}
+
+.meeting-sign-in-gate > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.meeting-sign-in-gate span {
+  color: var(--pp-muted);
+}
+
+.meeting-sign-in-gate button {
+  min-width: 92px;
+  min-height: 34px;
+  border: 1px solid #0e5e87;
+  background: var(--pp-blue);
+  color: #fff;
+  padding: 0.45rem 0.75rem;
+  font-weight: 850;
+}
+
 .meeting-error {
   border-color: #f2b8b5;
   background: #fff3f2;
@@ -2403,6 +2431,89 @@ textarea:focus-visible {
   font-weight: 900;
 }
 
+.meeting-evidence-outcomes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border-bottom: 1px solid var(--pp-line);
+  background: #fff;
+}
+
+.meeting-evidence-outcome {
+  min-width: 0;
+  padding: 0.9rem 1rem;
+}
+
+.meeting-evidence-outcome + .meeting-evidence-outcome {
+  border-left: 1px solid var(--pp-line);
+}
+
+.meeting-evidence-outcome > div {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.meeting-evidence-outcome > div > span {
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 50%;
+  background: #eaf1f6;
+  color: var(--pp-ink);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.meeting-evidence-outcome-confirmed > div > span {
+  background: #dff4ec;
+  color: #116657;
+}
+
+.meeting-evidence-outcome-corrected > div > span {
+  background: #fff0dc;
+  color: #8a5512;
+}
+
+.meeting-evidence-outcome-unresolved > div > span {
+  background: #eaf0f6;
+  color: #3f5870;
+}
+
+.meeting-evidence-outcome strong,
+.meeting-evidence-outcome small {
+  display: block;
+}
+
+.meeting-evidence-outcome strong {
+  color: var(--pp-ink);
+  font-size: 0.74rem;
+}
+
+.meeting-evidence-outcome small {
+  margin-top: 0.08rem;
+  color: var(--pp-muted);
+  font-size: 0.6rem;
+}
+
+.meeting-evidence-outcome ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.65rem 0 0;
+  padding-left: 1rem;
+  color: var(--pp-ink-soft);
+  font-size: 0.65rem;
+  line-height: 1.42;
+}
+
+.meeting-evidence-outcome p {
+  margin: 0.65rem 0 0;
+  color: var(--pp-muted);
+  font-size: 0.64rem;
+}
+
 .meeting-review-columns {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.55fr);
@@ -2509,6 +2620,41 @@ textarea:focus-visible {
   color: var(--pp-muted);
   font-size: 0.6rem;
   font-weight: 750;
+}
+
+.meeting-review-item-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.meeting-support-status {
+  border: 1px solid #b8c6d3;
+  border-radius: 999px;
+  background: #f4f7f9;
+  color: #425466;
+  padding: 0.18rem 0.42rem;
+  font-size: 0.56rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.meeting-support-status-supported {
+  border-color: #9fd3c5;
+  background: #edf8f4;
+  color: #116657;
+}
+
+.meeting-support-status-corrected {
+  border-color: #e7c78f;
+  background: #fff8eb;
+  color: #805318;
+}
+
+.meeting-support-status-unresolved {
+  border-color: #b9c8d6;
+  background: #f2f6f9;
+  color: #425b72;
 }
 
 .meeting-content-comparison {
@@ -4042,6 +4188,8 @@ textarea:focus-visible {
 .meeting-audio-empty span, .meeting-audio-file span { color: #5e6c79; font-size: 0.82rem; }
 .meeting-audio-empty button, .meeting-audio-file button { border: 1px solid #60758a; background: #fff; color: #243647; min-height: 38px; padding: 0 14px; font-weight: 750; }
 .meeting-audio-file > div:last-child { display: flex; gap: 8px; }
+.meeting-audio-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+.meeting-audio-empty button.meeting-audio-download { border-color: #9a6a24; color: #74501d; }
 
 .precall-handoff-status { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px 12px; margin-top: 14px; color: #506071; font-size: 0.82rem; }
 .precall-handoff-status strong { color: #294252; }
@@ -4095,5 +4243,8 @@ textarea:focus-visible {
 
 @media (max-width: 800px) {
 .meeting-audio-empty, .meeting-audio-file { align-items: stretch; flex-direction: column; }
+.meeting-audio-actions { flex-wrap: wrap; }
+.meeting-evidence-outcomes { grid-template-columns: 1fr; }
+.meeting-evidence-outcome + .meeting-evidence-outcome { border-left: 0; border-top: 1px solid var(--pp-line); }
 .person-engagement-grid { grid-template-columns: 1fr; }
 }
