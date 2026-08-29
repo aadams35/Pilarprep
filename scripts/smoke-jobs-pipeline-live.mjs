@@ -434,6 +434,42 @@ const presetOverrides = {
       "Merchant trust, rigorous compliance, low-drama change management, and faster delivery when customer impact stays protected.",
     additionalDirection:
       "BlueMesa is an existing AWS customer. The engagement focuses on payroll integration across mixed API and encrypted-file interfaces, including idempotency, reconciliation, data privacy, retention, partner certification, cutover, and recovery evidence. Replacing the existing ledger is outside scope.",
+    meetingNotes:
+      "BlueMesa approved discovery for a bounded payroll-partner integration on its existing AWS payment platform. The call must confirm mixed API and encrypted-file interfaces, idempotency, reconciliation ownership, data classification, retention, privileged access, partner certification, payroll-window availability, recovery evidence, named owners, and the next architecture decision gate.",
+    decisionMakers: [
+      {
+        name: "Ariana Cole",
+        title: "Chief Digital Officer",
+        roleType: "decision-maker",
+        source: "Synthetic customer-approved profile notes",
+        context:
+          "Owns the program commitment and needs a bounded first release tied to merchant trust and faster payroll-partner onboarding.",
+      },
+      {
+        name: "Dev Malik",
+        title: "VP Infrastructure and Resilience",
+        roleType: "decision-maker",
+        source: "Synthetic customer-approved profile notes",
+        context:
+          "Owns technical direction, integration reliability, replay evidence, observability, rollback readiness, and production approval.",
+      },
+      {
+        name: "Rachel Kim",
+        title: "Chief Risk and Compliance Officer",
+        roleType: "decision-maker",
+        source: "Synthetic customer-approved profile notes",
+        context:
+          "Owns payroll-data controls, privileged-access evidence, retention decisions, and risk acceptance.",
+      },
+      {
+        name: "Priya Shah",
+        title: "Director of Payment Operations",
+        roleType: "stakeholder",
+        source: "Synthetic customer-approved profile notes",
+        context:
+          "Influences acceptance through reconciliation, exception handling, payroll cutoffs, and operational ownership.",
+      },
+    ],
   },
   "northstar-health": {
     company: "Northstar Health",
@@ -689,6 +725,24 @@ if (resumeApproved) {
   }
 
   const baseline = snapshot(generation.result);
+  const blueMesaRefinement = clientId === "bluemesa-payments" && !customScenario;
+  const businessFeedback = blueMesaRefinement
+    ? {
+        summary:
+          "Business alignment: Add the confirmed payroll-integration success criteria",
+        instruction:
+          "The bounded validation must prove mixed API and encrypted-file exchange, idempotent replay, reconciliation ownership, payroll-window availability, tested rollback, and privacy-control evidence before partner certification",
+        notes:
+          "Regenerate the complete Business Case from first principles. Confirm BlueMesa already runs on AWS, remove every on-premises or initial AWS migration assumption, and incorporate payroll integration, mixed API and encrypted-file paths, reconciliation ownership, data handling, partner certification, rollback, and recovery evidence across every relevant outcome, scope, risk, decision, alignment, and next-step field.",
+      }
+    : {
+        summary:
+          "Business alignment: Add the newly confirmed peak-readiness success criteria",
+        instruction:
+          "The two-week validation must establish a p95 checkout-latency baseline, a payment-degradation budget below two minutes, a tested rollback gate, and a cost-per-order guardrail before campaign rehearsal",
+        notes:
+          "Regenerate the complete Business Case from first principles. Confirm the customer is already on AWS, remove every on-premises or initial AWS migration assumption, and incorporate the newly confirmed success criteria across every relevant outcome, scope, risk, decision, alignment, and next-step field. Sales must frame protected conversion and launch confidence while the SA validates each technical measure.",
+      };
   businessRefinement = await runJob(
     apiUrl,
     credentials,
@@ -702,7 +756,7 @@ if (resumeApproved) {
         ...briefInput,
         feedback: [
           "Customer context: Customer is already on AWS",
-          "Business alignment: Add the newly confirmed peak-readiness success criteria",
+          businessFeedback.summary,
         ],
         feedbackDetails: [
           {
@@ -711,12 +765,10 @@ if (resumeApproved) {
           },
           {
             category: "Business alignment",
-            instruction:
-              "The two-week validation must establish a p95 checkout-latency baseline, a payment-degradation budget below two minutes, a tested rollback gate, and a cost-per-order guardrail before campaign rehearsal",
+            instruction: businessFeedback.instruction,
           },
         ],
-        feedbackNotes:
-          "Regenerate the complete Business Case from first principles. Confirm the customer is already on AWS, remove every on-premises or initial AWS migration assumption, and incorporate the newly confirmed success criteria across every relevant outcome, scope, risk, decision, alignment, and next-step field. Sales must frame protected conversion and launch confidence while the SA validates each technical measure.",
+        feedbackNotes: businessFeedback.notes,
         baseBriefVersion: 1,
         refinementTarget: "businessCase",
         previousBrief: baseline,
@@ -751,6 +803,12 @@ if (resumeApproved) {
   }
 
   const beforeObjections = snapshot(businessBrief);
+  const objectionInstruction = blueMesaRefinement
+    ? "Rebuild every objection around payroll-integration evidence and decision gates"
+    : "Rebuild every objection around peak-readiness evidence and decision gates";
+  const objectionNotes = blueMesaRefinement
+    ? "Regenerate all four Objection Simulator entries. Cover payroll data risk, integration reliability, partner certification, operational ownership, and the evidence required to proceed. Keep the Concern, Response, Ask structure in every entry."
+    : "Regenerate all four Objection Simulator entries. Cover release risk, proof of resilience, cost guardrails, and accountable ownership. Keep the Concern, Response, Ask structure in every entry.";
   refinement = await runJob(
     apiUrl,
     credentials,
@@ -762,18 +820,14 @@ if (resumeApproved) {
       idempotencyKey: `refine-objections-${randomUUID()}`,
       input: {
         ...briefInput,
-        feedback: [
-          "Objection handling: Rebuild every objection around peak-readiness evidence and decision gates",
-        ],
+        feedback: [`Objection handling: ${objectionInstruction}`],
         feedbackDetails: [
           {
             category: "Objection handling",
-            instruction:
-              "Rebuild every objection around peak-readiness evidence and decision gates",
+            instruction: objectionInstruction,
           },
         ],
-        feedbackNotes:
-          "Regenerate all four Objection Simulator entries. Cover release risk, proof of resilience, cost guardrails, and accountable ownership. Keep the Concern, Response, Ask structure in every entry.",
+        feedbackNotes: objectionNotes,
         baseBriefVersion: 2,
         refinementTarget: "objections",
         previousBrief: beforeObjections,

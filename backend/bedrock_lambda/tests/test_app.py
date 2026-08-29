@@ -1455,12 +1455,117 @@ class LambdaHandlerTest(unittest.TestCase):
         )
         with self.assertRaisesRegex(
             ValueError,
-            r"outOfScope \(29/30 words\)",
+            r"outOfScope \(11/12 words\)",
         ):
             app._validate_complete_refinement_target(
                 {"businessCase": business_case, "citations": []},
                 payload,
             )
+
+    def test_schema_repair_can_be_followed_by_one_refinement_depth_repair(self):
+        payload = self.refinement_payload(
+            "Business alignment",
+            "Regenerate the complete business case",
+            target="businessCase",
+        )
+        complete = {
+            key: (
+                value
+                + " This regenerated field applies the confirmed customer direction "
+                "through specific decisions, evidence, ownership, and next steps."
+            )
+            for key, value in MODEL_BUSINESS_CASE.items()
+        }
+        shallow = json.loads(json.dumps(complete))
+        shallow["outOfScope"] = " ".join(["scope"] * 11)
+        attempts = [
+            {
+                "text": '{"businessCase":{"scenario":"Incomplete"}',
+                "usage": {"inputTokens": 100, "outputTokens": 20},
+                "metrics": {"latencyMs": 800},
+            },
+            {
+                "text": json.dumps(
+                    {
+                        "businessCase": shallow,
+                        "citations": ["Customer context", "Refinement feedback"],
+                    }
+                ),
+                "usage": {"inputTokens": 120, "outputTokens": 600},
+                "metrics": {"latencyMs": 1400},
+            },
+            {
+                "text": json.dumps(
+                    {
+                        "businessCase": complete,
+                        "citations": ["Customer context", "Refinement feedback"],
+                    }
+                ),
+                "usage": {"inputTokens": 130, "outputTokens": 700},
+                "metrics": {"latencyMs": 1600},
+            },
+        ]
+
+        with patch.object(app, "_invoke_bedrock", side_effect=attempts) as invoke:
+            response = app.handler({"body": json.dumps(payload)}, None)
+
+        body = json.loads(response["body"])
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(invoke.call_count, 3)
+        self.assertIn(
+            "Schema repair regeneration", invoke.call_args_list[1].args[0]
+        )
+        self.assertIn(
+            "Refinement depth repair", invoke.call_args_list[2].args[0]
+        )
+        self.assertIn(
+            "outOfScope (11/12 words)", invoke.call_args_list[2].args[0]
+        )
+        self.assertEqual(body["metadata"]["generationAttempts"], 3)
+        self.assertEqual(
+            body["metadata"]["retryReasons"],
+            ["invalid_json", "incomplete_refinement"],
+        )
+        self.assertEqual(body["businessCase"], complete)
+
+    def test_refinement_depth_repair_rejects_a_still_incomplete_target(self):
+        payload = self.refinement_payload(
+            "Business alignment",
+            "Regenerate the complete business case",
+            target="businessCase",
+        )
+        original = json.loads(json.dumps(payload["previousBrief"]))
+        shallow = {
+            key: value + " Materially regenerated customer-specific field."
+            for key, value in MODEL_BUSINESS_CASE.items()
+        }
+        shallow["outOfScope"] = " ".join(["scope"] * 11)
+        model_response = json.dumps(
+            {
+                "businessCase": shallow,
+                "citations": ["Customer context", "Refinement feedback"],
+            }
+        )
+
+        with (
+            patch.object(
+                app,
+                "_invoke_bedrock",
+                side_effect=[model_response, model_response],
+            ) as invoke,
+            patch.object(app, "_store_project_artifacts") as store,
+        ):
+            response = app.handler({"body": json.dumps(payload)}, None)
+
+        body = json.loads(response["body"])
+        self.assertEqual(response["statusCode"], 502)
+        self.assertEqual(invoke.call_count, 2)
+        self.assertIn(
+            "Refinement depth repair", invoke.call_args_list[1].args[0]
+        )
+        self.assertIn("previous version was preserved", body["error"])
+        self.assertEqual(payload["previousBrief"], original)
+        store.assert_not_called()
 
     def test_business_case_coverage_requires_configured_material_field_changes(self):
         payload = self.refinement_payload(

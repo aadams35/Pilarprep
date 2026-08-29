@@ -76,13 +76,19 @@ BUSINESS_CASE_MIN_WORDS = {
     "businessRisks": 30,
     "decisionRequired": 25,
     "inScope": 30,
-    "outOfScope": 30,
+    "outOfScope": 12,
     "assumptionsAndUnknowns": 30,
     "stakeholderAlignment": 30,
     "alignmentStatement": 25,
     "nextStepGuidance": 30,
 }
 BUSINESS_CASE_MIN_TOTAL_WORDS = 500
+
+
+class RefinementCompletenessError(ValueError):
+    """The model returned valid JSON without a complete selected brief target."""
+
+
 REFINEMENT_TARGETS = (
     "businessCase",
     "technical",
@@ -2149,7 +2155,9 @@ def _validate_complete_refinement_target(parsed, payload):
     if not refinement["active"]:
         return
     if not isinstance(parsed, dict):
-        raise ValueError("Refinement response must be a JSON object")
+        raise RefinementCompletenessError(
+            "Refinement response must be a JSON object"
+        )
 
     target = refinement["refinementTarget"]
     unexpected = sorted(
@@ -2163,7 +2171,9 @@ def _validate_complete_refinement_target(parsed, payload):
     value = parsed.get(target)
     if target == "businessCase":
         if not isinstance(value, dict):
-            raise ValueError("Refinement must return the complete businessCase object")
+            raise RefinementCompletenessError(
+                "Refinement must return the complete businessCase object"
+            )
         word_counts = {
             key: len(_clean_string(value.get(key)).split())
             for key, _label in BUSINESS_CASE_FIELDS
@@ -2178,13 +2188,13 @@ def _validate_complete_refinement_target(parsed, payload):
                 f"{key} ({count}/{BUSINESS_CASE_MIN_WORDS[key]} words)"
                 for key, count in insufficient.items()
             )
-            raise ValueError(
+            raise RefinementCompletenessError(
                 "Refinement must regenerate every businessCase field at the required depth: "
                 + details
             )
         total_words = sum(word_counts.values())
         if total_words < BUSINESS_CASE_MIN_TOTAL_WORDS:
-            raise ValueError(
+            raise RefinementCompletenessError(
                 "Refinement must return a substantive complete businessCase: "
                 f"{total_words}/{BUSINESS_CASE_MIN_TOTAL_WORDS} total words"
             )
@@ -2192,7 +2202,7 @@ def _validate_complete_refinement_target(parsed, payload):
 
     passage_issues = _refinement_passage_issues(target, value)
     if passage_issues:
-        raise ValueError(
+        raise RefinementCompletenessError(
             f"Refinement returned incomplete {target} passages: "
             + "; ".join(passage_issues)
         )
@@ -3162,6 +3172,7 @@ def _generate_brief(payload):
 
     generation_attempts = 1
     retry_reason = ""
+    retry_reasons = []
     routed_generation = (
         _model_profile_key(model_id) == "claude-sonnet-4.6"
         and payload.get("mode", "prebrief") == "prebrief"
@@ -3201,6 +3212,7 @@ def _generate_brief(payload):
         print(json.dumps({"event": "guardrail_intervened", "attempt": 1, "summary": guardrail_trace}))
     if stop_reason in {"guardrail_intervened", "max_tokens"}:
         retry_reason = stop_reason
+        retry_reasons.append(retry_reason)
         if stop_reason == "guardrail_intervened":
             retry_suffix = """
 Safety-preserving regeneration:
@@ -3253,8 +3265,13 @@ The prior output exceeded the model output limit. Regenerate the complete packet
     except (AttributeError, json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError) as error:
         parse_error = error
 
-    if parse_error is not None and generation_attempts == 1:
+    if (
+        parse_error is not None
+        and generation_attempts == 1
+        and not isinstance(parse_error, RefinementCompletenessError)
+    ):
         retry_reason = "invalid_json"
+        retry_reasons.append(retry_reason)
         retry_refinement = _refinement_context(payload)
         retry_target = retry_refinement["refinementTarget"]
         retry_target_contract = (
@@ -3326,6 +3343,42 @@ The prior response was not one complete valid JSON object in the required packet
             _metric("BriefErrors", ErrorType="BedrockSchemaRetry")
             parse_error = error
 
+    if isinstance(parse_error, RefinementCompletenessError):
+        retry_reason = "incomplete_refinement"
+        retry_reasons.append(retry_reason)
+        retry_refinement = _refinement_context(payload)
+        target = retry_refinement["refinementTarget"]
+        retry_suffix = f"""
+Refinement depth repair:
+The prior response was valid JSON but did not satisfy the complete {target} contract: {str(parse_error)[:500]}
+Regenerate the entire selected {target} from the authoritative Request JSON. Return exactly one JSON object containing only {target} and citations, with no non-target keys, markdown, commentary, or partial patch. Include every required field or passage, keep every value safely above its minimum depth, apply all supplied feedback throughout the selected tab, and preserve confirmed facts. Do not pad with repetition; add customer-specific reasoning, evidence needs, decisions, risks, scope, and next-step guidance.
+"""
+        generation_attempts += 1
+        _metric("BriefModelRetries", RetryReason=retry_reason)
+        try:
+            (
+                model_text,
+                usage,
+                metrics,
+                stop_reason,
+                performance_config,
+                guardrail_trace,
+            ) = _invoke_refinement_repair(
+                trusted_prompt,
+                retry_suffix,
+                model_id,
+                request_json,
+                usage,
+                metrics,
+                guardrail_trace,
+            )
+            prompt = f"{prompt}\n\n{retry_suffix.strip()}"
+            generated = _parse_model_response(model_text, payload)
+            parse_error = None
+        except Exception as error:
+            _metric("BriefErrors", ErrorType="BedrockDepthRetry")
+            parse_error = error
+
     refinement_coverage = (
         _refinement_coverage_diagnostics(generated, payload)
         if parse_error is None
@@ -3337,6 +3390,7 @@ The prior response was not one complete valid JSON object in the required packet
         and generation_attempts == 1
     ):
         retry_reason = "incomplete_refinement"
+        retry_reasons.append(retry_reason)
         retry_refinement = _refinement_context(payload)
         target = retry_refinement["refinementTarget"]
         minimum = refinement_coverage["refinementMinimumChangedPassages"]
@@ -3425,6 +3479,7 @@ These passages were still verbatim matches and should be independently rewritten
         and generation_attempts == 1
     ):
         retry_reason = "contradictory_refinement"
+        retry_reasons.append(retry_reason)
         retry_context = _refinement_context(payload)
         target = retry_context["refinementTarget"]
         authoritative_states = retry_context.get(
@@ -3490,6 +3545,7 @@ The prior {target} response retained claims superseded by authoritative feedback
         and generation_attempts == 1
     ):
         retry_reason = "additional_direction_missing"
+        retry_reasons.append(retry_reason)
         retry_refinement = _refinement_context(payload)
         target_instruction = (
             f"Return exactly one JSON object containing only {retry_refinement['refinementTarget']} and citations."
@@ -3636,6 +3692,7 @@ Regenerate the required content so the additional direction is reflected in the 
         metadata["generationRoutes"] = route_metadata
     if retry_reason:
         metadata["retryReason"] = retry_reason
+        metadata["retryReasons"] = retry_reasons
     if guardrail_trace:
         metadata["guardrailTrace"] = guardrail_trace
         _metric("GuardrailAssessments")

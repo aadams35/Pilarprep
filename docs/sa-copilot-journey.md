@@ -1,8 +1,7 @@
 # PilarPrep SA Copilot Journey
 
-Status: implemented and locally verified on `feature/agentic-rag-meeting`. This
-document describes the target release; no AWS deployment or GitHub push was performed
-as part of this change.
+Status: implemented, locally verified, and deployed to the PilarPrep AWS demo
+environment from `feature/agentic-rag-meeting` on 2026-08-28.
 
 ## Product journey
 
@@ -79,9 +78,9 @@ filter. Every result is checked again after retrieval.
 
 The model receives approved source records, never a client-selected filter. Generated
 labels must match the server allowlist. Existing contradiction, additional-direction,
-required-section, and target-isolation checks still run. One focused model repair is
-allowed; an invalid result is rejected after that attempt and the previous version is
-preserved.
+required-section, and target-isolation checks still run. A malformed response may use
+one schema repair followed by at most one focused content repair. An invalid result is
+then rejected and the previous version is preserved.
 
 ## Human governance
 
@@ -110,18 +109,18 @@ catch-up, audio, JSON, and DOCX use their existing contracts. New provenance fie
 optional at the migration boundary. Legacy packets remain readable and display
 Evidence not recorded.
 
-## Deployment plan
+## Deployment verification
 
-1. Review the local diff and architecture diagram.
-2. Validate SAM templates and package dependencies.
-3. Deploy the jobs pipeline and brief worker changes first.
-4. Seed or re-index approved Blue Mesa evidence with required metadata.
-5. Run live Blue Mesa and authenticated custom-client retrieval tests.
-6. Deploy the frontend and invalidate CloudFront.
-7. Verify generation, one-tab refinement, approval, handoff, catch-up, audio, human
-   review, next-call regeneration, JSON, and DOCX.
-8. Monitor cross-scope metrics, failed ingestion, queue age, DLQ depth, Bedrock errors,
-   and citation-validation failures before broader access.
+1. The backend, jobs pipeline, AgentCore, and frontend stacks reached
+   `UPDATE_COMPLETE`.
+2. Approved Blue Mesa evidence was re-indexed with required metadata.
+3. The live Nova Pro journey completed generation, Business Case refinement,
+   Objection refinement, approval, AgentCore handoff, read-only catch-up, client
+   listing, and DOCX download.
+4. The live test confirmed IAM signing, unsigned-request denial, cross-client denial,
+   and blocked direct S3 access.
+5. The public site returns HTTPS security headers and redirects HTTP to HTTPS.
+6. CloudWatch and queue health should continue to be reviewed before broader access.
 
 ## Remaining risks
 
@@ -135,11 +134,13 @@ Evidence not recorded.
   embeddings, result count, or reranking.
 - The current recommendation engine is deterministic and context-aware. A future
   release can rank recommendations more deeply after grounded-evaluation data exists.
+- The dead-letter queue retains historical failed test jobs. Inspect and archive or
+  purge those records separately rather than replaying stale refinements.
 
-## Local verification
+## Verification
 
-The implementation has been verified locally with backend unit tests, frontend
-contract tests, brief-quality evaluations, lint, production builds, strict SAM
-template validation, and Playwright coverage for the five-stage journey, evidence
-drawer, meeting intelligence, reduced motion, responsive overflow, and human review.
-No AWS deployment or GitHub push was performed as part of this change.
+The implementation passed 66 Bedrock Lambda tests, 118 jobs-pipeline tests, 79
+AgentCore tests with one expected skip, 46 frontend and contract tests, 12 Playwright
+tests, lint, production builds, strict SAM validation, and the brief-quality
+evaluation. The live AWS smoke test completed through Bedrock, SQS, AgentCore,
+DynamoDB, S3, and the public HTTPS application.
