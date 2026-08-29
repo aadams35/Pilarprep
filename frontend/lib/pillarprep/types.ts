@@ -47,6 +47,50 @@ export type BriefEvidence = {
   itemIndex: number;
   sources: string[];
 };
+
+export type EvidenceStatus =
+  | "supported"
+  | "partially-supported"
+  | "customer-provided"
+  | "assumption"
+  | "conflicting-evidence"
+  | "needs-validation";
+
+export type EvidenceSourceRecord = {
+  sourceId: string;
+  tenantId?: string;
+  clientId?: string;
+  projectId?: string;
+  label: string;
+  sourceType: string;
+  title: string;
+  sourceLocation: string;
+  capturedAt: string;
+  freshness: string;
+  approvedBy: string;
+  evidenceSnippet: string;
+  accessScope: string;
+  lifecycleStatus: string;
+};
+
+export type BriefClaim = {
+  claimId: string;
+  section: BriefEvidenceSection;
+  itemIndex: number;
+  text: string;
+  sourceIds: string[];
+  evidenceStatus: EvidenceStatus;
+  evidenceSnippet: string;
+  validationStatus: string;
+};
+
+export type EvidenceCoverage = {
+  materialClaims: number;
+  claimsWithApprovedSources: number;
+  coveragePercent: number;
+  statusCounts: Partial<Record<EvidenceStatus, number>>;
+  meaning: string;
+};
 export type BusinessCase = {
   scenario: string;
   whyNow: string;
@@ -73,6 +117,9 @@ export type ApprovedBriefSnapshot = {
   objections: string[];
   citations?: string[];
   evidence?: BriefEvidence[];
+  sourceCatalog?: EvidenceSourceRecord[];
+  claims?: BriefClaim[];
+  evidenceCoverage?: EvidenceCoverage;
   projectAnswer?: string;
   projectArtifacts?: ProjectArtifacts;
 };
@@ -331,6 +378,14 @@ export type EvidenceDocumentRecord = {
   ingestionJobId?: string;
   ingestionStatus?: string;
   failureReasons?: string[];
+  sourceId?: string;
+  sourceType?: string;
+  sourceLocation?: string;
+  capturedAt?: string;
+  freshness?: string;
+  approvedBy?: string;
+  accessScope?: string;
+  lifecycleStatus?: string;
 };
 
 export type ProjectArtifactItem = {
@@ -432,6 +487,12 @@ export type BriefResponse = {
     generationAttempts?: number;
     retryReason?: string;
     toolCalls?: string[];
+    rag?: {
+      enabled: boolean;
+      mode: string;
+      resultCount: number;
+      maxResults?: number;
+    };
     approvalStatus?: "draft" | "stale" | "approved";
     precallHandoffJobId?: string;
     precallHandoffStatus?: "idle" | "queued" | "preparing" | "ready" | "failed" | "stale";
@@ -450,4 +511,7 @@ export type BriefResponse = {
   projectArtifacts?: ProjectArtifacts;
   citations: string[];
   evidence?: BriefEvidence[];
+  sourceCatalog?: EvidenceSourceRecord[];
+  claims?: BriefClaim[];
+  evidenceCoverage?: EvidenceCoverage;
 };

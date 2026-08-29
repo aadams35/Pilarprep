@@ -18,6 +18,7 @@ Use this page as the documentation directory rather than scanning every file.
 - `unified-jobs-architecture.md`
 - `agentcore-architecture.md`
 - `agentic-rag-meeting-intelligence.md`
+- `sa-copilot-journey.md`
 - `rag-design.md`
 - `prompt-contract.md`
 - `project-model-tools.md`

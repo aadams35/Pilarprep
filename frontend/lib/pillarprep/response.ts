@@ -1,7 +1,11 @@
 import type {
   BriefEvidence,
+  BriefClaim,
   BriefResponse,
   BusinessCase,
+  EvidenceCoverage,
+  EvidenceSourceRecord,
+  EvidenceStatus,
   FollowUpEmailArtifact,
   NextStepAction,
   ProjectNextSteps,
@@ -177,6 +181,14 @@ function asMetadata(value: unknown) {
     generationAttempts: asNumber(value.generationAttempts),
     retryReason: asString(value.retryReason) || undefined,
     toolCalls: asStringList(value.toolCalls),
+    rag: isRecord(value.rag)
+      ? {
+          enabled: Boolean(value.rag.enabled),
+          mode: asString(value.rag.mode, "disabled"),
+          resultCount: asNumber(value.rag.resultCount) ?? 0,
+          maxResults: asNumber(value.rag.maxResults),
+        }
+      : undefined,
   };
 }
 
@@ -212,6 +224,97 @@ function asEvidence(value: unknown): BriefEvidence[] {
       sources,
     }];
   });
+}
+
+const evidenceStatuses = new Set<EvidenceStatus>([
+  "supported",
+  "partially-supported",
+  "customer-provided",
+  "assumption",
+  "conflicting-evidence",
+  "needs-validation",
+]);
+
+function asSourceCatalog(value: unknown): EvidenceSourceRecord[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const sourceId = asString(item.sourceId);
+    const title = asString(item.title) || asString(item.label);
+    if (!sourceId || !title || seen.has(sourceId)) return [];
+    seen.add(sourceId);
+    return [{
+      sourceId,
+      tenantId: asString(item.tenantId) || undefined,
+      clientId: asString(item.clientId) || undefined,
+      projectId: asString(item.projectId) || undefined,
+      label: asString(item.label, title),
+      sourceType: asString(item.sourceType, "approved-evidence"),
+      title,
+      sourceLocation: asString(item.sourceLocation, "protected-workspace-record"),
+      capturedAt: asString(item.capturedAt),
+      freshness: asString(item.freshness, "not-recorded"),
+      approvedBy: asString(item.approvedBy, "not-recorded"),
+      evidenceSnippet: asString(item.evidenceSnippet),
+      accessScope: asString(item.accessScope, "protected"),
+      lifecycleStatus: asString(item.lifecycleStatus, "active"),
+    }];
+  });
+}
+
+function asClaims(value: unknown, validSourceIds: Set<string>): BriefClaim[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!isRecord(item) || !evidenceSections.has(asString(item.section))) return [];
+    const itemIndex = asNumber(item.itemIndex);
+    const evidenceStatus = asString(item.evidenceStatus) as EvidenceStatus;
+    if (
+      !asString(item.claimId) ||
+      itemIndex === undefined ||
+      itemIndex < 0 ||
+      !asString(item.text) ||
+      !evidenceStatuses.has(evidenceStatus)
+    ) return [];
+    return [{
+      claimId: asString(item.claimId),
+      section: asString(item.section) as BriefEvidence["section"],
+      itemIndex,
+      text: asString(item.text),
+      sourceIds: asStringList(item.sourceIds).filter((sourceId) => validSourceIds.has(sourceId)),
+      evidenceStatus,
+      evidenceSnippet: asString(item.evidenceSnippet),
+      validationStatus: asString(item.validationStatus, "not-recorded"),
+    }];
+  });
+}
+
+function asEvidenceCoverage(value: unknown): EvidenceCoverage | undefined {
+  if (!isRecord(value)) return undefined;
+  const materialClaims = asNumber(value.materialClaims);
+  const claimsWithApprovedSources = asNumber(value.claimsWithApprovedSources);
+  const coveragePercent = asNumber(value.coveragePercent);
+  if (
+    materialClaims === undefined ||
+    claimsWithApprovedSources === undefined ||
+    coveragePercent === undefined
+  ) return undefined;
+  const rawCounts = isRecord(value.statusCounts) ? value.statusCounts : {};
+  const statusCounts: EvidenceCoverage["statusCounts"] = {};
+  for (const status of evidenceStatuses) {
+    const count = asNumber(rawCounts[status]);
+    if (count !== undefined) statusCounts[status] = count;
+  }
+  return {
+    materialClaims,
+    claimsWithApprovedSources,
+    coveragePercent: Math.max(0, Math.min(100, coveragePercent)),
+    statusCounts,
+    meaning: asString(
+      value.meaning,
+      "Percentage of material claims linked to approved sources; not a probability of truth."
+    ),
+  };
 }
 function asArtifactItem(value: unknown): ProjectArtifactItem | null {
   if (!isRecord(value)) {
@@ -301,6 +404,8 @@ export function normalizeBriefResponse(
   fallbackProvider: BriefResponse["provider"]
 ): BriefResponse {
   const source = isRecord(value) ? value : {};
+  const sourceCatalog = asSourceCatalog(source.sourceCatalog);
+  const sourceIds = new Set(sourceCatalog.map((item) => item.sourceId));
 
   return {
     provider: asProvider(source.provider, fallbackProvider),
@@ -328,6 +433,9 @@ export function normalizeBriefResponse(
     ),
     projectArtifacts: asProjectArtifacts(source.projectArtifacts),
     evidence: asEvidence(source.evidence),
+    sourceCatalog,
+    claims: asClaims(source.claims, sourceIds),
+    evidenceCoverage: asEvidenceCoverage(source.evidenceCoverage),
     citations: asStringList(source.citations, [
       fallbackProvider === "bedrock"
         ? "Amazon Bedrock response"

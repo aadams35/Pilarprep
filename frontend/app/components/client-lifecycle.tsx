@@ -1,12 +1,11 @@
 "use client";
 
 export type LifecycleStageId =
-  | "prepare"
-  | "refine"
-  | "sa-ready"
-  | "meet"
-  | "update"
-  | "advance";
+  | "research"
+  | "insights"
+  | "discovery"
+  | "meeting-prep"
+  | "follow-up";
 
 export type LifecycleStageStatus =
   | "complete"

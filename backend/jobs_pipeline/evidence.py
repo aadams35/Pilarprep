@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import base64
 import hashlib
+import ipaddress
 import json
 import os
+import socket
 from typing import Any, Mapping
+from urllib.error import HTTPError
+from urllib.parse import urljoin, urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from botocore.exceptions import ClientError
 
@@ -40,12 +46,165 @@ ALLOWED_DOCUMENT_TYPES = {
     "stakeholder-profile",
     "technical-inventory",
 }
-ALLOWED_EXTENSIONS = {".csv", ".json", ".md", ".txt"}
-MAX_DOCUMENT_BYTES = 120_000
+ALLOWED_EXTENSIONS = {".csv", ".docx", ".html", ".json", ".md", ".pdf", ".txt"}
+MAX_DOCUMENT_BYTES = 5_000_000
+ALLOWED_CONTENT_TYPES = {
+    "application/json",
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/csv",
+    "text/html",
+    "text/markdown",
+    "text/plain",
+}
 
 
 class EvidenceConflictError(ValueError):
     """The requested document mutation conflicts with durable evidence state."""
+
+
+class EvidenceScopeError(PermissionError):
+    """Retrieved evidence did not match the server-authorized client scope."""
+
+
+def _is_guest(scope: Mapping[str, str]) -> bool:
+    tenant_id = str(scope.get("tenantId") or "")
+    return tenant_id == "demo" or tenant_id.startswith("guest-")
+
+
+def _retrieval_filters(
+    scope: Mapping[str, str],
+) -> tuple[list[dict[str, Any]] | None, str]:
+    if _is_guest(scope):
+        if scope.get("clientId") != "bluemesa-payments":
+            return None, "guest-no-private-rag"
+        return [
+            {"equals": {"key": "scenarioId", "value": "blue-mesa-payments"}},
+            {"equals": {"key": "approved", "value": True}},
+            {"equals": {"key": "visibility", "value": "public-demo"}},
+        ], "public-demo"
+    return [
+        {"equals": {"key": "tenantId", "value": scope["tenantId"]}},
+        {"equals": {"key": "clientId", "value": scope["clientId"]}},
+        {"equals": {"key": "projectId", "value": scope["projectId"]}},
+        {"equals": {"key": "approved", "value": True}},
+        {"equals": {"key": "status", "value": "approved"}},
+        {"equals": {"key": "visibility", "value": "tenant-private"}},
+    ], "tenant-private"
+
+
+def _assert_retrieval_scope(
+    scope: Mapping[str, str], metadata: Mapping[str, Any]
+) -> None:
+    expected = (
+        {
+            "scenarioId": "blue-mesa-payments",
+            "approved": True,
+            "visibility": "public-demo",
+        }
+        if _is_guest(scope)
+        else {
+            "tenantId": scope["tenantId"],
+            "clientId": scope["clientId"],
+            "projectId": scope["projectId"],
+            "approved": True,
+            "status": "approved",
+            "visibility": "tenant-private",
+        }
+    )
+    if any(metadata.get(key) != value for key, value in expected.items()):
+        metric("RagCrossScopeAttempts", Action="brief.generate")
+        raise EvidenceScopeError(
+            "Retrieved evidence escaped the authorized client scope"
+        )
+
+
+def retrieve_for_brief(
+    scope: Mapping[str, str],
+    query: str,
+    *,
+    retrieval_client: Any | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    filters, mode = _retrieval_filters(scope)
+    if not KNOWLEDGE_BASE_ID or filters is None:
+        return [], {
+            "enabled": False,
+            "mode": mode,
+            "resultCount": 0,
+        }
+    client = retrieval_client or aws_client("bedrock-agent-runtime")
+    response = client.retrieve(
+        knowledgeBaseId=KNOWLEDGE_BASE_ID,
+        retrievalQuery={
+            "text": (str(query or "customer research and discovery")[:1000])
+        },
+        retrievalConfiguration={
+            "vectorSearchConfiguration": {
+                "numberOfResults": 6,
+                "filter": {"andAll": filters},
+            }
+        },
+    )
+    sources = []
+    for result in response.get("retrievalResults", []):
+        if not isinstance(result, Mapping):
+            continue
+        metadata = result.get("metadata")
+        if not isinstance(metadata, Mapping):
+            raise EvidenceScopeError(
+                "Retrieved evidence omitted authorization metadata"
+            )
+        _assert_retrieval_scope(scope, metadata)
+        content = result.get("content")
+        excerpt = (
+            str(content.get("text") or "").strip()
+            if isinstance(content, Mapping)
+            else ""
+        )
+        if not excerpt:
+            continue
+        title = str(
+            metadata.get("sourceTitle") or "Approved customer evidence"
+        )[:240]
+        source_seed = str(metadata.get("documentId") or title)
+        digest = hashlib.sha256(source_seed.encode("utf-8")).hexdigest()[:12]
+        sources.append(
+            {
+                "sourceId": f"src-rag-{digest}",
+                "label": title,
+                "sourceTitle": title,
+                "sourceType": str(
+                    metadata.get("documentType")
+                    or "approved-customer-evidence"
+                )[:80],
+                "sourceLocation": "private-knowledge-base",
+                "capturedAt": str(
+                    metadata.get("approvedAt")
+                    or metadata.get("uploadedAt")
+                    or ""
+                )[:80],
+                "freshness": "approved-evidence",
+                "approvedBy": str(
+                    metadata.get("source") or "workspace-reviewer"
+                )[:80],
+                "evidenceSnippet": excerpt[:1200],
+                "accessScope": mode,
+                "lifecycleStatus": "active",
+                "relevanceScore": round(float(result.get("score") or 0), 4),
+            }
+        )
+    metric(
+        "BriefRagRetrievals",
+        value=max(1, len(sources)),
+        Action="brief.generate",
+        Mode=mode,
+    )
+    return sources, {
+        "enabled": True,
+        "mode": mode,
+        "resultCount": len(sources),
+        "maxResults": 6,
+    }
 
 
 def evidence_record_key(
@@ -65,9 +224,128 @@ def _safe_filename(value: object) -> str:
         "",
     )
     if not extension:
-        raise ValueError("Evidence files must be TXT, Markdown, JSON, or CSV")
+        raise ValueError(
+            "Evidence files must be PDF, DOCX, TXT, Markdown, JSON, CSV, or HTML"
+        )
     stem = slugify(filename[: -len(extension)], "evidence")
     return f"{stem}{extension}"
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _validate_public_https_url(value: object) -> str:
+    url = require_string(value, "input.sourceUrl", maximum=2048)
+    parsed = urlsplit(url)
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        raise ValueError("Approved source URLs must use HTTPS")
+    if parsed.username or parsed.password:
+        raise ValueError("Approved source URLs cannot include credentials")
+    try:
+        addresses = {
+            result[4][0]
+            for result in socket.getaddrinfo(
+                parsed.hostname,
+                parsed.port or 443,
+                type=socket.SOCK_STREAM,
+            )
+        }
+    except OSError as exc:
+        raise ValueError("The approved source URL could not be resolved") from exc
+    if not addresses:
+        raise ValueError("The approved source URL could not be resolved")
+    for address in addresses:
+        try:
+            candidate = ipaddress.ip_address(address)
+        except ValueError as exc:
+            raise ValueError("The approved source resolved to an invalid address") from exc
+        if not candidate.is_global:
+            raise ValueError("Approved source URLs must resolve to a public address")
+    return url
+
+
+def _read_approved_url(value: object) -> tuple[bytes, str, str]:
+    current = _validate_public_https_url(value)
+    opener = build_opener(_NoRedirectHandler())
+    for redirect_count in range(4):
+        request = Request(
+            current,
+            headers={
+                "Accept": ", ".join(sorted(ALLOWED_CONTENT_TYPES)),
+                "User-Agent": "PilarPrep-approved-source/1.0",
+            },
+        )
+        try:
+            response = opener.open(request, timeout=8)
+        except HTTPError as exc:
+            if exc.code not in {301, 302, 303, 307, 308}:
+                raise ValueError("The approved source URL could not be retrieved") from exc
+            location = exc.headers.get("Location")
+            if not location or redirect_count >= 3:
+                raise ValueError("The approved source URL exceeded the redirect limit") from exc
+            current = _validate_public_https_url(urljoin(current, location))
+            continue
+        content_type = str(response.headers.get_content_type() or "").lower()
+        if content_type not in ALLOWED_CONTENT_TYPES:
+            raise ValueError("The approved source URL returned an unsupported content type")
+        content_length = response.headers.get("Content-Length")
+        if content_length:
+            try:
+                declared_length = int(content_length)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "The approved source returned an invalid content length"
+                ) from exc
+            if declared_length < 0 or declared_length > MAX_DOCUMENT_BYTES:
+                raise ValueError("The approved source exceeds the 5 MB limit")
+        body = response.read(MAX_DOCUMENT_BYTES + 1)
+        if len(body) > MAX_DOCUMENT_BYTES:
+            raise ValueError("The approved source exceeds the 5 MB limit")
+        if len(body) < 20:
+            raise ValueError("The approved source did not contain enough content")
+        return body, content_type, current
+    raise ValueError("The approved source URL exceeded the redirect limit")
+
+
+def _document_body(
+    inputs: Mapping[str, Any], filename: str
+) -> tuple[bytes, str, str]:
+    source_url = str(inputs.get("sourceUrl") or "").strip()
+    if source_url:
+        body, content_type, final_url = _read_approved_url(source_url)
+        return body, content_type, final_url
+
+    content_base64 = str(inputs.get("contentBase64") or "").strip()
+    if content_base64:
+        try:
+            body = base64.b64decode(content_base64, validate=True)
+        except (ValueError, TypeError) as exc:
+            raise ValueError("The evidence upload is not valid base64") from exc
+        if len(body) > MAX_DOCUMENT_BYTES:
+            raise ValueError("Evidence content exceeds 5 MB")
+        if len(body) < 20:
+            raise ValueError("Evidence content is too short")
+        if filename.endswith(".pdf") and not body.startswith(b"%PDF-"):
+            raise ValueError("The uploaded PDF signature is invalid")
+        if filename.endswith(".docx") and not body.startswith(b"PK\x03\x04"):
+            raise ValueError("The uploaded DOCX signature is invalid")
+        content_type = str(inputs.get("contentType") or "").split(";", 1)[0].lower()
+        if content_type not in ALLOWED_CONTENT_TYPES:
+            raise ValueError("The evidence upload has an unsupported content type")
+        return body, content_type, "protected-workspace-object"
+
+    content = require_string(
+        inputs.get("content"),
+        "input.content",
+        minimum=20,
+        maximum=MAX_DOCUMENT_BYTES,
+    )
+    body = content.encode("utf-8")
+    if len(body) > MAX_DOCUMENT_BYTES:
+        raise ValueError("Evidence content exceeds 5 MB")
+    return body, "text/plain; charset=utf-8", "protected-workspace-object"
 
 
 def _document_keys(
@@ -113,6 +391,14 @@ def _public_record(item: Mapping[str, Any]) -> dict[str, Any]:
             "ingestionJobId",
             "ingestionStatus",
             "failureReasons",
+            "sourceId",
+            "sourceType",
+            "sourceLocation",
+            "capturedAt",
+            "freshness",
+            "approvedBy",
+            "accessScope",
+            "lifecycleStatus",
         )
         if item.get(key) not in (None, "", [])
     }
@@ -228,6 +514,8 @@ def ingest_document(
 ) -> dict[str, Any]:
     if not EVIDENCE_BUCKET or not PROJECT_TABLE:
         raise RuntimeError("Tenant evidence storage is not configured")
+    if _is_guest(scope):
+        raise EvidenceScopeError("Sign in before adding private customer evidence")
     document_id = require_identifier(inputs.get("documentId"), "input.documentId")
     existing = _record(scope, document_id)
     if existing and existing.get("sourceJobId") == source_job_id:
@@ -246,15 +534,7 @@ def ingest_document(
     )
     if document_type not in ALLOWED_DOCUMENT_TYPES:
         raise ValueError("input.documentType is not supported")
-    content = require_string(
-        inputs.get("content"),
-        "input.content",
-        minimum=20,
-        maximum=MAX_DOCUMENT_BYTES,
-    )
-    content_body = content.encode("utf-8")
-    if len(content_body) > MAX_DOCUMENT_BYTES:
-        raise ValueError("Evidence content exceeds 120 KB")
+    content_body, content_type, source_location = _document_body(inputs, filename)
 
     timestamp = now_iso()
     version = int(existing.get("version") or 0) + 1
@@ -262,6 +542,9 @@ def ingest_document(
         scope, document_id, filename
     )
     checksum = hashlib.sha256(content_body).hexdigest()
+    source_id = f"src-doc-{checksum[:12]}"
+    source_type = str(inputs.get("sourceType") or document_type)[:80]
+    approved_by = str(inputs.get("approvedBy") or scope["userId"])[:120]
     metadata = {
         "tenantId": scope["tenantId"],
         "clientId": scope["clientId"],
@@ -276,6 +559,14 @@ def ingest_document(
         "version": version,
         "uploadedAt": timestamp,
         "contentTrust": "untrusted-evidence",
+        "sourceId": source_id,
+        "sourceType": source_type,
+        "sourceLocation": source_location if source_location.startswith("https://") else document_key,
+        "capturedAt": timestamp,
+        "freshness": "current",
+        "approvedBy": approved_by,
+        "accessScope": "tenant-private",
+        "lifecycleStatus": "active",
     }
     sidecar = json.dumps(
         {"metadataAttributes": metadata},
@@ -286,7 +577,7 @@ def ingest_document(
         Bucket=EVIDENCE_BUCKET,
         Key=document_key,
         Body=content_body,
-        ContentType="text/plain; charset=utf-8",
+        ContentType=content_type,
         Metadata={
             "document-id": document_id,
             "checksum-sha256": checksum,
@@ -323,6 +614,14 @@ def ingest_document(
         "createdAt": timestamp,
         "updatedAt": timestamp,
         "approvedAt": timestamp,
+        "sourceId": source_id,
+        "sourceType": source_type,
+        "sourceLocation": source_location if source_location.startswith("https://") else document_key,
+        "capturedAt": timestamp,
+        "freshness": "current",
+        "approvedBy": approved_by,
+        "accessScope": "tenant-private",
+        "lifecycleStatus": "active",
     }
     try:
         _put_record(scope, record, allow_deleted=bool(existing))

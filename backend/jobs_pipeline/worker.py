@@ -756,6 +756,28 @@ def _run_brief(
     if validation_error:
         raise NonRetryableJobError(validation_error)
 
+    retrieval_terms = [
+        payload.get("company"),
+        payload.get("industry"),
+        payload.get("meetingType"),
+        payload.get("context"),
+        payload.get("companyValues"),
+        payload.get("additionalDirection"),
+        payload.get("meetingNotes"),
+        payload.get("feedbackNotes"),
+        " ".join(str(item) for item in payload.get("pillars", [])[:6]),
+    ]
+    retrieval_query = "\n".join(
+        str(value).strip()
+        for value in retrieval_terms
+        if isinstance(value, str) and value.strip()
+    )[:1000]
+    approved_sources, retrieval_metadata = _evidence_module().retrieve_for_brief(
+        scope,
+        retrieval_query,
+    )
+    payload["approvedEvidenceSources"] = approved_sources
+
     brief_app._resolve_model_id(payload)
     try:
         generated = brief_app._generate_brief(payload)
@@ -785,6 +807,7 @@ def _run_brief(
                 "input": input_safety,
                 "output": output_safety,
             },
+            "rag": retrieval_metadata,
         }
     )
     _set_job_phase(scope, job_id, "saving")

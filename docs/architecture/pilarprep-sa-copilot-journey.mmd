@@ -1,0 +1,53 @@
+flowchart LR
+  U["Sales, SA, PM, executive"] --> CF["CloudFront"]
+  CF --> FE["Private S3 React app"]
+  FE --> ID["Cognito and IAM"]
+  ID --> API["API Gateway"]
+  API --> JOBS["Jobs API Lambda"]
+
+  JOBS --> STATE[("One DynamoDB table<br/>jobs, clients, versions, approvals, memory")]
+  JOBS --> INPUT[("Private S3<br/>inputs and artifacts")]
+  JOBS --> Q["SQS job queue"]
+  Q -.->|"after retries"| DLQ["SQS dead-letter queue"]
+  Q --> WORKER["Unified AI worker Lambda"]
+
+  WORKER --> ROUTE{"Route by action"}
+  ROUTE -->|"brief.generate / brief.refine"| RETRIEVE["Bedrock Knowledge Base<br/>metadata-scoped retrieval"]
+  RETRIEVE --> GUARD["Bedrock Guardrails"]
+  GUARD --> MODEL["Amazon Bedrock model"]
+  MODEL --> VALIDATE["Citation, contradiction,<br/>coverage, and isolation validation"]
+
+  ROUTE -->|"handoff / catch-up"| AGENT["AgentCore and Strands"]
+  AGENT --> VALIDATE
+
+  ROUTE -->|"evidence.ingest"| EVIDENCE[("Private S3 customer evidence")]
+  EVIDENCE --> INDEX["Knowledge Base ingestion"]
+  INDEX --> RETRIEVE
+
+  AUDIO[("Private meeting audio")] --> MALWARE["GuardDuty malware scan"]
+  MALWARE --> EVENT1["EventBridge: clean upload"]
+  EVENT1 --> Q
+  ROUTE -->|"meeting.process"| TRANSCRIBE["Amazon Transcribe"]
+  TRANSCRIBE --> EVENT2["EventBridge: transcript complete"]
+  EVENT2 --> Q
+  ROUTE -->|"meeting continuation"| REVIEW["Proposed meeting updates"]
+  REVIEW --> HUMAN["Human accept / edit / reject"]
+  HUMAN --> VALIDATE
+
+  VALIDATE --> STATE
+  VALIDATE --> INPUT
+  STATE -->|"scoped status and result"| API
+  API --> FE
+  HUMAN -.->|"approved context grounds next cycle"| RETRIEVE
+
+  classDef edge fill:#edf6ff,stroke:#1976d2,color:#0c3158;
+  classDef compute fill:#fff5e8,stroke:#e87917,color:#6b3500;
+  classDef ai fill:#edf9f2,stroke:#138a58,color:#084c34;
+  classDef data fill:#f3efff,stroke:#7c4dff,color:#3f2680;
+  classDef govern fill:#fff2f4,stroke:#c93d5d,color:#6f1730;
+
+  class CF,ID,API edge;
+  class JOBS,Q,DLQ,WORKER,EVENT1,EVENT2 compute;
+  class RETRIEVE,GUARD,MODEL,AGENT,INDEX,TRANSCRIBE ai;
+  class FE,STATE,INPUT,EVIDENCE,AUDIO data;
+  class VALIDATE,MALWARE,REVIEW,HUMAN govern;

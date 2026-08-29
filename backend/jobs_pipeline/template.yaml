@@ -1141,6 +1141,10 @@ Resources:
                   - bedrock:GetIngestionJob
                   - bedrock:ListIngestionJobs
                 Resource: !GetAtt BlueMesaKnowledgeBase.KnowledgeBaseArn
+              - Sid: RetrieveOnlyPilarPrepKnowledgeBase
+                Effect: Allow
+                Action: bedrock:Retrieve
+                Resource: !GetAtt BlueMesaKnowledgeBase.KnowledgeBaseArn
               - Sid: ReadMeetingEvidenceBucketLocation
                 Effect: Allow
                 Action: s3:GetBucketLocation

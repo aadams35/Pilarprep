@@ -262,7 +262,7 @@ test("meeting intelligence stays readable through transcription and human review
   });
 
   await page.goto("/");
-  await page.getByRole("navigation", { name: "Customer lifecycle" }).getByRole("button", { name: /Meet/ }).click();
+  await page.getByRole("navigation", { name: "Customer lifecycle" }).getByRole("button", { name: /Follow-up/ }).click();
   const workspace = page.locator(".meeting-intelligence");
   await expect(workspace).toBeVisible();
   await expect(workspace.getByText("Synthetic demo", { exact: true })).toBeVisible();

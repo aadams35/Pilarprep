@@ -625,14 +625,43 @@ def validate_job_request(payload: object) -> dict[str, Any]:
             request["documentType"] = require_string(
                 request.get("documentType"), "input.documentType", maximum=64
             )
-            request["content"] = require_string(
-                request.get("content"),
-                "input.content",
-                minimum=20,
-                maximum=120_000,
+            content = optional_string(
+                request.get("content"), "input.content", 120_000
             )
+            content_base64 = optional_string(
+                request.get("contentBase64"),
+                "input.contentBase64",
+                6_700_000,
+            )
+            source_url = optional_string(
+                request.get("sourceUrl"), "input.sourceUrl", 2_048
+            )
+            supplied_sources = [
+                value
+                for value in (content, content_base64, source_url)
+                if value
+            ]
+            if len(supplied_sources) != 1:
+                raise ValueError(
+                    "evidence.ingest requires exactly one of input.content, "
+                    "input.contentBase64, or input.sourceUrl"
+                )
+            if content and len(content) < 20:
+                raise ValueError("input.content must be at least 20 characters")
+            request["content"] = content
+            request["contentBase64"] = content_base64
+            request["contentType"] = optional_string(
+                request.get("contentType"), "input.contentType", 160
+            )
+            request["sourceUrl"] = source_url
             request["source"] = optional_string(
                 request.get("source"), "input.source", 80
+            )
+            request["sourceType"] = optional_string(
+                request.get("sourceType"), "input.sourceType", 80
+            )
+            request["approvedBy"] = optional_string(
+                request.get("approvedBy"), "input.approvedBy", 120
             )
     else:
         audience = require_string(

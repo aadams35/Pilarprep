@@ -41,3 +41,42 @@ test("response normalization preserves refinement provenance", () => {
   assert.equal(normalized.metadata?.refinementCoveragePassed, true);
   assert.equal(normalized.metadata?.refinementLatencyMs, 4321);
 });
+
+test("response normalization keeps only claims linked to real catalog sources", () => {
+  const brief = generateBlueMesaBackupBrief();
+  const validSource = brief.sourceCatalog[0];
+  const normalized = normalizeBriefResponse(
+    {
+      ...brief,
+      claims: [
+        {
+          ...brief.claims[0],
+          sourceIds: [validSource.sourceId, "src-invented"],
+        },
+      ],
+    },
+    "bedrock",
+  );
+
+  assert.deepEqual(normalized.claims[0].sourceIds, [validSource.sourceId]);
+  assert.ok(normalized.sourceCatalog.some((source) => source.sourceId === validSource.sourceId));
+  assert.equal(
+    normalized.evidenceCoverage?.meaning,
+    "Percentage of material claims linked to approved sources; not a probability of truth.",
+  );
+});
+
+test("legacy packets migrate without fabricated provenance", () => {
+  const normalized = normalizeBriefResponse(
+    {
+      businessCase: { scenario: "Legacy scenario" },
+      technical: ["Legacy technical brief"],
+      executive: ["Legacy executive brief"],
+    },
+    "demo",
+  );
+
+  assert.deepEqual(normalized.sourceCatalog, []);
+  assert.deepEqual(normalized.claims, []);
+  assert.equal(normalized.evidenceCoverage, undefined);
+});

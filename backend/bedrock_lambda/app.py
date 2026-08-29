@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import os
 import re
@@ -569,6 +570,12 @@ def _source_labels(payload):
         labels.append("Stakeholder notes")
     if _clean_string(payload.get("meetingNotes")):
         labels.append("Meeting notes")
+    for source in payload.get("approvedEvidenceSources", []):
+        if not isinstance(source, dict):
+            continue
+        label = _clean_string(source.get("sourceTitle") or source.get("label"))
+        if label and label not in labels:
+            labels.append(label)
     if _feedback_instructions(payload):
         labels.append("Refinement feedback")
     refinement = _refinement_context(payload)
@@ -588,6 +595,12 @@ def _source_labels(payload):
 
 def _default_evidence(payload):
     labels = _source_labels(payload)
+    retrieved_labels = [
+        _clean_string(source.get("sourceTitle") or source.get("label"))
+        for source in payload.get("approvedEvidenceSources", [])
+        if isinstance(source, dict)
+        and _clean_string(source.get("sourceTitle") or source.get("label")) in labels
+    ][:3]
 
     def available(*preferred):
         selected = [label for label in preferred if label in labels]
@@ -595,12 +608,12 @@ def _default_evidence(payload):
 
     evidence = []
     section_sources = {
-        "businessCase": available("Customer context", "Company values", "Meeting notes", "AWS Well-Architected pillars"),
-        "technical": available("Customer context", "AWS Well-Architected pillars", "Meeting notes"),
-        "executive": available("Customer context", "Company values", "Meeting notes"),
-        "stakeholders": available("Decision-maker notes", "Stakeholder notes", "Customer context"),
-        "gameplan": available("Meeting notes", "Refinement feedback", "Customer context"),
-        "objections": available("Customer context", "Meeting notes", "Company values"),
+        "businessCase": list(dict.fromkeys(retrieved_labels + available("Customer context", "Company values", "Meeting notes", "AWS Well-Architected pillars"))),
+        "technical": list(dict.fromkeys(retrieved_labels + available("Customer context", "AWS Well-Architected pillars", "Meeting notes"))),
+        "executive": list(dict.fromkeys(retrieved_labels + available("Customer context", "Company values", "Meeting notes"))),
+        "stakeholders": list(dict.fromkeys(retrieved_labels + available("Decision-maker notes", "Stakeholder notes", "Customer context"))),
+        "gameplan": list(dict.fromkeys(retrieved_labels + available("Meeting notes", "Refinement feedback", "Customer context"))),
+        "objections": list(dict.fromkeys(retrieved_labels + available("Customer context", "Meeting notes", "Company values"))),
     }
     refinement = _refinement_context(payload)
     affected = set(refinement["affectedSections"]) if refinement["active"] else set()
@@ -668,6 +681,255 @@ def _normalize_evidence(value, payload):
         by_key.setdefault(key, item)
     return list(by_key.values())
 
+
+def _stable_source_id(value):
+    raw = _clean_string(value) or "evidence"
+    slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")[:42] or "evidence"
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:10]
+    return f"src-{slug}-{digest}"
+
+
+def _source_catalog(payload):
+    timestamp = datetime.now(timezone.utc).isoformat()
+    tenant_id = _clean_string(payload.get("tenantId"))
+    access_scope = (
+        "public-demo"
+        if tenant_id == "demo" or tenant_id.startswith("guest-")
+        else "tenant-private"
+    )
+    people = payload.get("decisionMakers")
+    people = people if isinstance(people, list) else []
+    decision_notes = " ".join(
+        _clean_string(person.get("context"))
+        for person in people
+        if isinstance(person, dict) and person.get("roleType") != "stakeholder"
+    )
+    stakeholder_notes = " ".join(
+        _clean_string(person.get("context"))
+        for person in people
+        if isinstance(person, dict) and person.get("roleType") == "stakeholder"
+    )
+    intrinsic = {
+        "Customer context": ("customer-provided-context", payload.get("context")),
+        "AWS Well-Architected pillars": (
+            "aws-framework",
+            ", ".join(_as_string_list(payload.get("pillars"))),
+        ),
+        "Company values": ("company-values", payload.get("companyValues")),
+        "Company values page": (
+            "approved-public-url",
+            payload.get("companyValuesUrl"),
+        ),
+        "Additional direction": (
+            "customer-provided-context",
+            _additional_direction(payload),
+        ),
+        "Decision-maker notes": ("stakeholder-profile", decision_notes),
+        "Stakeholder notes": ("stakeholder-profile", stakeholder_notes),
+        "Meeting notes": ("meeting-transcript-or-notes", payload.get("meetingNotes")),
+        "Refinement feedback": (
+            "customer-correction",
+            " ".join(
+                instruction.get("instruction", "")
+                for instruction in _feedback_instructions(payload)
+            )
+            or payload.get("feedbackNotes"),
+        ),
+        "Previous brief version": (
+            "approved-brief",
+            "Previous PilarPrep packet retained for target-isolated refinement.",
+        ),
+        "Approved pre-brief": (
+            "approved-brief",
+            "Human-approved PilarPrep pre-brief.",
+        ),
+    }
+    retrieved = {
+        _clean_string(source.get("sourceTitle") or source.get("label")): source
+        for source in payload.get("approvedEvidenceSources", [])
+        if isinstance(source, dict)
+        and _clean_string(source.get("sourceTitle") or source.get("label"))
+    }
+    catalog = []
+    for label in _source_labels(payload):
+        source = retrieved.get(label, {})
+        source_id = _clean_string(source.get("sourceId")) or _stable_source_id(label)
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{2,79}", source_id):
+            source_id = _stable_source_id(label)
+        source_type, intrinsic_snippet = intrinsic.get(
+            label,
+            ("approved-customer-evidence", ""),
+        )
+        snippet = _clean_string(
+            source.get("evidenceSnippet")
+            or source.get("excerpt")
+            or intrinsic_snippet
+        )[:600]
+        catalog.append(
+            {
+                "sourceId": source_id,
+                "tenantId": tenant_id,
+                "clientId": _clean_string(payload.get("clientId")),
+                "projectId": _clean_string(payload.get("projectId")),
+                "label": label,
+                "sourceType": _clean_string(source.get("sourceType")) or source_type,
+                "title": _clean_string(source.get("sourceTitle")) or label,
+                "sourceLocation": _clean_string(source.get("sourceLocation"))
+                or "protected-workspace-record",
+                "capturedAt": _clean_string(
+                    source.get("capturedAt") or source.get("approvedAt")
+                )
+                or timestamp,
+                "freshness": _clean_string(source.get("freshness"))
+                or (
+                    "approved-evidence"
+                    if source
+                    else "current-request"
+                ),
+                "approvedBy": _clean_string(source.get("approvedBy"))
+                or (
+                    "workspace-reviewer"
+                    if source
+                    else "request-author"
+                ),
+                "evidenceSnippet": snippet,
+                "accessScope": _clean_string(source.get("accessScope"))
+                or access_scope,
+                "lifecycleStatus": _clean_string(source.get("lifecycleStatus"))
+                or "active",
+            }
+        )
+    return catalog
+
+
+def _claim_text_rows(generated):
+    rows = []
+    business_case = generated.get("businessCase")
+    if isinstance(business_case, dict):
+        for item_index, (field, _label) in enumerate(BUSINESS_CASE_FIELDS):
+            text = _clean_string(business_case.get(field))
+            if text:
+                rows.append(("businessCase", item_index, text))
+    for section in (
+        "technical",
+        "executive",
+        "stakeholders",
+        "gameplan",
+        "objections",
+    ):
+        for item_index, text in enumerate(_as_string_list(generated.get(section))):
+            rows.append((section, item_index, text))
+    project_answer = _clean_string(generated.get("projectAnswer"))
+    if project_answer:
+        rows.append(("projectAnswer", 0, project_answer))
+    return rows
+
+
+def _claim_status(section, item_index, text, source_rows):
+    lowered = text.lower()
+    if (
+        "conflicting evidence" in lowered
+        or "sources disagree" in lowered
+        or "conflict between" in lowered
+    ):
+        return "conflicting-evidence"
+    if section == "businessCase" and item_index == 9:
+        return "assumption"
+    if (
+        "working assumption" in lowered
+        or "remains an assumption" in lowered
+        or "unknown to validate" in lowered
+    ):
+        return "assumption"
+    if not source_rows:
+        return "needs-validation"
+    source_types = {row.get("sourceType") for row in source_rows}
+    if "approved-customer-evidence" in source_types:
+        return "supported"
+    if source_types.intersection(
+        {
+            "customer-provided-context",
+            "company-values",
+            "stakeholder-profile",
+            "meeting-transcript-or-notes",
+            "customer-correction",
+        }
+    ):
+        return "customer-provided"
+    return "partially-supported"
+
+
+def _attach_provenance(generated, payload):
+    catalog = _source_catalog(payload)
+    by_label = {row["label"]: row for row in catalog}
+    evidence_by_key = {
+        (item.get("section"), item.get("itemIndex")): item
+        for item in generated.get("evidence", [])
+        if isinstance(item, dict)
+    }
+    claims = []
+    for section, item_index, text in _claim_text_rows(generated):
+        evidence = evidence_by_key.get((section, item_index), {})
+        source_rows = [
+            by_label[label]
+            for label in evidence.get("sources", [])
+            if label in by_label
+        ]
+        status = _claim_status(section, item_index, text, source_rows)
+        if not source_rows and status not in {"assumption", "needs-validation"}:
+            raise ValueError(
+                f"Claim {section}[{item_index}] omitted an approved source"
+            )
+        digest = hashlib.sha256(
+            f"{section}|{item_index}|{text}".encode("utf-8")
+        ).hexdigest()[:14]
+        claims.append(
+            {
+                "claimId": f"claim-{digest}",
+                "section": section,
+                "itemIndex": item_index,
+                "text": text,
+                "sourceIds": [row["sourceId"] for row in source_rows],
+                "evidenceStatus": status,
+                "evidenceSnippet": (
+                    source_rows[0].get("evidenceSnippet", "")[:360]
+                    if source_rows
+                    else "No approved supporting source is recorded."
+                ),
+                "validationStatus": (
+                    "valid-source-reference"
+                    if source_rows
+                    else "explicit-assumption"
+                ),
+            }
+        )
+    known_ids = {row["sourceId"] for row in catalog}
+    if any(
+        source_id not in known_ids
+        for claim in claims
+        for source_id in claim["sourceIds"]
+    ):
+        raise ValueError("Packet contains an unauthorized evidence source")
+    status_counts = {}
+    for claim in claims:
+        status = claim["evidenceStatus"]
+        status_counts[status] = status_counts.get(status, 0) + 1
+    supported = sum(1 for claim in claims if claim["sourceIds"])
+    generated["sourceCatalog"] = catalog
+    generated["claims"] = claims
+    generated["evidenceCoverage"] = {
+        "materialClaims": len(claims),
+        "claimsWithApprovedSources": supported,
+        "coveragePercent": (
+            round((supported / len(claims)) * 100)
+            if claims
+            else 0
+        ),
+        "statusCounts": status_counts,
+        "meaning": "Coverage measures approved source linkage, not probability of truth.",
+    }
+    return generated
+
 def _build_prompt_parts(payload, generation_sections=None):
     guidance = _briefing_guidance(payload)
     ranked_pillars = guidance.get("pillarRanking", [])
@@ -691,6 +953,7 @@ def _build_prompt_parts(payload, generation_sections=None):
         "additionalDirection": _additional_direction(payload),
         "decisionMakers": payload.get("decisionMakers", []),
         "meetingNotes": payload.get("meetingNotes", ""),
+        "approvedEvidenceSources": payload.get("approvedEvidenceSources", []),
         "feedback": payload.get("feedback", []),
         "feedbackDetails": _feedback_instructions(payload),
         "feedbackNotes": payload.get("feedbackNotes", ""),
@@ -2062,9 +2325,17 @@ def _normalize_generated(parsed, payload, model_text=""):
         source["objections"] = _canonical_objections(source.get("objections"))
     _validate_complete_refinement_target(source, payload)
     allowed_citations = set(_source_labels(payload))
+    raw_citations = _as_string_list(source.get("citations"))
+    invalid_citations = [
+        citation for citation in raw_citations if citation not in allowed_citations
+    ]
+    if invalid_citations:
+        raise ValueError(
+            "Generated citations referenced an unapproved source label"
+        )
     citations = [
         citation
-        for citation in _as_string_list(source.get("citations"))
+        for citation in raw_citations
         if citation in allowed_citations
     ]
 
@@ -2096,7 +2367,7 @@ def _normalize_generated(parsed, payload, model_text=""):
     diagnostics = _refinement_diagnostics(normalized, payload)
     if diagnostics and not diagnostics["refinementIsolationPassed"]:
         raise ValueError("Refinement attempted to modify non-target sections")
-    return normalized
+    return _attach_provenance(normalized, payload)
 
 def _parse_model_response(model_text, payload):
     cleaned = model_text.strip()
@@ -2330,6 +2601,37 @@ def _brief_docx_bytes(payload, generated, metadata):
         sections.append(_docx_paragraph("Approved Source Labels", "Heading1"))
         for citation in citations:
             sections.append(_docx_bullet(citation, 10))
+
+    coverage = generated.get("evidenceCoverage")
+    if isinstance(coverage, dict):
+        sections.append(_docx_paragraph("Evidence Coverage", "Heading1"))
+        sections.append(
+            _docx_paragraph(
+                f"{int(coverage.get('coveragePercent') or 0)}% of material claims "
+                "reference approved sources. This measures source coverage, not "
+                "probability of truth."
+            )
+        )
+
+    source_catalog = (
+        generated.get("sourceCatalog")
+        if isinstance(generated.get("sourceCatalog"), list)
+        else []
+    )
+    if source_catalog:
+        sections.append(_docx_paragraph("Evidence Register", "Heading1"))
+        for source in source_catalog:
+            if not isinstance(source, dict):
+                continue
+            sections.append(
+                _docx_bullet(
+                    f"[{_clean_string(source.get('sourceId'))}] "
+                    f"{_clean_string(source.get('title'))} | "
+                    f"{_clean_string(source.get('sourceType'))} | "
+                    f"Captured: {_clean_string(source.get('capturedAt')) or 'Not recorded'}",
+                    10,
+                )
+            )
 
     body_xml = "".join(sections)
     document_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

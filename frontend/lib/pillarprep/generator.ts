@@ -1,13 +1,141 @@
 import type {
   ApprovedBriefSnapshot,
+  BriefClaim,
   BriefEvidence,
   BriefRequest,
   BriefResponse,
   BusinessCase,
   DecisionMakerContext,
+  EvidenceCoverage,
+  EvidenceSourceRecord,
   ProjectArtifacts,
   RefinementTarget,
 } from "./types";
+
+const businessCaseFields: Array<keyof BusinessCase> = [
+  "scenario",
+  "whyNow",
+  "currentSituation",
+  "desiredOutcomes",
+  "successCriteria",
+  "businessRisks",
+  "decisionRequired",
+  "inScope",
+  "outOfScope",
+  "assumptionsAndUnknowns",
+  "stakeholderAlignment",
+  "alignmentStatement",
+  "nextStepGuidance",
+];
+
+function stableLocalSourceId(label: string) {
+  let hash = 2166136261;
+  for (const character of label) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 36) || "evidence";
+  return `src-${slug}-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function attachLocalProvenance(brief: BriefResponse, input: BriefRequest): BriefResponse {
+  const people = input.decisionMakers ?? [];
+  const sourceText: Record<string, { sourceType: string; snippet: string; location?: string }> = {
+    "Customer context": { sourceType: "customer-provided-context", snippet: input.context },
+    "AWS Well-Architected pillars": { sourceType: "aws-framework", snippet: rankedPillarsFromInput(input).join(", ") },
+    "Company values": { sourceType: "company-values", snippet: input.companyValues ?? "" },
+    "Company values page": { sourceType: "approved-public-url", snippet: input.companyValuesUrl ?? "", location: input.companyValuesUrl },
+    "Additional direction": { sourceType: "customer-provided-context", snippet: input.additionalDirection ?? "" },
+    "Decision-maker notes": { sourceType: "stakeholder-profile", snippet: people.filter((person) => person.roleType !== "stakeholder").map((person) => person.context).filter(Boolean).join(" ") },
+    "Stakeholder notes": { sourceType: "stakeholder-profile", snippet: people.filter((person) => person.roleType === "stakeholder").map((person) => person.context).filter(Boolean).join(" ") },
+    "Meeting notes": { sourceType: "meeting-transcript-or-notes", snippet: input.meetingNotes ?? "" },
+    "Refinement feedback": { sourceType: "customer-correction", snippet: refinementInstructions(input).map((item) => item.instruction).join(" ") },
+    "Previous brief version": { sourceType: "approved-brief", snippet: "Previous packet retained for target-isolated refinement." },
+    "Approved pre-brief": { sourceType: "approved-brief", snippet: "Human-approved PilarPrep packet." },
+  };
+  const labels = Array.from(new Set([
+    ...brief.citations,
+    ...(brief.evidence ?? []).flatMap((item) => item.sources),
+  ])).filter(Boolean);
+  const capturedAt = brief.generatedAt || new Date().toISOString();
+  const sourceCatalog: EvidenceSourceRecord[] = labels.map((label) => {
+    const source = sourceText[label] ?? {
+      sourceType: "approved-customer-evidence",
+      snippet: "Approved source retained with this packet.",
+    };
+    return {
+      sourceId: stableLocalSourceId(label),
+      tenantId: "demo",
+      clientId: toProjectId(input.company),
+      projectId: toProjectId(input.company),
+      label,
+      sourceType: source.sourceType,
+      title: label,
+      sourceLocation: source.location || "browser-local-workspace-record",
+      capturedAt,
+      freshness: "current-request",
+      approvedBy: "request-author",
+      evidenceSnippet: source.snippet.trim().slice(0, 600),
+      accessScope: "synthetic-demo",
+      lifecycleStatus: "active",
+    };
+  });
+  const sourcesByLabel = new Map(sourceCatalog.map((source) => [source.label, source]));
+  const evidenceByItem = new Map(
+    (brief.evidence ?? []).map((item) => [`${item.section}:${item.itemIndex}`, item])
+  );
+  const rows: Array<{ section: BriefEvidence["section"]; itemIndex: number; text: string }> = [
+    ...businessCaseFields.map((field, itemIndex) => ({ section: "businessCase" as const, itemIndex, text: brief.businessCase[field] })),
+    ...(["technical", "executive", "stakeholders", "gameplan", "objections"] as const).flatMap((section) =>
+      brief[section].map((text, itemIndex) => ({ section, itemIndex, text }))
+    ),
+    { section: "projectAnswer", itemIndex: 0, text: brief.projectAnswer },
+  ].filter((row) => row.text.trim());
+  const claims: BriefClaim[] = rows.map((row) => {
+    const evidence = evidenceByItem.get(`${row.section}:${row.itemIndex}`);
+    const sourceIds = (evidence?.sources ?? []).flatMap((label) => {
+      const source = sourcesByLabel.get(label);
+      return source ? [source.sourceId] : [];
+    });
+    const assumption =
+      (row.section === "businessCase" && row.itemIndex === 9) ||
+      /\b(?:working assumption|remains an assumption|unknown to validate)\b/i.test(row.text);
+    const evidenceStatus = assumption
+      ? "assumption"
+      : sourceIds.length
+        ? "customer-provided"
+        : "needs-validation";
+    return {
+      claimId: `claim-${stableLocalSourceId(`${row.section}-${row.itemIndex}-${row.text}`).slice(-8)}`,
+      section: row.section,
+      itemIndex: row.itemIndex,
+      text: row.text,
+      sourceIds,
+      evidenceStatus,
+      evidenceSnippet: sourceIds.length
+        ? sourceCatalog.find((source) => source.sourceId === sourceIds[0])?.evidenceSnippet ?? ""
+        : "No approved supporting source is recorded.",
+      validationStatus: sourceIds.length ? "valid-source-reference" : "explicit-assumption",
+    };
+  });
+  const supported = claims.filter((claim) => claim.sourceIds.length).length;
+  const statusCounts = claims.reduce<EvidenceCoverage["statusCounts"]>((counts, claim) => {
+    counts[claim.evidenceStatus] = (counts[claim.evidenceStatus] ?? 0) + 1;
+    return counts;
+  }, {});
+  return {
+    ...brief,
+    sourceCatalog,
+    claims,
+    evidenceCoverage: {
+      materialClaims: claims.length,
+      claimsWithApprovedSources: supported,
+      coveragePercent: claims.length ? Math.round((supported / claims.length) * 100) : 0,
+      statusCounts,
+      meaning: "Percentage of material claims linked to approved sources; not a probability of truth.",
+    },
+  };
+}
 
 function compactList(items: string[]) {
   return items.filter(Boolean).join(", ");
@@ -698,7 +826,7 @@ export function generateDemoBrief(input: BriefRequest): BriefResponse {
     citations: sourceLabels,
     evidence,
   };
-  return applyLocalPacketRefinement(generated, input);
+  return attachLocalProvenance(applyLocalPacketRefinement(generated, input), input);
 }
 
 export function generateBlueMesaBackupBrief(
@@ -743,9 +871,10 @@ export function generateBlueMesaBackupBrief(
     pillarRanking: request.pillarRanking?.length
       ? request.pillarRanking
       : defaults.pillarRanking,
-    decisionMakers: request.decisionMakers?.length
-      ? request.decisionMakers
-      : defaults.decisionMakers,
+    decisionMakers:
+      request.decisionMakers !== undefined
+        ? request.decisionMakers
+        : defaults.decisionMakers,
     feedback: request.feedback ?? defaults.feedback,
   });
 

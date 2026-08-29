@@ -43,9 +43,59 @@ test("BlueMesa backup preserves the current request and refinement feedback", ()
   assert.equal(comparison.changedSections, 2);
 });
 
+test("local demo packets expose deterministic source-backed claim coverage", () => {
+  const brief = generateBlueMesaBackupBrief(baseRequest);
+  const sourceIds = new Set(brief.sourceCatalog.map((source) => source.sourceId));
+
+  assert.ok(brief.sourceCatalog.some((source) => source.label === "Customer context"));
+  assert.ok(brief.sourceCatalog.some((source) => source.label === "Meeting notes"));
+  assert.equal(brief.claims.length, brief.evidenceCoverage.materialClaims);
+  assert.ok(brief.claims.every((claim) => claim.sourceIds.every((sourceId) => sourceIds.has(sourceId))));
+  assert.equal(
+    brief.evidenceCoverage.coveragePercent,
+    Math.round(
+      (brief.evidenceCoverage.claimsWithApprovedSources / brief.evidenceCoverage.materialClaims) * 100,
+    ),
+  );
+  assert.match(brief.evidenceCoverage.meaning, /not a probability of truth/i);
+});
+
+test("custom scenarios receive the same provenance controls without BlueMesa carryover", () => {
+  const brief = generateBlueMesaBackupBrief({
+    ...baseRequest,
+    company: "Harbor Manufacturing",
+    industry: "Manufacturing",
+    context:
+      "Harbor Manufacturing needs to validate production scheduling resilience before a plant expansion.",
+    companyValues: "Worker safety, predictable operations, and accountable change.",
+    meetingNotes: "The operations sponsor requested a bounded resilience assessment.",
+    decisionMakers: [],
+    feedback: [],
+  });
+  const sourceIds = new Set(brief.sourceCatalog.map((source) => source.sourceId));
+  const allText = JSON.stringify(brief);
+
+  assert.match(brief.businessCase.scenario, /Harbor Manufacturing/);
+  assert.doesNotMatch(allText, /Ariana Cole|Marcus Vale|Dev Malik|Rachel Kim|Priya Shah|Elena Torres/);
+  assert.ok(brief.sourceCatalog.some((source) => source.label === "Customer context"));
+  assert.ok(brief.sourceCatalog.some((source) => source.label === "Meeting notes"));
+  assert.ok(!brief.sourceCatalog.some((source) => source.label === "Decision-maker notes"));
+  assert.ok(
+    brief.claims.every(
+      (claim) =>
+        claim.sourceIds.every((sourceId) => sourceIds.has(sourceId)) &&
+        (claim.sourceIds.length > 0 ||
+          ["assumption", "needs-validation", "conflicting-evidence"].includes(
+            claim.evidenceStatus,
+          )),
+    ),
+  );
+});
+
 test("BlueMesa backup enforces a deep Business Case and canonical SA handoff", () => {
   const brief = generateBlueMesaBackupBrief({
     ...baseRequest,
+    decisionMakers: undefined,
     role: "Solutions Architect",
     prompt: "What architecture assumptions must I validate?",
   });

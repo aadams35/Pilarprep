@@ -452,6 +452,73 @@ class CommonContractTests(unittest.TestCase):
         self.assertEqual(validated["input"]["documentId"], "approved-architecture")
         self.assertEqual(validated["input"]["qualityTier"], "standard")
 
+    def test_evidence_ingestion_accepts_one_bounded_source_mode(self):
+        url_request = {
+            **generation_request(),
+            "action": "evidence.ingest",
+            "input": {
+                "documentId": "approved-values-page",
+                "fileName": "values.html",
+                "sourceTitle": "Customer-approved values page",
+                "documentType": "company-profile",
+                "sourceUrl": "https://example.com/company/values",
+                "sourceType": "approved-public-url",
+            },
+        }
+        upload_request = {
+            **generation_request(),
+            "action": "evidence.ingest",
+            "input": {
+                "documentId": "approved-requirements",
+                "fileName": "requirements.pdf",
+                "sourceTitle": "Customer-approved requirements",
+                "documentType": "requirements",
+                "contentBase64": "JVBERi0xLjQK" * 3,
+                "contentType": "application/pdf",
+                "sourceType": "uploaded-customer-document",
+            },
+        }
+
+        validated_url = common.validate_job_request(url_request)
+        validated_upload = common.validate_job_request(upload_request)
+
+        self.assertEqual(
+            validated_url["input"]["sourceUrl"],
+            "https://example.com/company/values",
+        )
+        self.assertEqual(
+            validated_upload["input"]["contentType"],
+            "application/pdf",
+        )
+        self.assertFalse(validated_url["input"]["content"])
+
+    def test_evidence_ingestion_rejects_missing_or_multiple_source_modes(self):
+        base_input = {
+            "documentId": "ambiguous-source",
+            "fileName": "source.md",
+            "sourceTitle": "Ambiguous source",
+            "documentType": "requirements",
+        }
+        missing = {
+            **generation_request(),
+            "action": "evidence.ingest",
+            "input": base_input,
+        }
+        multiple = {
+            **generation_request(),
+            "action": "evidence.ingest",
+            "input": {
+                **base_input,
+                "content": "Customer-approved source content for the packet.",
+                "sourceUrl": "https://example.com/source",
+            },
+        }
+
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            common.validate_job_request(missing)
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            common.validate_job_request(multiple)
+
 
     def test_guest_cannot_create_an_evidence_job(self):
         request = {
@@ -486,6 +553,153 @@ class CommonContractTests(unittest.TestCase):
 
 
 class EvidenceStorageTests(unittest.TestCase):
+    def test_private_rag_retrieval_uses_exact_scope_filters(self):
+        calls = []
+
+        class FakeRetrieval:
+            def retrieve(self, **kwargs):
+                calls.append(kwargs)
+                return {
+                    "retrievalResults": [
+                        {
+                            "score": 0.91,
+                            "content": {"text": "Approved AWS current-state evidence."},
+                            "metadata": {
+                                "tenantId": "tenant-acme",
+                                "clientId": "apex-mutual",
+                                "projectId": "apex-mutual",
+                                "approved": True,
+                                "status": "approved",
+                                "visibility": "tenant-private",
+                                "documentId": "current-state",
+                                "sourceTitle": "Approved current state",
+                                "documentType": "architecture",
+                            },
+                        }
+                    ]
+                }
+
+        scope = {
+            **SCOPE,
+            "tenantId": "tenant-acme",
+            "identityType": "authenticated",
+        }
+        with patch.object(evidence, "KNOWLEDGE_BASE_ID", "kb-123"):
+            sources, metadata = evidence.retrieve_for_brief(
+                scope,
+                "current architecture",
+                retrieval_client=FakeRetrieval(),
+            )
+
+        filters = calls[0]["retrievalConfiguration"]["vectorSearchConfiguration"]["filter"]["andAll"]
+        self.assertIn(
+            {"equals": {"key": "tenantId", "value": "tenant-acme"}},
+            filters,
+        )
+        self.assertIn(
+            {"equals": {"key": "clientId", "value": "apex-mutual"}},
+            filters,
+        )
+        self.assertEqual(metadata["mode"], "tenant-private")
+        self.assertEqual(sources[0]["accessScope"], "tenant-private")
+
+    def test_public_demo_rag_is_limited_to_blue_mesa(self):
+        calls = []
+
+        class FakeRetrieval:
+            def retrieve(self, **kwargs):
+                calls.append(kwargs)
+                return {
+                    "retrievalResults": [
+                        {
+                            "score": 0.8,
+                            "content": {"text": "Synthetic Blue Mesa evidence."},
+                            "metadata": {
+                                "scenarioId": "blue-mesa-payments",
+                                "approved": True,
+                                "visibility": "public-demo",
+                                "documentId": "demo-overview",
+                                "sourceTitle": "Blue Mesa overview",
+                            },
+                        }
+                    ]
+                }
+
+        with patch.object(evidence, "KNOWLEDGE_BASE_ID", "kb-123"):
+            sources, metadata = evidence.retrieve_for_brief(
+                BLUE_SCOPE,
+                "payment platform",
+                retrieval_client=FakeRetrieval(),
+            )
+            custom_sources, custom_metadata = evidence.retrieve_for_brief(
+                SCOPE,
+                "private custom scenario",
+                retrieval_client=types.SimpleNamespace(
+                    retrieve=lambda **_kwargs: (_ for _ in ()).throw(
+                        AssertionError("guest custom scenarios cannot query RAG")
+                    )
+                ),
+            )
+
+        filters = calls[0]["retrievalConfiguration"]["vectorSearchConfiguration"]["filter"]["andAll"]
+        self.assertIn(
+            {"equals": {"key": "scenarioId", "value": "blue-mesa-payments"}},
+            filters,
+        )
+        self.assertEqual(metadata["mode"], "public-demo")
+        self.assertEqual(sources[0]["accessScope"], "public-demo")
+        self.assertEqual(custom_sources, [])
+        self.assertEqual(custom_metadata["mode"], "guest-no-private-rag")
+
+    def test_rag_rejects_any_result_outside_the_authorized_scope(self):
+        class FakeRetrieval:
+            def retrieve(self, **_kwargs):
+                return {
+                    "retrievalResults": [
+                        {
+                            "content": {"text": "Evidence from another customer."},
+                            "metadata": {
+                                "tenantId": "tenant-other",
+                                "clientId": "other-client",
+                                "projectId": "other-project",
+                                "approved": True,
+                                "status": "approved",
+                                "visibility": "tenant-private",
+                            },
+                        }
+                    ]
+                }
+
+        scope = {
+            **SCOPE,
+            "tenantId": "tenant-acme",
+            "identityType": "authenticated",
+        }
+        with (
+            patch.object(evidence, "KNOWLEDGE_BASE_ID", "kb-123"),
+            patch.object(evidence, "metric"),
+            self.assertRaises(evidence.EvidenceScopeError),
+        ):
+            evidence.retrieve_for_brief(
+                scope,
+                "current architecture",
+                retrieval_client=FakeRetrieval(),
+            )
+
+    def test_approved_url_validation_blocks_private_network_targets(self):
+        with patch.object(
+            evidence.socket,
+            "getaddrinfo",
+            return_value=[
+                (evidence.socket.AF_INET, evidence.socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443))
+            ],
+        ):
+            with self.assertRaisesRegex(ValueError, "public address"):
+                evidence._validate_public_https_url("https://localhost/source")
+
+        with self.assertRaisesRegex(ValueError, "HTTPS"):
+            evidence._validate_public_https_url("http://example.com/source")
+
     def test_tenant_evidence_writes_scoped_document_and_metadata(self):
         calls = {"s3": [], "ddb": [], "ingestion": []}
 
@@ -558,6 +772,10 @@ class EvidenceStorageTests(unittest.TestCase):
         self.assertEqual(attributes["projectId"], "apex-mutual")
         self.assertEqual(attributes["visibility"], "tenant-private")
         self.assertIs(attributes["approved"], True)
+        self.assertTrue(attributes["sourceId"].startswith("src-doc-"))
+        self.assertEqual(attributes["sourceType"], "architecture")
+        self.assertEqual(attributes["accessScope"], "tenant-private")
+        self.assertEqual(attributes["lifecycleStatus"], "active")
         self.assertEqual(len(calls["ingestion"]), 1)
 
     def test_evidence_paths_change_across_tenants(self):
@@ -647,6 +865,14 @@ class EvidenceStorageTests(unittest.TestCase):
 
 
 class InfrastructureSecurityTests(unittest.TestCase):
+    def test_worker_can_retrieve_only_from_the_deployed_knowledge_base(self):
+        pipeline = (
+            BACKEND_ROOT / "jobs_pipeline" / "template.yaml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("bedrock:Retrieve", pipeline)
+        self.assertIn("BlueMesaKnowledgeBase.KnowledgeBaseArn", pipeline)
+
     def test_frontend_and_meeting_buckets_are_private_and_tls_only(self):
         frontend = (
             BACKEND_ROOT / "frontend_static" / "template.yaml"
@@ -2218,6 +2444,74 @@ class WorkerTests(unittest.TestCase):
 
         self.assertIs(result, generated)
         self.assertEqual(phases, ["validating", "saving"])
+
+    def test_brief_generation_passes_tenant_scoped_retrieval_to_the_model(self):
+        generated = {
+            "provider": "bedrock",
+            "metadata": {"fallbackUsed": False},
+        }
+        model_payloads = []
+        approved_sources = [
+            {
+                "sourceId": "src-rag-current-state",
+                "sourceTitle": "Approved current state",
+                "evidenceSnippet": "The customer is already on AWS.",
+                "accessScope": "tenant-private",
+            }
+        ]
+        brief_module = types.SimpleNamespace(
+            _validate_brief_payload=lambda _payload: None,
+            _resolve_model_id=lambda _payload: "us.amazon.nova-pro-v1:0",
+            _generate_brief=lambda payload: (
+                model_payloads.append(json.loads(json.dumps(payload))) or generated
+            ),
+        )
+        evidence_module = types.SimpleNamespace(
+            retrieve_for_brief=lambda _scope, query: (
+                approved_sources,
+                {
+                    "enabled": True,
+                    "mode": "tenant-private",
+                    "resultCount": 1,
+                    "queryObserved": bool(query),
+                },
+            )
+        )
+
+        with (
+            patch.object(worker, "_brief_module", return_value=brief_module),
+            patch.object(worker, "_evidence_module", return_value=evidence_module),
+            patch.object(
+                worker,
+                "_screen_ai_payload",
+                side_effect=lambda value, **_kwargs: (
+                    value,
+                    {"policyResult": "passed"},
+                ),
+            ),
+            patch.object(worker, "_set_job_phase"),
+            patch.object(worker, "_write_brief_draft", return_value=generated),
+        ):
+            result = worker._run_brief(
+                {**SCOPE, "tenantId": "tenant-acme", "identityType": "authenticated"},
+                {
+                    "action": "brief.generate",
+                    "inputVersion": "input-rag-0001",
+                    "input": {
+                        "company": "Apex Mutual",
+                        "industry": "Financial Services",
+                        "context": "Validate the current AWS architecture.",
+                    },
+                },
+                "job-rag-generation",
+            )
+
+        self.assertEqual(
+            model_payloads[0]["approvedEvidenceSources"],
+            approved_sources,
+        )
+        self.assertEqual(result["metadata"]["rag"]["resultCount"], 1)
+        self.assertTrue(result["metadata"]["rag"]["queryObserved"])
 
     def test_retry_status_becomes_terminal_on_third_receive(self):
         calls = []

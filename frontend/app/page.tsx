@@ -18,6 +18,7 @@ import {
   type OpportunityGateStatus,
 } from "@/app/components/opportunity-gates";
 import { EvidenceWorkspace, type EvidenceUpload } from "@/app/components/evidence-workspace";
+import { EvidenceDrawer } from "@/app/components/evidence-drawer";
 import {
   cognitoIdentityCredentialsProvider,
   signedApiFetch,
@@ -495,6 +496,14 @@ function buildApprovedBriefSnapshot(brief: BriefResponse | null): BriefRequest["
     objections: [...brief.objections],
     citations: [...brief.citations],
     evidence: brief.evidence?.map((item) => ({ ...item, sources: [...item.sources] })),
+    sourceCatalog: brief.sourceCatalog?.map((source) => ({ ...source })),
+    claims: brief.claims?.map((claim) => ({ ...claim, sourceIds: [...claim.sourceIds] })),
+    evidenceCoverage: brief.evidenceCoverage
+      ? {
+          ...brief.evidenceCoverage,
+          statusCounts: { ...brief.evidenceCoverage.statusCounts },
+        }
+      : undefined,
     projectAnswer: brief.projectAnswer,
     projectArtifacts: brief.projectArtifacts
       ? JSON.parse(JSON.stringify(brief.projectArtifacts))
@@ -701,13 +710,6 @@ const rolePrompts: Record<AudienceRole, string[]> = {
 };
 
 
-const evidenceSources = [
-  "Customer notes",
-  "SA feedback",
-  "AWS Well-Architected",
-  "Bedrock Knowledge Base",
-];
-
 const packetOutputs = [
   {
     title: "Business case",
@@ -742,25 +744,36 @@ const packetOutputs = [
 ] as const;
 
 const lifecycleStageIds: LifecycleStageId[] = [
-  "prepare",
-  "refine",
-  "sa-ready",
-  "meet",
-  "update",
-  "advance",
+  "research",
+  "insights",
+  "discovery",
+  "meeting-prep",
+  "follow-up",
 ];
 
 const lifecycleRoutes: Record<
   LifecycleStageId,
   { page: ConsolePage; sectionId: string }
 > = {
-  prepare: { page: "setup", sectionId: "setup" },
-  refine: { page: "brief", sectionId: "brief-review-section" },
-  "sa-ready": { page: "project", sectionId: "project-sa-ready-section" },
-  meet: { page: "project", sectionId: "meeting-workspace-section" },
-  update: { page: "project", sectionId: "meeting-workspace-section" },
-  advance: { page: "project", sectionId: "project-advance-section" },
+  research: { page: "setup", sectionId: "setup" },
+  insights: { page: "brief", sectionId: "brief-review-section" },
+  discovery: { page: "brief", sectionId: "brief-review-section" },
+  "meeting-prep": { page: "project", sectionId: "project-meeting-prep-section" },
+  "follow-up": { page: "project", sectionId: "meeting-workspace-section" },
 };
+
+function restoreLifecycleStage(value: unknown): LifecycleStageId | null {
+  if (typeof value !== "string") return null;
+  if (lifecycleStageIds.includes(value as LifecycleStageId)) return value as LifecycleStageId;
+  return {
+    prepare: "research",
+    refine: "insights",
+    "sa-ready": "meeting-prep",
+    meet: "follow-up",
+    update: "follow-up",
+    advance: "follow-up",
+  }[value] as LifecycleStageId | undefined ?? null;
+}
 
 const opportunityGateDefinitions = [
   { id: "business", name: "Business alignment" },
@@ -833,6 +846,10 @@ function providerLabel(provider: BriefResponse["provider"]) {
   }
 
   return "Local fallback";
+}
+
+function evidenceStatusLabel(value: string) {
+  return value.replace(/-/g, " ").replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
 function fallbackBriefForRequest(request: BriefRequest) {
@@ -1001,6 +1018,8 @@ export default function Home() {
   const [authReady, setAuthReady] = useState(!workspaceLoginAvailable);
   const [authError, setAuthError] = useState("");
   const [evidenceDocuments, setEvidenceDocuments] = useState<EvidenceDocumentRecord[]>([]);
+  const [selectedEvidenceSourceId, setSelectedEvidenceSourceId] = useState("");
+  const [selectedEvidenceClaimId, setSelectedEvidenceClaimId] = useState("");
   const [isEvidenceLoading, setIsEvidenceLoading] = useState(false);
   const [evidenceBusyDocumentId, setEvidenceBusyDocumentId] = useState("");
   const [evidenceError, setEvidenceError] = useState("");
@@ -1033,7 +1052,7 @@ export default function Home() {
   const [activePage, setActivePage] = useState<ConsolePage>("setup");
   const [pendingSectionId, setPendingSectionId] = useState<string | null>(null);
   const [selectedLifecycleStage, setSelectedLifecycleStage] =
-    useState<LifecycleStageId>("prepare");
+    useState<LifecycleStageId>("research");
   const [gateDecisions, setGateDecisions] = useState<Record<string, GateDecision>>({});
   const [catchupFilter, setCatchupFilter] = useState<CatchupFilter>("all");
   const [catchupAnswer, setCatchupAnswer] = useState("");
@@ -1286,16 +1305,14 @@ export default function Home() {
         typeof saved.projectAnswerKey === "string" ? saved.projectAnswerKey : ""
       );
       const restoredStage =
-        typeof saved.selectedLifecycleStage === "string" &&
-        lifecycleStageIds.includes(saved.selectedLifecycleStage as LifecycleStageId)
-          ? (saved.selectedLifecycleStage as LifecycleStageId)
-          : saved.promoted
-            ? "meet"
-            : saved.approved
-              ? "sa-ready"
-              : saved.generatedBrief
-                ? "refine"
-                : "prepare";
+        restoreLifecycleStage(saved.selectedLifecycleStage) ??
+        (saved.promoted
+          ? "follow-up"
+          : saved.approved
+            ? "meeting-prep"
+            : saved.generatedBrief
+              ? "insights"
+              : "research");
       setSelectedLifecycleStage(restoredStage);
       setActivePage(lifecycleRoutes[restoredStage].page);
       if (typeof saved.gateDecisions === "object" && saved.gateDecisions !== null) {
@@ -1669,13 +1686,27 @@ const industryFocus = useMemo(() => {
           ? "Saving catch-up..."
           : "Preparing catch-up...";
 
-  function claimSources(section: BriefTab | "projectAnswer", itemIndex: number) {
-    return (
-      generatedBrief?.evidence?.find(
-        (item) => item.section === section && item.itemIndex === itemIndex
-      )?.sources ?? []
+  function claimRecord(section: BriefTab | "projectAnswer", itemIndex: number) {
+    return generatedBrief?.claims?.find(
+      (item) => item.section === section && item.itemIndex === itemIndex
     );
   }
+
+  function claimSourceRecords(section: BriefTab | "projectAnswer", itemIndex: number) {
+    const claim = claimRecord(section, itemIndex);
+    const allowed = new Set(claim?.sourceIds ?? []);
+    return (generatedBrief?.sourceCatalog ?? []).filter((source) => allowed.has(source.sourceId));
+  }
+
+  function openEvidenceSource(sourceId: string, claimId = "") {
+    setSelectedEvidenceSourceId(sourceId);
+    setSelectedEvidenceClaimId(claimId);
+  }
+
+  const selectedEvidenceSource =
+    generatedBrief?.sourceCatalog?.find((source) => source.sourceId === selectedEvidenceSourceId) ?? null;
+  const selectedEvidenceClaim =
+    generatedBrief?.claims?.find((claim) => claim.claimId === selectedEvidenceClaimId) ?? null;
 
   const briefContent = isGenerating && !generatedBrief
     ? blankBriefContent
@@ -1755,7 +1786,7 @@ const industryFocus = useMemo(() => {
       (item, index) => `${briefSectionHeading(activeTab, index)}: ${item}`
     ),
     "",
-    `Sources: ${(generatedBrief?.citations ?? evidenceSources).join(", ")}`,
+    `Sources: ${generatedBrief?.sourceCatalog?.length ? generatedBrief.sourceCatalog.map((source) => source.title).join(", ") : "Evidence not recorded"}`,
   ].join("\n");
 
   const followUpEmailText = generatedBrief?.projectArtifacts?.followUpEmail
@@ -1799,7 +1830,7 @@ const industryFocus = useMemo(() => {
       : projectAnswer;
   const handoffPacketText = (() => {
     const metadata = generatedBrief?.metadata;
-    const sources = generatedBrief?.citations ?? evidenceSources;
+    const sources = generatedBrief?.sourceCatalog?.map((source) => source.title) ?? [];
     const artifactList = (title: string, items: ProjectArtifactItem[] | undefined) => [
       title,
       ...(items?.length
@@ -2032,39 +2063,36 @@ const industryFocus = useMemo(() => {
   ]);
   const confirmedGateCount = opportunityGates.filter((gate) => gate.confirmed).length;
   const currentLifecycleStage = useMemo<LifecycleStageId>(() => {
-    if (!generatedBrief) return "prepare";
-    if (!approved || approvalStale) return "refine";
-    if (!promoted) return "sa-ready";
-    if (!meetingResult && !meetingUpdateApproved) return "meet";
-    if (!meetingUpdateApproved) return "update";
-    return "advance";
-  }, [approved, approvalStale, generatedBrief, meetingResult, meetingUpdateApproved, promoted]);
+    if (!generatedBrief) return "research";
+    if (!approved || approvalStale) {
+      return activeTab === "businessCase" || activeTab === "executive"
+        ? "insights"
+        : "discovery";
+    }
+    if (!promoted) return "meeting-prep";
+    return "follow-up";
+  }, [activeTab, approved, approvalStale, generatedBrief, promoted]);
   const lifecycleStages = useMemo<LifecycleStage[]>(() => {
     const completed: Record<LifecycleStageId, boolean> = {
-      prepare: Boolean(generatedBrief),
-      refine: Boolean(approved && !approvalStale),
-      "sa-ready": Boolean(promoted),
-      meet: Boolean(meetingResult || meetingUpdateApproved),
-      update: meetingUpdateApproved,
-      advance:
-        meetingUpdateApproved &&
-        confirmedGateCount === opportunityGateDefinitions.length,
+      research: Boolean(generatedBrief),
+      insights: Boolean(generatedBrief),
+      discovery: Boolean(approved && !approvalStale),
+      "meeting-prep": Boolean(promoted),
+      "follow-up": meetingUpdateApproved && confirmedGateCount === opportunityGateDefinitions.length,
     };
     const available: Record<LifecycleStageId, boolean> = {
-      prepare: true,
-      refine: Boolean(generatedBrief),
-      "sa-ready": Boolean(approved && !approvalStale),
-      meet: Boolean(promoted),
-      update: Boolean(meetingResult),
-      advance: meetingUpdateApproved,
+      research: true,
+      insights: Boolean(generatedBrief),
+      discovery: Boolean(generatedBrief),
+      "meeting-prep": Boolean(approved && !approvalStale),
+      "follow-up": Boolean(promoted),
     };
     const definitions: Array<Omit<LifecycleStage, "status">> = [
-      { id: "prepare", label: "Prepare", shortLabel: "Prepare", detail: "Build customer context and generate the prebrief." },
-      { id: "refine", label: "Refine", shortLabel: "Refine", detail: "Review, improve, and approve the meeting packet." },
-      { id: "sa-ready", label: "Team handoff", shortLabel: "Team handoff", detail: "Prepare shared context for everyone joining the customer call." },
-      { id: "meet", label: "Meet", shortLabel: "Meet", detail: "Run the call and capture the source conversation." },
-      { id: "update", label: "Update", shortLabel: "Update", detail: "Review AI-suggested changes against the approved brief." },
-      { id: "advance", label: "Advance", shortLabel: "Advance", detail: "Confirm gates, owners, and the next customer move." },
+      { id: "research", label: "Research", shortLabel: "Research", detail: "Capture approved customer facts, people, values, and sources." },
+      { id: "insights", label: "Insights", shortLabel: "Insights", detail: "Review the business scenario, outcomes, risks, and stakeholder signals." },
+      { id: "discovery", label: "Discovery", shortLabel: "Discovery", detail: "Validate assumptions, evidence gaps, questions, and architecture considerations." },
+      { id: "meeting-prep", label: "Meeting prep", shortLabel: "Meeting prep", detail: "Approve the packet and align the team before the customer call." },
+      { id: "follow-up", label: "Follow-up", shortLabel: "Follow-up", detail: "Review meeting evidence, update project truth, and prepare the next call." },
     ];
 
     return definitions.map((stage) => ({
@@ -2085,7 +2113,6 @@ const industryFocus = useMemo(() => {
     confirmedGateCount,
     currentLifecycleStage,
     generatedBrief,
-    meetingResult,
     meetingUpdateApproved,
     opportunityGates,
     promoted,
@@ -2093,21 +2120,52 @@ const industryFocus = useMemo(() => {
   const currentLifecycleLabel =
     lifecycleStages.find((stage) => stage.id === currentLifecycleStage)?.label || "Prepare";
   const nextLifecycleActionLabel: Record<LifecycleStageId, string> = {
-    prepare: meetingUpdateApproved ? "Prepare next call" : "Generate prebrief",
-    refine: "Review and approve",
-    "sa-ready": "Prepare team handoff",
-    meet: "Open meeting workspace",
-    update: "Review meeting changes",
-    advance: "Review next-step gates",
+    research: meetingUpdateApproved ? "Prepare next call" : "Generate prebrief",
+    insights: "Review business insights",
+    discovery: "Resolve discovery gaps",
+    "meeting-prep": "Prepare team handoff",
+    "follow-up": meetingUpdateApproved ? "Review next-step gates" : "Open meeting workspace",
   };
   const projectStagePresentation =
-    selectedLifecycleStage === "meet"
-      ? { eyebrow: "Customer call", title: "Capture the customer conversation", detail: "Process the meeting without changing the approved brief until a human reviews every proposed update." }
-      : selectedLifecycleStage === "update"
-        ? { eyebrow: "Change review", title: "Decide what becomes project truth", detail: "Accept, edit, or reject meeting-derived updates before they enter the next-step handoff." }
-        : selectedLifecycleStage === "advance"
-          ? { eyebrow: "Follow-on motion", title: "Turn decisions into the next move", detail: "Review the next-step handoff, confirm opportunity gates, and prepare the next customer call." }
-          : { eyebrow: "Pre-call alignment", title: "Prepare the team for the customer call", detail: "Share the approved context, assumptions, questions, owners, and meeting goals across everyone joining the call." };
+    selectedLifecycleStage === "follow-up"
+      ? meetingUpdateApproved
+        ? { eyebrow: "Follow-on motion", title: "Turn decisions into the next move", detail: "Review the accepted meeting evidence, confirm opportunity gates, and prepare the next customer call." }
+        : meetingResult
+          ? { eyebrow: "Change review", title: "Decide what becomes project truth", detail: "Accept, edit, or reject meeting-derived updates before they enter the next-step handoff." }
+          : { eyebrow: "Customer call", title: "Capture the customer conversation", detail: "Process the meeting without changing the approved brief until a human reviews every proposed update." }
+      : { eyebrow: "Meeting preparation", title: "Prepare the team for the customer call", detail: "Share the approved context, assumptions, questions, owners, and meeting goals across everyone joining the call." };
+  const isFollowUpStage = selectedLifecycleStage === "follow-up";
+  const isNextStepFollowUp = isFollowUpStage && meetingUpdateApproved;
+  const evidenceCoverageLabel = generatedBrief?.evidenceCoverage
+    ? `${generatedBrief.evidenceCoverage.coveragePercent}% linked`
+    : "Evidence not recorded";
+  const validationNeedCount = (generatedBrief?.claims ?? []).filter((claim) =>
+    claim.evidenceStatus === "assumption" ||
+    claim.evidenceStatus === "needs-validation" ||
+    claim.evidenceStatus === "conflicting-evidence"
+  ).length;
+  const latestApprovedOutput = meetingUpdateApproved
+    ? "Approved meeting outcome"
+    : promoted
+      ? "Pre-call handoff"
+      : approved && !approvalStale
+        ? `Approved brief v${briefVersion}`
+        : generatedBrief
+          ? `Draft brief v${briefVersion}`
+          : "No packet yet";
+  const nextBestAction = currentLifecycleStage === "research"
+    ? "Confirm approved sources and customer context"
+    : currentLifecycleStage === "insights"
+      ? "Align the business scenario and desired outcomes"
+      : currentLifecycleStage === "discovery"
+        ? validationNeedCount
+          ? `Resolve ${validationNeedCount} evidence or assumption gap${validationNeedCount === 1 ? "" : "s"}`
+          : "Approve the customer meeting packet"
+        : currentLifecycleStage === "meeting-prep"
+          ? "Align owners and evidence requests before the call"
+          : meetingUpdateApproved
+            ? "Confirm gates and prepare the next customer meeting"
+            : "Upload the call and review every proposed update";
   const latestHistoryByClient = useMemo(() => {
     const grouped = new Map<string, BriefHistoryEntry>();
 
@@ -2921,10 +2979,12 @@ const industryFocus = useMemo(() => {
     clearCopyFeedback();
     setSelectedLifecycleStage(
       entry.generatedBrief.metadata?.meetingApprovalStatus === "approved"
-        ? "advance"
+        ? "follow-up"
         : entry.promoted
-          ? "meet"
-          : "refine"
+          ? "follow-up"
+          : entry.approved
+            ? "meeting-prep"
+            : "insights"
     );
     setActivePage("brief");
   }
@@ -2945,7 +3005,7 @@ const industryFocus = useMemo(() => {
     setRole(defaultRole);
     setActivePrompt(rolePrompts[defaultRole][0]);
     setActivePage("setup");
-    setSelectedLifecycleStage("prepare");
+    setSelectedLifecycleStage("research");
     setGateDecisions({});
     setPendingSectionId(null);
     setCatchupFilter("all");
@@ -3297,13 +3357,17 @@ const industryFocus = useMemo(() => {
 
 
   function generateBrief() {
-    setSelectedLifecycleStage("refine");
+    setSelectedLifecycleStage("insights");
     setActivePage("brief");
     void requestBrief("prebrief", { forceNew: true });
   }
 
   function refineBrief() {
-    setSelectedLifecycleStage("refine");
+    setSelectedLifecycleStage(
+      activeTab === "businessCase" || activeTab === "executive"
+        ? "insights"
+        : "discovery"
+    );
     setActivePage("brief");
     void requestBrief("prebrief");
   }
@@ -3342,6 +3406,8 @@ const industryFocus = useMemo(() => {
         setBriefVersion(approvedBrief.metadata?.packetVersion || briefVersion);
         setApproved(true);
         setApprovalStale(false);
+        setSelectedLifecycleStage("meeting-prep");
+        setActivePage("project");
         setBriefHistory((current) =>
           current.map((entry) =>
             entry.id === selectedHistoryId
@@ -3385,6 +3451,8 @@ const industryFocus = useMemo(() => {
 
     setApproved(true);
     setApprovalStale(false);
+    setSelectedLifecycleStage("meeting-prep");
+    setActivePage("project");
     setBriefHistory((current) =>
       current.map((entry) =>
         entry.id === selectedHistoryId ? { ...entry, approved: true } : entry
@@ -3393,7 +3461,7 @@ const industryFocus = useMemo(() => {
   }
 
   function refreshProjectModel() {
-    setSelectedLifecycleStage("sa-ready");
+    setSelectedLifecycleStage("meeting-prep");
     setActivePage("project");
     const automaticJobId = generatedBrief?.metadata?.precallHandoffJobId || "";
     const automaticSourceVersion =
@@ -3663,7 +3731,7 @@ const industryFocus = useMemo(() => {
       setMeetingDecisions({});
       setMeetingJobStatus("review-ready");
       setMeetingNotice("Transcript analysis is ready. Review every proposed update before approval.");
-      setSelectedLifecycleStage("update");
+      setSelectedLifecycleStage("follow-up");
     } catch (error) {
       setMeetingJobStatus("failed");
       setMeetingError(
@@ -3752,7 +3820,7 @@ const industryFocus = useMemo(() => {
         )
       );
       setMeetingNotice("Meeting updates approved. The project handoff and catch-up context now use only the accepted evidence.");
-      setSelectedLifecycleStage("advance");
+      setSelectedLifecycleStage("follow-up");
     } catch (error) {
       setMeetingJobStatus("failed");
       setMeetingError(
@@ -3907,6 +3975,8 @@ const industryFocus = useMemo(() => {
 
   function openLifecycleStage(stageId: LifecycleStageId) {
     const route = lifecycleRoutes[stageId];
+    if (stageId === "insights") setActiveTab("businessCase");
+    if (stageId === "discovery") setActiveTab("technical");
     setSelectedLifecycleStage(stageId);
     navigateToPage(route.page);
     setPendingSectionId(route.sectionId);
@@ -3929,7 +3999,7 @@ const industryFocus = useMemo(() => {
   }
 
   function prepareNextCall() {
-    setSelectedLifecycleStage("prepare");
+    setSelectedLifecycleStage("research");
     setActivePage("setup");
     setGenerationError("");
     setGenerationNotice(
@@ -3987,7 +4057,7 @@ const industryFocus = useMemo(() => {
   }
 
   function continueWorkflow() {
-    if (currentLifecycleStage === "prepare" && !generatedBrief) {
+    if (currentLifecycleStage === "research" && !generatedBrief) {
       generateBrief();
       return;
     }
@@ -4083,7 +4153,7 @@ const industryFocus = useMemo(() => {
             </span>
           </div>
           <div className="workspace-context-action">
-            <span className={cx("stage-state", currentLifecycleStage === "advance" && "stage-state-complete")}>
+            <span className={cx("stage-state", currentLifecycleStage === "follow-up" && meetingUpdateApproved && "stage-state-complete")}>
               {currentLifecycleLabel}
             </span>
             <button type="button" onClick={continueWorkflow} disabled={isGenerating}>
@@ -4092,6 +4162,12 @@ const industryFocus = useMemo(() => {
                 : nextLifecycleActionLabel[currentLifecycleStage]}
             </button>
           </div>
+        </div>
+        <div className="journey-context-strip" aria-label="Current journey context">
+          <span><small>Evidence status</small><strong>{evidenceCoverageLabel}</strong></span>
+          <span><small>Validation needs</small><strong>{generatedBrief?.claims?.length ? validationNeedCount : "Not assessed"}</strong></span>
+          <span><small>Latest output</small><strong>{latestApprovedOutput}</strong></span>
+          <span className="journey-context-next"><small>Next recommended action</small><strong>{nextBestAction}</strong></span>
         </div>
 
         {authError ? (
@@ -4360,8 +4436,12 @@ const industryFocus = useMemo(() => {
                 type="button"
                 onClick={() =>
                   packet.key === "handoff"
-                    ? openLifecycleStage(promoted ? "advance" : "sa-ready")
-                    : openLifecycleStage("refine")
+                    ? openLifecycleStage(promoted ? "follow-up" : "meeting-prep")
+                    : openLifecycleStage(
+                        packet.key === "businessCase" || packet.key === "executive"
+                          ? "insights"
+                          : "discovery"
+                      )
                 }
                 disabled={!generatedBrief}
               >
@@ -5126,7 +5206,8 @@ const industryFocus = useMemo(() => {
                     <div className="mt-4 space-y-3 brief-output-canvas">
                       {briefContent[activeTab].length ? (
                         briefContent[activeTab].map((item, index) => {
-                          const sources = claimSources(activeTab, index);
+                          const claim = claimRecord(activeTab, index);
+                          const sources = claimSourceRecords(activeTab, index);
                           const change =
                             reviewMode === "changes"
                               ? activePassageChanges.find((entry) => entry.itemIndex === index)
@@ -5165,13 +5246,24 @@ const industryFocus = useMemo(() => {
                                   <p className="brief-line">{item}</p>
                                 </>
                               )}
-                              {sources.length ? (
-                                <div className="brief-claim-sources" aria-label={`Sources for paragraph ${index + 1}`}>
-                                  {sources.map((source) => (
-                                    <span key={source}>{source}</span>
-                                  ))}
-                                </div>
-                              ) : null}
+                              <div className="brief-claim-sources" aria-label={`Evidence for paragraph ${index + 1}`}>
+                                {claim ? (
+                                  <span className={`claim-evidence-status claim-evidence-status-${claim.evidenceStatus}`}>
+                                    {evidenceStatusLabel(claim.evidenceStatus)}
+                                  </span>
+                                ) : (
+                                  <span className="claim-evidence-status claim-evidence-status-not-recorded">Evidence not recorded</span>
+                                )}
+                                {sources.map((source) => (
+                                  <button
+                                    key={source.sourceId}
+                                    type="button"
+                                    onClick={() => openEvidenceSource(source.sourceId, claim?.claimId)}
+                                  >
+                                    [{source.title}]
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           );
                         })
@@ -5223,9 +5315,15 @@ const industryFocus = useMemo(() => {
                         : null}
                     </div>
                     <div className="evidence-tray">
-                      {(generatedBrief?.citations ?? evidenceSources).map((source) => (
-                        <span key={source}>{source}</span>
-                      ))}
+                      {generatedBrief?.sourceCatalog?.length ? (
+                        generatedBrief.sourceCatalog.slice(0, 10).map((source) => (
+                          <button key={source.sourceId} type="button" onClick={() => openEvidenceSource(source.sourceId)}>
+                            {source.title}
+                          </button>
+                        ))
+                      ) : (
+                        <span>Evidence not recorded</span>
+                      )}
                     </div>
                     {generatedBrief?.metadata ? (
                       <details className="brief-run-details">
@@ -5482,7 +5580,7 @@ const industryFocus = useMemo(() => {
             <div className="page-view">
           <div className="page-titlebar page-titlebar-handoff" id="project-brain">
             <div className="page-title-copy">
-              <span className="page-number">{selectedLifecycleStage === "sa-ready" ? "3" : selectedLifecycleStage === "meet" ? "4" : selectedLifecycleStage === "update" ? "5" : "6"}</span>
+              <span className="page-number">{selectedLifecycleStage === "meeting-prep" ? "4" : "5"}</span>
               <div>
                 <p>{projectStagePresentation.eyebrow}</p>
                 <h1>{projectStagePresentation.title}</h1>
@@ -5495,7 +5593,7 @@ const industryFocus = useMemo(() => {
             </div>
           </div>
 
-          {selectedLifecycleStage === "meet" || selectedLifecycleStage === "update" ? (
+          {isFollowUpStage && !meetingUpdateApproved ? (
           <div id="meeting-workspace-section" className="project-stage-panel">
           <MeetingIntelligence
             isBlueMesa={scenarioId === "bluemesa"}
@@ -5521,12 +5619,12 @@ const industryFocus = useMemo(() => {
           </div>
           ) : null}
 
-          {selectedLifecycleStage === "sa-ready" || selectedLifecycleStage === "advance" ? (
-          <div id={selectedLifecycleStage === "advance" ? "project-advance-section" : "project-sa-ready-section"} className="project-stage-panel">
+          {selectedLifecycleStage === "meeting-prep" || isNextStepFollowUp ? (
+          <div id={isNextStepFollowUp ? "project-follow-up-section" : "project-meeting-prep-section"} className="project-stage-panel">
           <div className={cx("handoff-ready-card", handoffReady && "handoff-ready-card-done")}>
             <div>
               <span>
-                {selectedLifecycleStage === "advance"
+                {isNextStepFollowUp
                   ? "Next-step handoff"
                   : handoffReady
                     ? "Pre-call handoff ready"
@@ -5535,20 +5633,20 @@ const industryFocus = useMemo(() => {
                       : "Waiting for brief approval"}
               </span>
               <h3>
-                {selectedLifecycleStage === "advance"
+                {isNextStepFollowUp
                   ? `${company || "Customer"} is ready for the next decision`
                   : handoffReady
                     ? `${company || "Customer"} is ready for team alignment`
                     : `Build the pre-call handoff for ${company || "this customer"}`}
               </h3>
               <p>
-                {selectedLifecycleStage === "advance"
+                {isNextStepFollowUp
                   ? "Use the accepted meeting evidence, owned actions, and gate decisions to prepare the next customer move."
                   : handoffReady
                     ? "Sales context, technical assumptions, stakeholders, discovery questions, and meeting goals are aligned for the full call team."
                     : "PilarPrep prepares the shared pre-call handoff automatically after approval."}
               </p>
-              {selectedLifecycleStage === "sa-ready" && approved ? (
+              {selectedLifecycleStage === "meeting-prep" && approved ? (
                 <div className={`precall-handoff-status precall-handoff-status-${precallHandoffStatus}`} role="status" aria-live="polite">
                   <strong>{precallHandoffStatus === "ready" ? "Ready" : precallHandoffStatus === "failed" ? "Needs attention" : precallHandoffStatus === "stale" ? "Out of date" : "Preparing"}</strong>
                   <span>
@@ -5564,7 +5662,7 @@ const industryFocus = useMemo(() => {
               ) : null}
             </div>
             <div className="handoff-ready-actions">
-              {selectedLifecycleStage === "sa-ready" ? (
+              {selectedLifecycleStage === "meeting-prep" ? (
                 <button
                   className="handoff-ready-action handoff-ready-action-primary"
                   type="button"
@@ -5582,7 +5680,7 @@ const industryFocus = useMemo(() => {
               ) : null}
               {generatedBrief?.metadata?.docxDownloadUrl ? (
                 <a
-                  className={cx("handoff-ready-action", selectedLifecycleStage === "advance" && "handoff-ready-action-primary")}
+                  className={cx("handoff-ready-action", isNextStepFollowUp && "handoff-ready-action-primary")}
                   href={generatedBrief.metadata.docxDownloadUrl}
                   target="_blank"
                   rel="noreferrer"
@@ -5602,7 +5700,7 @@ const industryFocus = useMemo(() => {
             </div>
           </div>
 
-          {selectedLifecycleStage === "advance" ? (
+          {isNextStepFollowUp ? (
             <OpportunityGates
               gates={opportunityGates}
               disabled={!meetingUpdateApproved}
@@ -5614,11 +5712,11 @@ const industryFocus = useMemo(() => {
           <details
             className={cx(
               "project-handoff-details",
-              selectedLifecycleStage === "sa-ready" && "project-handoff-details-always-open"
+              selectedLifecycleStage === "meeting-prep" && "project-handoff-details-always-open"
             )}
-            open={selectedLifecycleStage === "sa-ready" ? true : undefined}
+            open={selectedLifecycleStage === "meeting-prep" ? true : undefined}
           >
-            {selectedLifecycleStage === "advance" ? (
+            {isNextStepFollowUp ? (
               <summary className="advance-handoff-summary">
                 <span>
                   <strong>Full next-step handoff</strong>
@@ -5631,13 +5729,13 @@ const industryFocus = useMemo(() => {
             <div className="grid gap-0 2xl:grid-cols-[380px_1fr]">
               <div className="border-b border-white/10 p-5 2xl:border-b-0 2xl:border-r">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7dd3fc]">
-                  {selectedLifecycleStage === "advance" ? "Next-step handoff" : "Pre-call handoff"}
+                  {isNextStepFollowUp ? "Next-step handoff" : "Pre-call handoff"}
                 </p>
                 <h2 className="mt-1 text-xl font-black">
-                  {selectedLifecycleStage === "advance" ? "Follow-on team context" : "Pre-call context"}
+                  {isNextStepFollowUp ? "Follow-on team context" : "Pre-call context"}
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-white/70">
-                  {selectedLifecycleStage === "advance"
+                  {isNextStepFollowUp
                     ? "Give Sales, the SA, and delivery one view of what changed, who owns the next action, and which decision is next."
                     : "Give Sales, SAs, executives, PMs, and delivery leads the shared context, assumptions, evidence needs, and questions required for the customer call."}
                 </p>
@@ -5745,16 +5843,25 @@ const industryFocus = useMemo(() => {
                       <p className="mt-5 text-base leading-7 text-white/82">
                         {displayedProjectAnswer}
                       </p>
-                      {claimSources("projectAnswer", 0).length ? (
+                      {claimRecord("projectAnswer", 0) ? (
                         <div className="project-answer-sources">
-                          {claimSources("projectAnswer", 0).map((source) => (
-                            <span key={source}>{source}</span>
+                          <span className={`claim-evidence-status claim-evidence-status-${claimRecord("projectAnswer", 0)?.evidenceStatus}`}>
+                            {evidenceStatusLabel(claimRecord("projectAnswer", 0)?.evidenceStatus ?? "needs-validation")}
+                          </span>
+                          {claimSourceRecords("projectAnswer", 0).map((source) => (
+                            <button
+                              key={source.sourceId}
+                              type="button"
+                              onClick={() => openEvidenceSource(source.sourceId, claimRecord("projectAnswer", 0)?.claimId)}
+                            >
+                              [{source.title}]
+                            </button>
                           ))}
                         </div>
-                      ) : null}
+                      ) : <div className="project-answer-sources"><span>Evidence not recorded</span></div>}
                     </div>
 
-                    {selectedLifecycleStage === "advance" ? (
+                    {isNextStepFollowUp ? (
                     <>
                     <section className="next-steps-panel" aria-label="Handoff next steps">
                       <div className="next-steps-heading">
@@ -5935,7 +6042,7 @@ const industryFocus = useMemo(() => {
                     ) : null}
                   </div>
 
-                  {selectedLifecycleStage === "sa-ready" ? (
+                  {selectedLifecycleStage === "meeting-prep" ? (
                     <div className="meeting-panel" id="project-notes-section">
                       <label className="block">
                         <span className="dark-label">Known customer context</span>
@@ -5966,7 +6073,7 @@ const industryFocus = useMemo(() => {
           </section>
           </details>
 
-          {selectedLifecycleStage === "advance" ? (
+          {isNextStepFollowUp ? (
             <div className="advance-action-bar">
               <div>
                 <p>Continue the account cycle</p>
@@ -5989,7 +6096,14 @@ const industryFocus = useMemo(() => {
           </div>
         ) : null}
       </section>
+      <EvidenceDrawer
+        source={selectedEvidenceSource}
+        claim={selectedEvidenceClaim}
+        onClose={() => {
+          setSelectedEvidenceSourceId("");
+          setSelectedEvidenceClaimId("");
+        }}
+      />
     </main>
   );
 }
-

@@ -1,7 +1,8 @@
 # Authorized Agentic RAG Design
 
-Status: generalized tenant evidence workflow implemented and locally tested. Live
-Knowledge Base ingestion and retrieval must be verified after deployment.
+Status: generalized tenant evidence ingestion and brief retrieval are implemented
+and locally tested. Live Knowledge Base ingestion and retrieval must be verified
+after deployment.
 
 ## Why this is not GraphRAG
 
@@ -18,8 +19,17 @@ an evaluation candidate, not a portfolio checkbox.
 
 ## Ingestion contract
 
-Evidence management is available only to verified workspace users. Supported text
-formats are TXT, Markdown, JSON, and CSV, with a 120 KB application limit.
+Evidence management is available only to verified workspace users. A source can be
+entered as bounded text, uploaded as PDF, DOCX, TXT, Markdown, JSON, CSV, or HTML,
+or captured from one user-approved HTTPS URL. Uploads and URL responses are limited
+to 5 MB. Pasted text retains the smaller API contract limit.
+
+URL capture is not web crawling. It retrieves only the URL approved by the user.
+The server enforces HTTPS, an eight-second timeout, a three-redirect limit, content
+type and size allowlists, and public-address resolution. Private, loopback,
+link-local, reserved, and cloud metadata targets are rejected. DNS rebinding
+protection should be strengthened before production by pinning the validated IP to
+the outbound connection or by moving URL acquisition to a governed fetch service.
 
 Each document includes:
 
@@ -30,6 +40,8 @@ Each document includes:
 - approved/status/visibility metadata
 - uploadedAt and approvedAt timestamps
 - contentTrust=untrusted-evidence
+- sourceId, sourceType, sourceLocation, capturedAt, and freshness
+- approvedBy, accessScope, and lifecycleStatus
 
 Storage:
 
@@ -49,8 +61,9 @@ Titan Text Embeddings v2 creates 1,024-dimensional FLOAT32 vectors in S3 Vectors
 
 ## Retrieval policy
 
-The client cannot supply a Knowledge Base ID or metadata filter. The AgentCore runtime
-reads the configured ID from its environment and builds one of two server policies:
+The client cannot supply a Knowledge Base ID or metadata filter. The unified brief
+worker and AgentCore runtime read the configured ID from their environments and
+build one of two server policies:
 
 Guest Blue Mesa:
 
@@ -67,7 +80,7 @@ Authenticated workspace:
 - status=approved
 - visibility=tenant-private
 
-Retrieval is bounded to six results. Every returned result is checked again against
+Brief retrieval is bounded to six results. Every returned result is checked again against
 the expected metadata. Missing metadata or any mismatch rejects the retrieval and
 emits a cross-scope security metric.
 
@@ -86,9 +99,27 @@ Retrieved text is labeled untrusted evidence. It cannot:
 The model receives allowed source labels separately. Generated citations must use
 those labels. Retrieved storage locations and tenant IDs are not exposed to the UI.
 
-## Citations and freshness
+## Claims, citations, and freshness
 
-The normalized result contains only:
+The normalized packet contains a source catalog and claim ledger. Each source has a
+stable sourceId. Each material brief paragraph becomes a claim with section,
+itemIndex, sourceIds, evidenceStatus, an evidence snippet, and validation status.
+Source IDs are resolved only from the server-authorized catalog.
+
+The evidence statuses are:
+
+- supported
+- partially-supported
+- customer-provided
+- assumption
+- conflicting-evidence
+- needs-validation
+
+Evidence coverage is deterministic: claims with at least one valid source divided by
+all material claims. It is explicitly not a model confidence score or probability of
+truth. Legacy packets keep an empty source catalog and display Evidence not recorded.
+
+The normalized retrieval result contains only:
 
 - sourceTitle
 - documentType
@@ -98,8 +129,10 @@ The normalized result contains only:
 - relevance score
 - contentTrust
 
-Generation metadata reports source freshness and retrieval count. The evaluation
-suite measures citation/evidence completeness and unsupported claims.
+Generation metadata reports retrieval mode and result count. JSON artifacts retain
+the full source and claim contracts. DOCX exports add source notes, evidence coverage,
+and an evidence register. The evaluation suite measures citation completeness,
+unsupported claims, and cross-client isolation.
 
 ## Deletion and re-index
 

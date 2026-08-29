@@ -245,6 +245,86 @@ class LambdaHandlerTest(unittest.TestCase):
             all(source in approved_sources for item in evidence for source in item["sources"])
         )
 
+    def test_returns_validated_source_catalog_claims_and_coverage(self):
+        payload = {
+            **VALID_PAYLOAD,
+            "tenantId": "tenant-acme",
+            "clientId": "apex-mutual",
+            "projectId": "apex-mutual",
+            "approvedEvidenceSources": [
+                {
+                    "sourceId": "src-rag-current-state",
+                    "sourceTitle": "Approved current-state architecture",
+                    "sourceType": "architecture",
+                    "evidenceSnippet": "Apex Mutual runs the portal on AWS today.",
+                    "sourceLocation": "private-knowledge-base",
+                    "approvedBy": "customer-architect",
+                    "accessScope": "tenant-private",
+                }
+            ],
+        }
+        response = self.invoke(payload)
+        body = response["json"]
+        source_ids = {source["sourceId"] for source in body["sourceCatalog"]}
+
+        self.assertIn("src-rag-current-state", source_ids)
+        self.assertEqual(len(body["claims"]), 34)
+        self.assertTrue(
+            all(
+                source_id in source_ids
+                for claim in body["claims"]
+                for source_id in claim["sourceIds"]
+            )
+        )
+        self.assertEqual(
+            body["evidenceCoverage"]["materialClaims"],
+            len(body["claims"]),
+        )
+        self.assertLessEqual(body["evidenceCoverage"]["coveragePercent"], 100)
+        self.assertIn(
+            "not probability of truth",
+            body["evidenceCoverage"]["meaning"],
+        )
+
+        self.assertTrue(
+            all(
+                claim["sourceIds"]
+                or claim["evidenceStatus"]
+                in {"assumption", "needs-validation", "conflicting-evidence"}
+                for claim in body["claims"]
+            )
+        )
+
+    def test_surfaces_conflicting_evidence_as_a_validation_state(self):
+        generated = json.loads(MODEL_RESPONSE)
+        generated["technical"][0] = (
+            "Conflicting evidence exists between the current-state architecture notes "
+            "and the latest customer correction. The SA must resolve the disagreement "
+            "with the customer owner before recommending a target pattern. Ask: \"Which "
+            "artifact is authoritative for the current environment?\""
+        )
+
+        normalized = app._normalize_generated(generated, VALID_PAYLOAD)
+        claim = next(
+            row
+            for row in normalized["claims"]
+            if row["section"] == "technical" and row["itemIndex"] == 0
+        )
+
+        self.assertEqual(claim["evidenceStatus"], "conflicting-evidence")
+        self.assertTrue(claim["sourceIds"])
+        self.assertEqual(
+            normalized["evidenceCoverage"]["statusCounts"]["conflicting-evidence"],
+            1,
+        )
+
+    def test_rejects_model_citations_outside_the_server_allowlist(self):
+        generated = json.loads(MODEL_RESPONSE)
+        generated["citations"].append("Invented analyst report")
+
+        with self.assertRaisesRegex(ValueError, "unapproved source label"):
+            app._normalize_generated(generated, VALID_PAYLOAD)
+
     def test_estimates_usage_when_bedrock_does_not_report_tokens(self):
         response = self.invoke(VALID_PAYLOAD)
         metadata = response["json"]["metadata"]
@@ -379,6 +459,22 @@ class LambdaHandlerTest(unittest.TestCase):
 
         self.assertIn("Next Steps", document_xml)
         self.assertIn("Decision gate", document_xml)
+
+    def test_docx_export_contains_evidence_coverage_and_register(self):
+        generated = self.invoke(VALID_PAYLOAD)["json"]
+        docx_bytes = app._brief_docx_bytes(
+            VALID_PAYLOAD,
+            generated,
+            {"projectId": "apex-mutual"},
+        )
+
+        with ZipFile(BytesIO(docx_bytes)) as docx:
+            document_xml = docx.read("word/document.xml").decode("utf-8")
+
+        self.assertIn("Evidence Coverage", document_xml)
+        self.assertIn("Evidence Register", document_xml)
+        self.assertIn("This measures source coverage, not probability of truth", document_xml)
+        self.assertIn("Customer context", document_xml)
 
     def test_store_prebrief_artifacts_replaces_previous_s3_outputs(self):
         generated = json.loads(MODEL_RESPONSE)

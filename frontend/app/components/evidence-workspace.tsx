@@ -25,8 +25,14 @@ export type EvidenceUpload = {
   sourceTitle: string;
   documentType: string;
   source: string;
-  content: string;
+  sourceType: string;
+  content?: string;
+  contentBase64?: string;
+  contentType?: string;
+  sourceUrl?: string;
 };
+
+type SourceMode = "text" | "file" | "url";
 
 type EvidenceWorkspaceProps = {
   authenticated: boolean;
@@ -61,6 +67,33 @@ function statusLabel(value: string) {
     .replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("The selected file could not be read."));
+    reader.onload = () => {
+      const value = typeof reader.result === "string" ? reader.result : "";
+      const separator = value.indexOf(",");
+      if (separator < 0) reject(new Error("The selected file could not be encoded."));
+      else resolve(value.slice(separator + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function fileContentType(file: File) {
+  if (file.type) return file.type;
+  const extension = file.name.toLowerCase().split(".").pop();
+  return {
+    csv: "text/csv",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    json: "application/json",
+    md: "text/markdown",
+    pdf: "application/pdf",
+    txt: "text/plain",
+  }[extension ?? ""] ?? "application/octet-stream";
+}
+
 function ProcessingClock({ label }: { label: string }) {
   return (
     <span className="processing-indicator" role="status" aria-live="polite">
@@ -93,24 +126,47 @@ export function EvidenceWorkspace({
   const [documentType, setDocumentType] = useState("requirements");
   const [source, setSource] = useState("Customer-approved notes");
   const [content, setContent] = useState("");
+  const [sourceMode, setSourceMode] = useState<SourceMode>("text");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [localError, setLocalError] = useState("");
   const [deleteCandidate, setDeleteCandidate] = useState("");
   const documentId = useMemo(() => documentSlug(sourceTitle), [sourceTitle]);
   const isBusy = Boolean(busyDocumentId);
 
   async function submitEvidence(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setLocalError("");
     try {
-      await onUpload({
+      const input: EvidenceUpload = {
         documentId,
-        fileName: `${documentId}.md`,
+        fileName: sourceMode === "file" && selectedFile ? selectedFile.name : `${documentId}.${sourceMode === "url" ? "html" : "md"}`,
         sourceTitle: sourceTitle.trim(),
         documentType,
         source: source.trim(),
-        content: content.trim(),
-      });
+        sourceType:
+          sourceMode === "url"
+            ? "approved-public-url"
+            : sourceMode === "file"
+              ? "uploaded-customer-document"
+              : "customer-provided-context",
+      };
+      if (sourceMode === "url") {
+        input.sourceUrl = sourceUrl.trim();
+      } else if (sourceMode === "file" && selectedFile) {
+        if (selectedFile.size > 5_000_000) throw new Error("Files must be 5 MB or smaller.");
+        input.contentBase64 = await fileToBase64(selectedFile);
+        input.contentType = fileContentType(selectedFile);
+      } else {
+        input.content = content.trim();
+      }
+      await onUpload(input);
       setSourceTitle("");
       setContent("");
-    } catch {
+      setSourceUrl("");
+      setSelectedFile(null);
+    } catch (uploadError) {
+      setLocalError(uploadError instanceof Error ? uploadError.message : "The source could not be prepared.");
       return;
     }
   }
@@ -162,6 +218,28 @@ export function EvidenceWorkspace({
               <span>New evidence</span>
               <strong>Add an approved source</strong>
             </div>
+            <div className="evidence-source-modes" role="tablist" aria-label="Source format">
+              {([
+                ["text", "Paste text"],
+                ["file", "Upload document"],
+                ["url", "Approved URL"],
+              ] as Array<[SourceMode, string]>).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  className={sourceMode === mode ? "evidence-source-mode evidence-source-mode-active" : "evidence-source-mode"}
+                  type="button"
+                  role="tab"
+                  aria-selected={sourceMode === mode}
+                  onClick={() => {
+                    setSourceMode(mode);
+                    setLocalError("");
+                  }}
+                  disabled={isBusy}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <label className="block">
               <span className="field-label">Source title</span>
               <input
@@ -199,31 +277,73 @@ export function EvidenceWorkspace({
                 />
               </label>
             </div>
-            <label className="block">
-              <span className="field-label">Approved content</span>
-              <textarea
-                className="field evidence-content-field"
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                placeholder="Paste the customer-approved facts, constraints, and requirements the AI may use as evidence."
-                minLength={20}
-                maxLength={120000}
-                required
-                disabled={isBusy}
-              />
-            </label>
+            {sourceMode === "text" ? (
+              <label className="block">
+                <span className="field-label">Approved content</span>
+                <textarea
+                  className="field evidence-content-field"
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                  placeholder="Paste customer-approved facts, constraints, and requirements."
+                  minLength={20}
+                  maxLength={120000}
+                  required
+                  disabled={isBusy}
+                />
+              </label>
+            ) : sourceMode === "file" ? (
+              <label className="evidence-file-field">
+                <span className="field-label">Approved document</span>
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.txt,.md,.csv,.json"
+                  required
+                  disabled={isBusy}
+                  onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+                />
+                <small>{selectedFile ? `${selectedFile.name} · ${(selectedFile.size / 1024).toFixed(0)} KB` : "PDF, DOCX, TXT, Markdown, CSV, or JSON · 5 MB maximum"}</small>
+              </label>
+            ) : (
+              <label className="block">
+                <span className="field-label">Approved HTTPS page</span>
+                <input
+                  className="field"
+                  type="url"
+                  value={sourceUrl}
+                  onChange={(event) => setSourceUrl(event.target.value)}
+                  placeholder="https://customer.example/company/values"
+                  pattern="https://.*"
+                  required
+                  disabled={isBusy}
+                />
+                <small className="field-note">PilarPrep captures this user-approved page only. It does not crawl the site.</small>
+              </label>
+            )}
             <div className="evidence-form-footer">
-              <span>{content.length.toLocaleString()} / 120,000 characters</span>
+              <span>
+                {sourceMode === "text"
+                  ? `${content.length.toLocaleString()} / 120,000 characters`
+                  : sourceMode === "file"
+                    ? "Stored privately and indexed for this client"
+                    : "HTTPS, redirect, size, and network checks enforced"}
+              </span>
               <button
                 className="primary-button"
                 type="submit"
-                disabled={isBusy || sourceTitle.trim().length < 2 || content.trim().length < 20}
+                disabled={
+                  isBusy ||
+                  sourceTitle.trim().length < 2 ||
+                  (sourceMode === "text" && content.trim().length < 20) ||
+                  (sourceMode === "file" && !selectedFile) ||
+                  (sourceMode === "url" && !sourceUrl.trim().startsWith("https://"))
+                }
               >
                 {busyDocumentId === "upload"
                   ? <ProcessingClock label="Adding evidence..." />
                   : "Add and index evidence"}
               </button>
             </div>
+            {localError ? <div className="evidence-inline-error" role="alert">{localError}</div> : null}
           </form>
 
           <section className="evidence-library-panel" aria-label="Client evidence">

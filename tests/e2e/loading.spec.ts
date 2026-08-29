@@ -67,6 +67,43 @@ const completedBrief = {
   },
   citations: ["Customer context"],
   evidence: [],
+  sourceCatalog: [
+    {
+      sourceId: "src-customer-context",
+      tenantId: "tenant-test",
+      clientId: "apex-mutual",
+      projectId: "apex-mutual",
+      label: "Customer context",
+      sourceType: "customer-provided-context",
+      title: "Customer context",
+      sourceLocation: "protected-workspace-record",
+      capturedAt: "2026-08-13T11:55:00.000Z",
+      freshness: "current-request",
+      approvedBy: "request-author",
+      evidenceSnippet: "Apex Mutual approved a bounded modernization discovery focused on customer trust and audit evidence.",
+      accessScope: "tenant-private",
+      lifecycleStatus: "active",
+    },
+  ],
+  claims: [
+    {
+      claimId: "claim-business-scenario",
+      section: "businessCase",
+      itemIndex: 0,
+      text: businessCase.scenario,
+      sourceIds: ["src-customer-context"],
+      evidenceStatus: "customer-provided",
+      evidenceSnippet: "Apex Mutual approved a bounded modernization discovery focused on customer trust and audit evidence.",
+      validationStatus: "valid-source-reference",
+    },
+  ],
+  evidenceCoverage: {
+    materialClaims: 1,
+    claimsWithApprovedSources: 1,
+    coveragePercent: 100,
+    statusCounts: { "customer-provided": 1 },
+    meaning: "Percentage of material claims linked to approved sources; not a probability of truth.",
+  },
   metadata: {
     projectId: "apex-mutual",
     clientId: "apex-mutual",
@@ -256,7 +293,7 @@ test("live job keeps the workspace responsive with an in-app clock", async ({ pa
     name: "Customer lifecycle",
   });
   const briefNavigation = workflowNavigation.getByRole("button", {
-    name: /Refine/,
+    name: /Insights/,
   });
 
   await expect(generate).toBeEnabled();
@@ -320,6 +357,54 @@ test("live job keeps the workspace responsive with an in-app clock", async ({ pa
       )
   );
   expect(longestTask).toBeLessThan(250);
+});
+
+test("claim citations open an accessible authorized evidence drawer", async ({ page }) => {
+  await page.route("https://test.execute-api.us-east-1.amazonaws.com/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === "GET" && path === "/clients") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ clients: [] }) });
+      return;
+    }
+    if (route.request().method() === "POST") {
+      await route.fulfill({
+        status: 202,
+        contentType: "application/json",
+        body: JSON.stringify({
+          jobId: "job-evidence-drawer",
+          clientId: "apex-mutual",
+          projectId: "apex-mutual",
+          status: "queued",
+          pollAfterMs: 10,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        jobId: "job-evidence-drawer",
+        clientId: "apex-mutual",
+        projectId: "apex-mutual",
+        status: "complete",
+        result: completedBrief,
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Generate AI prebrief/i }).click();
+  await expect(page.getByText(businessCase.scenario)).toBeVisible();
+  await page.getByRole("button", { name: "[Customer context]" }).first().click();
+
+  const drawer = page.getByRole("dialog", { name: "Customer context" });
+  await expect(drawer).toBeVisible();
+  await expect(drawer).toContainText("Customer provided");
+  await expect(drawer).toContainText("bounded modernization discovery");
+  await expect(drawer).toContainText("not a probability that a claim is true");
+  await drawer.getByRole("button", { name: "Close evidence details" }).click();
+  await expect(drawer).toHaveCount(0);
 });
 
 test("failed generation replaces the empty state with an actionable error", async ({ page }) => {
