@@ -1,5 +1,7 @@
 # PilarPrep
 
+<img width="1774" height="887" alt="image" src="https://github.com/user-attachments/assets/5a564a65-389f-48e9-bba7-6e1205c99c5b" />
+
 [![CI](https://github.com/aadams35/Pilarprep/actions/workflows/ci.yml/badge.svg)](https://github.com/aadams35/Pilarprep/actions/workflows/ci.yml)
 
 PilarPrep is an AWS-native GenAI workspace that turns scattered customer context into an actionable meeting brief, a role-aware pre-call handoff, and governed follow-on project context.
