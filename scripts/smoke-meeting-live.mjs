@@ -311,14 +311,12 @@ if (reuseApprovedBrief) {
     throw new Error("Blue Mesa brief approval did not durably promote the draft.");
   }
   if (
-    !approval.result.metadata?.precallHandoffJobId ||
-    !["queued", "preparing", "ready"].includes(
-      approval.result.metadata?.precallHandoffStatus
-    ) ||
+    approval.result.metadata?.precallHandoffJobId ||
+    approval.result.metadata?.precallHandoffStatus !== "idle" ||
     approval.result.metadata?.precallHandoffSourceVersion !== packetVersion
   ) {
     throw new Error(
-      "Blue Mesa approval did not create or recover the automatic pre-call handoff."
+      "Blue Mesa approval did not stop at the manual pre-call handoff checkpoint."
     );
   }
 }

@@ -381,7 +381,7 @@ test("live job keeps the workspace responsive with an in-app clock", async ({ pa
   expect(longestTask).toBeLessThan(250);
 });
 
-test("approve pre-call packet completes and opens the pre-call handoff", async ({ page }) => {
+test("approval waits for an explicit pre-call handoff action", async ({ page }) => {
   const submittedActions: Array<{
     action?: string;
     input?: { packetVersion?: number };
@@ -393,9 +393,59 @@ test("approve pre-call packet completes and opens the pre-call handoff", async (
       packetVersion: 2,
       approvedPacketVersion: 2,
       approvalStatus: "approved",
-      precallHandoffJobId: "job-precall-ready",
-      precallHandoffStatus: "ready",
+      precallHandoffStatus: "idle",
       precallHandoffSourceVersion: 2,
+    },
+  };
+  const handoffBrief = {
+    ...approvedBrief,
+    provider: "agentcore",
+    projectArtifacts: {
+      twoWeekPlan: [
+        {
+          day: "Day 1",
+          action: "Validate payroll interface evidence",
+          owner: "Solutions Architect",
+          exitCriteria: "Evidence owner confirmed",
+        },
+      ],
+      riskRegister: [
+        {
+          risk: "Payroll cutover risk",
+          impact: "Settlement confidence",
+          mitigation: "Bounded validation",
+          owner: "Platform lead",
+        },
+      ],
+      stakeholderMap: [
+        {
+          name: "Maya Chen",
+          role: "Executive sponsor",
+          priorities: "Visible progress",
+          engagement: "Weekly decision readout",
+        },
+      ],
+      followUpEmail: {
+        subject: "BlueMesa pre-call alignment",
+        body: "The approved packet is ready for the call team.",
+      },
+      nextSteps: {
+        immediateActions: ["Confirm evidence owners"],
+        openQuestions: ["Which payroll interfaces are in scope?"],
+        nextMeeting: {
+          purpose: "Validate architecture evidence",
+          timing: "Next week",
+          attendees: ["Sales", "Solutions Architect"],
+        },
+        customerSummary: "BlueMesa is preparing a bounded payroll integration.",
+        internalNotes: "Use the approved packet as the source of truth.",
+      },
+    },
+    metadata: {
+      ...approvedBrief.metadata,
+      docxArtifactKey: "handoff/latest.docx",
+      stateKey: "HANDOFF#LATEST",
+      precallHandoffStatus: "ready",
     },
   };
 
@@ -417,11 +467,16 @@ test("approve pre-call packet completes and opens the pre-call handoff", async (
       };
       submittedActions.push(payload);
       const approval = payload.action === "brief.approve";
+      const handoff = payload.action === "handoff.generate";
       await route.fulfill({
         status: 202,
         contentType: "application/json",
         body: JSON.stringify({
-          jobId: approval ? "job-approve-v1" : "job-generate-v1",
+          jobId: approval
+            ? "job-approve-v1"
+            : handoff
+              ? "job-handoff-v1"
+              : "job-generate-v1",
           clientId: "apex-mutual",
           projectId: "apex-mutual",
           status: "queued",
@@ -432,15 +487,20 @@ test("approve pre-call packet completes and opens the pre-call handoff", async (
     }
 
     const approval = path.endsWith("/job-approve-v1");
+    const handoff = path.endsWith("/job-handoff-v1");
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        jobId: approval ? "job-approve-v1" : "job-generate-v1",
+        jobId: approval
+          ? "job-approve-v1"
+          : handoff
+            ? "job-handoff-v1"
+            : "job-generate-v1",
         clientId: "apex-mutual",
         projectId: "apex-mutual",
         status: "complete",
-        result: approval ? approvedBrief : completedBrief,
+        result: approval ? approvedBrief : handoff ? handoffBrief : completedBrief,
       }),
     });
   });
@@ -456,11 +516,25 @@ test("approve pre-call packet completes and opens the pre-call handoff", async (
   await expect(
     page.getByRole("heading", { name: "Prepare the team for the customer call" })
   ).toBeVisible();
+  await expect(page.getByText("Ready to prepare", { exact: true })).toBeVisible();
+  const buildHandoff = page.getByRole("button", {
+    name: "Build pre-call handoff",
+  });
+  await expect(buildHandoff).toBeEnabled();
   expect(submittedActions.map((request) => request.action)).toEqual([
     "brief.generate",
     "brief.approve",
   ]);
   expect(submittedActions[1]?.input?.packetVersion).toBe(1);
+  await buildHandoff.click();
+  await expect(
+    page.getByText("The shared handoff is ready for the call team.")
+  ).toBeVisible();
+  expect(submittedActions.map((request) => request.action)).toEqual([
+    "brief.generate",
+    "brief.approve",
+    "handoff.generate",
+  ]);
 });
 
 test("claim citations open an accessible authorized evidence drawer", async ({ page }) => {

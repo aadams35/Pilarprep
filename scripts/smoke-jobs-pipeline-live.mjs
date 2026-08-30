@@ -942,6 +942,18 @@ if (resumeApproved) {
   }
 }
 
+if (
+  (!resumeApproved || refreshApproval) &&
+  (approval.result.metadata?.precallHandoffJobId ||
+    approval.result.metadata?.precallHandoffStatus !== "idle" ||
+    approval.result.metadata?.precallHandoffSourceVersion !==
+      approval.result.metadata?.approvedPacketVersion)
+) {
+  throw new Error(
+    "Approval did not stop at the explicit pre-call handoff checkpoint."
+  );
+}
+
 let handoff;
 if (skipHandoff) {
   const storedHandoffQuery = new URLSearchParams({

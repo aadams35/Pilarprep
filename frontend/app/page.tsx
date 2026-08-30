@@ -1039,12 +1039,7 @@ export default function Home() {
   const agentSessionIdRef = useRef("");
   const generationRequestRef = useRef(false);
   const pipelineAbortRef = useRef<AbortController | null>(null);
-  const precallHandoffAbortRef = useRef<AbortController | null>(null);
-  const briefVersionRef = useRef(briefVersion);
   const activeTabRef = useRef<BriefTab>("businessCase");
-  useEffect(() => {
-    briefVersionRef.current = briefVersion;
-  }, [briefVersion]);
   const catchupRequestRef = useRef(false);
   const catchupAbortRef = useRef<AbortController | null>(null);
   const [activePage, setActivePage] = useState<ConsolePage>("setup");
@@ -3133,6 +3128,10 @@ const industryFocus = useMemo(() => {
     setGenerationError("");
     setGenerationNotice("");
     clearCopyFeedback();
+    if (mode === "project") {
+      setPrecallHandoffStatus("preparing");
+      setPrecallHandoffError("");
+    }
 
     if (!preserveExistingOutput) {
       setGeneratedBrief(null);
@@ -3287,10 +3286,16 @@ const industryFocus = useMemo(() => {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setGenerationNotice("The AI request was cancelled. Your current packet was preserved.");
+        if (mode === "project") {
+          setPrecallHandoffStatus("idle");
+        }
       } else {
-        setGenerationError(
-          error instanceof Error ? error.message : "Brief generation failed"
-        );
+        const message = error instanceof Error ? error.message : "Brief generation failed";
+        setGenerationError(message);
+        if (mode === "project") {
+          setPrecallHandoffStatus("failed");
+          setPrecallHandoffError(message);
+        }
       }
     } finally {
       if (pipelineAbortRef.current === controller) {
@@ -3302,100 +3307,6 @@ const industryFocus = useMemo(() => {
       setRefiningTarget(null);
     }
   }
-
-  async function monitorAutomaticHandoff(
-    jobId: string,
-    selectedCompany: string,
-    sourceVersion: number
-  ) {
-    precallHandoffAbortRef.current?.abort();
-    const controller = new AbortController();
-    precallHandoffAbortRef.current = controller;
-    setPrecallHandoffStatus("queued");
-    setPrecallHandoffError("");
-    const clientId = pipelineClientIdentifier(selectedCompany);
-    const projectId = clientId;
-    const sessionId = agentSessionId();
-    const accepted = {
-      jobId,
-      clientId,
-      projectId,
-      status: "queued" as const,
-      pollAfterMs: 1250,
-    };
-
-    try {
-      const raw = await pollPipelineJob<BriefResponse>(
-        accepted,
-        (pollSignal) =>
-          signedPipelineRequest(
-            `jobs/${jobId}?clientId=${encodeURIComponent(clientId)}&projectId=${encodeURIComponent(projectId)}&sessionId=${encodeURIComponent(sessionId)}`,
-            "GET",
-            undefined,
-            pollSignal
-          ),
-        (milliseconds) =>
-          new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds)),
-        720_000,
-        {
-          signal: controller.signal,
-          onStatus: (status) =>
-            setPrecallHandoffStatus(status === "queued" ? "queued" : "preparing"),
-          onProgress: (progress) => {
-            setPrecallHandoffStatus(
-              progress.status === "queued" ? "queued" : "preparing"
-            );
-            setPrecallHandoffError(
-              progress.retryCount > 0
-                ? "AgentCore hit a temporary issue. AWS is retrying this handoff automatically."
-                : ""
-            );
-          },
-        }
-      );
-      const handoff = normalizeBriefResponse(raw, "agentcore");
-      if (handoff.metadata?.fallbackUsed) {
-        throw new Error("The pre-call handoff did not complete through AgentCore.");
-      }
-      if (briefVersionRef.current !== sourceVersion) {
-        setPrecallHandoffStatus("stale");
-        return;
-      }
-      setProjectBrainAnswer(handoff.projectAnswer);
-      setGeneratedBrief((current) =>
-        current
-          ? {
-              ...current,
-              projectAnswer: handoff.projectAnswer,
-              projectArtifacts: handoff.projectArtifacts,
-              metadata: {
-                ...current.metadata,
-                precallHandoffJobId: jobId,
-                precallHandoffStatus: "ready",
-                precallHandoffSourceVersion: sourceVersion,
-              },
-            }
-          : current
-      );
-      setPromoted(true);
-      setPrecallHandoffStatus("ready");
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        return;
-      }
-      setPrecallHandoffStatus("failed");
-      setPrecallHandoffError(
-        error instanceof Error
-          ? error.message
-          : "The pre-call handoff could not be prepared."
-      );
-    } finally {
-      if (precallHandoffAbortRef.current === controller) {
-        precallHandoffAbortRef.current = null;
-      }
-    }
-  }
-
 
   function generateBrief() {
     setSelectedLifecycleStage("insights");
@@ -3456,19 +3367,11 @@ const industryFocus = useMemo(() => {
               : entry
           )
         );
-        const approvedVersion = approvedBrief.metadata?.packetVersion || briefVersion;
-        const handoffJobId = approvedBrief.metadata?.precallHandoffJobId || "";
-        const handoffStatus = approvedBrief.metadata?.precallHandoffStatus || "failed";
-        setPrecallHandoffStatus(handoffStatus);
-        setPrecallHandoffError(approvedBrief.metadata?.precallHandoffError || "");
+        setPrecallHandoffStatus("idle");
+        setPrecallHandoffError("");
         setGenerationNotice(
-          handoffJobId
-            ? "Approved for the meeting. PilarPrep is preparing the shared pre-call handoff in the background."
-            : "Approved for the meeting, but the pre-call handoff could not be queued. You can retry it from the Pre-call stage."
+          "Approved for the meeting. Build the pre-call handoff when the team is ready."
         );
-        if (handoffJobId && handoffStatus !== "ready") {
-          void monitorAutomaticHandoff(handoffJobId, company, approvedVersion);
-        }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           setGenerationNotice("Approval was cancelled. The draft remains unchanged.");
@@ -3492,6 +3395,8 @@ const industryFocus = useMemo(() => {
 
     setApproved(true);
     setApprovalStale(false);
+    setPrecallHandoffStatus("idle");
+    setPrecallHandoffError("");
     setSelectedLifecycleStage("meeting-prep");
     setActivePage("project");
     setBriefHistory((current) =>
@@ -3504,23 +3409,6 @@ const industryFocus = useMemo(() => {
   function refreshProjectModel() {
     setSelectedLifecycleStage("meeting-prep");
     setActivePage("project");
-    const automaticJobId = generatedBrief?.metadata?.precallHandoffJobId || "";
-    const automaticSourceVersion =
-      generatedBrief?.metadata?.precallHandoffSourceVersion ||
-      generatedBrief?.metadata?.approvedPacketVersion ||
-      briefVersion;
-    if (
-      automaticJobId &&
-      (precallHandoffStatus === "queued" ||
-        precallHandoffStatus === "preparing")
-    ) {
-      void monitorAutomaticHandoff(
-        automaticJobId,
-        company,
-        automaticSourceVersion
-      );
-      return;
-    }
     void requestBrief("project");
   }
 
@@ -5745,19 +5633,21 @@ const industryFocus = useMemo(() => {
                   ? "Use the accepted meeting evidence, owned actions, and gate decisions to prepare the next customer move."
                   : handoffReady
                     ? "Sales context, technical assumptions, stakeholders, discovery questions, and meeting goals are aligned for the full call team."
-                    : "PilarPrep prepares the shared pre-call handoff automatically after approval."}
+                    : "The approved packet is ready. Build the shared pre-call handoff when your team is ready."}
               </p>
               {selectedLifecycleStage === "meeting-prep" && approved ? (
                 <div className={`precall-handoff-status precall-handoff-status-${precallHandoffStatus}`} role="status" aria-live="polite">
-                  <strong>{precallHandoffStatus === "ready" ? "Ready" : precallHandoffStatus === "failed" ? "Needs attention" : precallHandoffStatus === "stale" ? "Out of date" : "Preparing"}</strong>
+                  <strong>{precallHandoffStatus === "ready" ? "Ready" : precallHandoffStatus === "failed" ? "Needs attention" : precallHandoffStatus === "stale" ? "Out of date" : precallHandoffStatus === "idle" ? "Ready to prepare" : "Preparing"}</strong>
                   <span>
                     {precallHandoffStatus === "ready"
                       ? "The shared handoff is ready for the call team."
                       : precallHandoffStatus === "failed"
-                        ? precallHandoffError || "The automatic handoff could not be prepared."
+                        ? precallHandoffError || "The pre-call handoff could not be prepared."
                       : precallHandoffStatus === "stale"
                           ? "Approve the latest brief version to prepare a current handoff."
-                          : precallHandoffError || "You can keep working while AgentCore builds the handoff."}
+                          : precallHandoffStatus === "idle"
+                            ? "Start the handoff when you want AgentCore to prepare the team packet."
+                            : precallHandoffError || "You can keep working while AgentCore builds the handoff."}
                   </span>
                 </div>
               ) : null}
@@ -5773,10 +5663,10 @@ const industryFocus = useMemo(() => {
                   {precallHandoffStatus === "queued" || precallHandoffStatus === "preparing"
                     ? <ProcessingIndicator label="Preparing pre-call handoff..." announce={false} compact />
                     : precallHandoffStatus === "failed"
-                      ? "Retry pre-call handoff"
+                      ? "Try pre-call handoff again"
                       : handoffReady
                         ? "Refresh pre-call handoff"
-                        : "Prepare team handoff"}
+                        : "Build pre-call handoff"}
                 </button>
               ) : null}
               {generatedBrief?.metadata?.docxDownloadUrl ? (

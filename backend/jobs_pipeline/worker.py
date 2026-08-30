@@ -995,280 +995,6 @@ def _precall_handoff_state(
     return True
 
 
-def _existing_internal_job(
-    scope: Mapping[str, str], idempotency: str
-) -> tuple[str, str]:
-    dynamodb = aws_client("dynamodb")
-    item = dynamodb.get_item(
-        TableName=PROJECT_TABLE,
-        Key=idempotency_key(scope, idempotency),
-        ConsistentRead=True,
-    ).get("Item")
-    existing = deserialize_item(item)
-    job_id = str(existing.get("jobId") or "")
-    if not job_id:
-        return "", ""
-    job = deserialize_item(
-        dynamodb.get_item(
-            TableName=PROJECT_TABLE,
-            Key=job_key(scope, job_id),
-            ConsistentRead=True,
-        ).get("Item")
-    )
-    return job_id, str(job.get("status") or "queued")
-
-
-def _precall_status(job_status: str) -> str:
-    if job_status == "complete":
-        return "ready"
-    if job_status == "failed":
-        return "failed"
-    if job_status in {"running", "validating", "saving"}:
-        return "preparing"
-    return "queued"
-
-
-def _enqueue_pre_call_handoff(
-    scope: Mapping[str, str],
-    approved_document: Mapping[str, Any],
-    source_version: int,
-    approval_job_id: str,
-) -> tuple[str, str]:
-    idempotency = f"precall-handoff-v{source_version:06d}"
-    existing_job_id, existing_status = _existing_internal_job(
-        scope, idempotency
-    )
-    if existing_job_id:
-        mapped = _precall_status(existing_status)
-        _precall_handoff_state(
-            scope,
-            status=mapped,
-            job_id=existing_job_id,
-            source_version=source_version,
-        )
-        return existing_job_id, mapped
-
-    job_id = str(uuid4())
-    input_version = str(uuid4())
-    trace_id = stable_identifier(
-        "trace",
-        [
-            scope["tenantId"],
-            scope["clientId"],
-            scope["projectId"],
-            idempotency,
-        ],
-        length=32,
-    )
-    timestamp = now_iso()
-    expires_at = now_epoch() + JOB_TTL_SECONDS
-    input_key = f"{job_object_prefix(scope, job_id)}/input.json"
-    request_context = approved_document.get("request")
-    request_context = (
-        request_context if isinstance(request_context, Mapping) else {}
-    )
-    handoff_input = {
-        "audienceRole": "PM",
-        "focus": (
-            "Create one role-neutral pre-call handoff for Sales, Solutions "
-            "Architects, executives, project managers, and delivery leads. "
-            "Use only the approved packet and distinguish confirmed facts, "
-            "assumptions, risks, questions, owners, and meeting goals."
-        ),
-        "meetingNotes": str(request_context.get("meetingNotes") or ""),
-        "modelPreference": "nova-pro",
-        "qualityTier": "standard",
-        "expectedApprovedPacketVersion": source_version,
-        "automatic": True,
-        "sourceApprovalJobId": approval_job_id,
-        "modelRouting": {
-            "selectedModel": "nova-pro",
-            "requestedModel": "nova-pro",
-            "qualityTier": "standard",
-            "userTier": str(scope.get("userTier") or "guest"),
-            "reason": "Approved packets automatically prepare one pre-call handoff",
-            "serverSelected": True,
-        },
-    }
-    document = {
-        "inputVersion": input_version,
-        "action": "handoff.generate",
-        "scope": dict(scope),
-        "idempotencyKey": idempotency,
-        "input": handoff_input,
-        "createdAt": timestamp,
-    }
-    aws_client("s3").put_object(
-        Bucket=ARTIFACT_BUCKET,
-        Key=input_key,
-        Body=json.dumps(document, separators=(",", ":")).encode("utf-8"),
-        ContentType="application/json",
-        **s3_encryption_args(),
-        Metadata={"input-version": input_version, "job-id": job_id},
-    )
-    try:
-        aws_client("dynamodb").transact_write_items(
-            TransactItems=[
-                {
-                    "Put": {
-                        "TableName": PROJECT_TABLE,
-                        "Item": {
-                            **job_key(scope, job_id),
-                            "entityType": {"S": "JOB"},
-                            "jobId": {"S": job_id},
-                            "tenantId": {"S": scope["tenantId"]},
-                            "clientId": {"S": scope["clientId"]},
-                            "projectScopeId": {"S": scope["projectId"]},
-                            "ownerId": {"S": scope["userId"]},
-                            "sessionId": {"S": scope["sessionId"]},
-                            "action": {"S": "handoff.generate"},
-                            "status": {"S": "queued"},
-                            "traceId": {"S": trace_id},
-                            "inputKey": {"S": input_key},
-                            "inputVersion": {"S": input_version},
-                            "retryCount": {"N": "0"},
-                            "automatic": {"BOOL": True},
-                            "sourceApprovalJobId": {"S": approval_job_id},
-                            "sourceBriefVersion": {"N": str(source_version)},
-                            "createdAt": {"S": timestamp},
-                            "updatedAt": {"S": timestamp},
-                            "expiresAt": {"N": str(expires_at)},
-                        },
-                        "ConditionExpression": (
-                            "attribute_not_exists(projectId) AND "
-                            "attribute_not_exists(sortKey)"
-                        ),
-                    }
-                },
-                {
-                    "Put": {
-                        "TableName": PROJECT_TABLE,
-                        "Item": {
-                            **idempotency_key(scope, idempotency),
-                            "entityType": {"S": "IDEMPOTENCY"},
-                            "jobId": {"S": job_id},
-                            "action": {"S": "handoff.generate"},
-                            "createdAt": {"S": timestamp},
-                            "expiresAt": {"N": str(expires_at + 6 * 86400)},
-                        },
-                        "ConditionExpression": "attribute_not_exists(projectId)",
-                    }
-                },
-            ],
-            ClientRequestToken=dynamodb_client_request_token(
-                "auto-handoff", [project_partition_key(scope), idempotency]
-            ),
-        )
-    except ClientError as exc:
-        aws_client("s3").delete_object(Bucket=ARTIFACT_BUCKET, Key=input_key)
-        if _client_error_code(exc) == "TransactionCanceledException":
-            existing_job_id, existing_status = _existing_internal_job(
-                scope, idempotency
-            )
-            if existing_job_id:
-                return existing_job_id, _precall_status(existing_status)
-        raise
-
-    _precall_handoff_state(
-        scope,
-        status="queued",
-        job_id=job_id,
-        source_version=source_version,
-    )
-    pointer = {
-        "action": "handoff.generate",
-        "jobId": job_id,
-        "tenantId": scope["tenantId"],
-        "clientId": scope["clientId"],
-        "projectId": scope["projectId"],
-        "userId": scope["userId"],
-        "sessionId": scope["sessionId"],
-        "traceId": trace_id,
-        "inputVersion": input_version,
-        "inputKey": input_key,
-    }
-    try:
-        aws_client("sqs").send_message(
-            QueueUrl=JOB_QUEUE_URL,
-            MessageBody=json.dumps(pointer, separators=(",", ":")),
-        )
-    except Exception as exc:
-        aws_client("dynamodb").update_item(
-            TableName=PROJECT_TABLE,
-            Key=job_key(scope, job_id),
-            UpdateExpression=(
-                "SET #status = :failed, updatedAt = :updatedAt, "
-                "#error = :error"
-            ),
-            ExpressionAttributeNames={
-                "#status": "status",
-                "#error": "error",
-            },
-            ExpressionAttributeValues={
-                ":failed": {"S": "failed"},
-                ":updatedAt": {"S": now_iso()},
-                ":error": {"S": "The automatic pre-call handoff could not be queued"},
-            },
-        )
-        _precall_handoff_state(
-            scope,
-            status="failed",
-            job_id=job_id,
-            source_version=source_version,
-            error="The automatic pre-call handoff could not be queued",
-        )
-        raise RuntimeError(
-            "The automatic pre-call handoff could not be queued"
-        ) from exc
-    metric("AutomaticHandoffsQueued", Action="handoff.generate")
-    return job_id, "queued"
-
-
-def _attach_pre_call_handoff_metadata(
-    scope: Mapping[str, str],
-    approved_document: Mapping[str, Any],
-    source_version: int,
-    approval_job_id: str,
-    metadata: dict[str, Any],
-) -> None:
-    try:
-        handoff_job_id, handoff_status = _enqueue_pre_call_handoff(
-            scope,
-            approved_document,
-            source_version,
-            approval_job_id,
-        )
-        metadata.update(
-            {
-                "precallHandoffJobId": handoff_job_id,
-                "precallHandoffStatus": handoff_status,
-                "precallHandoffSourceVersion": source_version,
-            }
-        )
-        metadata.pop("precallHandoffError", None)
-    except Exception as exc:
-        LOGGER.exception(
-            json.dumps(
-                {
-                    "event": "automatic_handoff_queue_failed",
-                    "approvalJobId": approval_job_id,
-                    "sourceBriefVersion": source_version,
-                    "errorType": type(exc).__name__,
-                }
-            )
-        )
-        metric("AutomaticHandoffQueueFailures")
-        metadata.update(
-            {
-                "precallHandoffStatus": "failed",
-                "precallHandoffSourceVersion": source_version,
-                "precallHandoffError": (
-                    "The pre-call handoff could not be prepared automatically"
-                ),
-            }
-        )
-
-
 def _approve_brief(
     scope: Mapping[str, str], document: Mapping[str, Any], job_id: str
 ) -> dict[str, Any]:
@@ -1325,6 +1051,8 @@ def _approve_brief(
     expected_docx_key = f"{approved_prefix}packet.docx"
     metadata = generated.setdefault("metadata", {})
     metadata.pop("docxDownloadUrl", None)
+    metadata.pop("precallHandoffJobId", None)
+    metadata.pop("precallHandoffError", None)
     metadata.update(
         {
             "projectId": scope["projectId"],
@@ -1337,6 +1065,8 @@ def _approve_brief(
             "docxArtifactKey": expected_docx_key,
             "stateKey": "BRIEF#LATEST",
             "artifactRetention": "immutable-approved",
+            "precallHandoffStatus": "idle",
+            "precallHandoffSourceVersion": approval_version,
         }
     )
     refinement_history = {
@@ -1429,27 +1159,34 @@ def _approve_brief(
                     "TableName": PROJECT_TABLE,
                     "Key": _brief_latest_key(scope),
                     "UpdateExpression": (
-                "SET packetVersion = :approvedVersion, approvalStatus = :approved, "
-                "approvedPacketVersion = :approvedVersion, "
-                "approvedArtifactKey = :artifactKey, "
-                "approvedDocxArtifactKey = :docxKey, approvedAt = :approvedAt, "
-                "approvedBy = :approvedBy, approvalJobId = :jobId, "
-                "updatedAt = :updatedAt"
+                        "SET packetVersion = :approvedVersion, "
+                        "approvalStatus = :approved, "
+                        "approvedPacketVersion = :approvedVersion, "
+                        "approvedArtifactKey = :artifactKey, "
+                        "approvedDocxArtifactKey = :docxKey, "
+                        "approvedAt = :approvedAt, approvedBy = :approvedBy, "
+                        "approvalJobId = :jobId, updatedAt = :updatedAt, "
+                        "precallHandoffStatus = :handoffIdle, "
+                        "precallHandoffSourceVersion = :approvedVersion "
+                        "REMOVE precallHandoffJobId, precallHandoffError, "
+                        "precallHandoffUpdatedAt"
                     ),
                     "ConditionExpression": (
-                "packetVersion = :expectedVersion AND draftArtifactKey = :draftArtifactKey"
+                        "packetVersion = :expectedVersion AND "
+                        "draftArtifactKey = :draftArtifactKey"
                     ),
                     "ExpressionAttributeValues": {
-                ":approved": {"S": "approved"},
-                ":approvedVersion": {"N": str(approval_version)},
-                ":expectedVersion": {"N": str(expected_version)},
-                ":artifactKey": {"S": artifact_key},
-                ":docxKey": {"S": docx_key},
-                ":approvedAt": {"S": approved_at},
-                ":approvedBy": {"S": scope["userId"]},
-                ":jobId": {"S": job_id},
-                ":updatedAt": {"S": approved_at},
-                ":draftArtifactKey": {"S": draft_key},
+                        ":approved": {"S": "approved"},
+                        ":approvedVersion": {"N": str(approval_version)},
+                        ":expectedVersion": {"N": str(expected_version)},
+                        ":artifactKey": {"S": artifact_key},
+                        ":docxKey": {"S": docx_key},
+                        ":approvedAt": {"S": approved_at},
+                        ":approvedBy": {"S": scope["userId"]},
+                        ":jobId": {"S": job_id},
+                        ":updatedAt": {"S": approved_at},
+                        ":draftArtifactKey": {"S": draft_key},
+                        ":handoffIdle": {"S": "idle"},
                     },
                 }},
                 {"Put": {
@@ -1474,13 +1211,6 @@ def _approve_brief(
                 == approval_version
                 and current.get("approvedArtifactKey") == artifact_key
             ):
-                _attach_pre_call_handoff_metadata(
-                    scope,
-                    approved_document,
-                    approval_version,
-                    job_id,
-                    metadata,
-                )
                 metadata["docxDownloadUrl"] = download_url
                 return generated
             raise NonRetryableJobError("The brief changed before approval; review the latest version.") from exc
@@ -1493,13 +1223,6 @@ def _approve_brief(
             "approvedPacketVersion": approval_version,
             "approvedArtifactKey": artifact_key,
         },
-    )
-    _attach_pre_call_handoff_metadata(
-        scope,
-        approved_document,
-        approval_version,
-        job_id,
-        metadata,
     )
     metadata["docxDownloadUrl"] = download_url
     return generated

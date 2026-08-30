@@ -1833,17 +1833,6 @@ class WorkerTests(unittest.TestCase):
             ),
             patch.object(worker, "_write_approved_packet_pair", side_effect=write_pair),
             patch.object(worker, "_upsert_client_directory"),
-            patch.object(
-                worker,
-                "_attach_pre_call_handoff_metadata",
-                side_effect=lambda _scope, _document, version, _job_id, metadata: metadata.update(
-                    {
-                        "precallHandoffJobId": "job-handoff",
-                        "precallHandoffStatus": "queued",
-                        "precallHandoffSourceVersion": version,
-                    }
-                ),
-            ),
             patch.object(worker, "aws_client", side_effect=lambda name: clients[name]),
         ):
             result = worker._approve_brief(
@@ -1870,12 +1859,15 @@ class WorkerTests(unittest.TestCase):
             result["metadata"]["docxDownloadUrl"],
             "https://download.example/packet.docx",
         )
-        self.assertEqual(
-            result["metadata"]["precallHandoffJobId"], "job-handoff"
+        self.assertNotIn("precallHandoffJobId", result["metadata"])
+        self.assertEqual(result["metadata"]["precallHandoffStatus"], "idle")
+        self.assertEqual(result["metadata"]["precallHandoffSourceVersion"], 2)
+        update = transactions[0]["TransactItems"][0]["Update"]
+        self.assertIn(
+            "precallHandoffStatus = :handoffIdle",
+            update["UpdateExpression"],
         )
-        self.assertEqual(
-            result["metadata"]["precallHandoffStatus"], "queued"
-        )
+        self.assertIn("REMOVE precallHandoffJobId", update["UpdateExpression"])
         self.assertEqual(
             written["download_filename"], "Apex Mutual - Brief - v2.docx"
         )
@@ -1964,7 +1956,6 @@ class WorkerTests(unittest.TestCase):
             patch.object(worker, "_brief_module", return_value=brief_module),
             patch.object(worker, "_write_approved_packet_pair", side_effect=write_pair),
             patch.object(worker, "_upsert_client_directory"),
-            patch.object(worker, "_attach_pre_call_handoff_metadata"),
             patch.object(worker, "metric") as metric,
             patch.object(
                 worker,
@@ -1992,6 +1983,8 @@ class WorkerTests(unittest.TestCase):
         )
         self.assertEqual(result["metadata"]["packetVersion"], 2)
         self.assertEqual(result["metadata"]["approvedPacketVersion"], 2)
+        self.assertEqual(result["metadata"]["precallHandoffStatus"], "idle")
+        self.assertNotIn("precallHandoffJobId", result["metadata"])
         update = transactions[0]["TransactItems"][0]["Update"]
         self.assertEqual(
             update["ExpressionAttributeValues"][":expectedVersion"]["N"], "1"
@@ -2031,7 +2024,7 @@ class WorkerTests(unittest.TestCase):
                 content_type="application/json",
             )
 
-    def test_idempotent_approval_recovers_automatic_handoff(self):
+    def test_idempotent_approval_remains_ready_for_manual_handoff(self):
         draft_key = (
             f"tenants/{SCOPE['tenantId']}/clients/apex-mutual/projects/apex-mutual/"
             "brief/draft/latest.json"
@@ -2078,16 +2071,6 @@ class WorkerTests(unittest.TestCase):
             "approvedArtifactKey": approved_key,
         }
 
-        def attach(_scope, _document, version, job_id, metadata):
-            metadata.update(
-                {
-                    "precallHandoffJobId": "job-handoff",
-                    "precallHandoffStatus": "queued",
-                    "precallHandoffSourceVersion": version,
-                }
-            )
-            self.assertEqual(job_id, "job-approval")
-
         with (
             patch.object(worker, "PROJECT_TABLE", "project-state"),
             patch.object(worker, "ARTIFACT_BUCKET", "artifact-bucket"),
@@ -2103,11 +2086,6 @@ class WorkerTests(unittest.TestCase):
                     "docx-sha256",
                 ),
             ),
-            patch.object(
-                worker,
-                "_attach_pre_call_handoff_metadata",
-                side_effect=attach,
-            ) as attach_handoff,
             patch.object(
                 worker,
                 "aws_client",
@@ -2126,13 +2104,9 @@ class WorkerTests(unittest.TestCase):
                 "job-approval",
             )
 
-        attach_handoff.assert_called_once()
-        self.assertEqual(
-            result["metadata"]["precallHandoffJobId"], "job-handoff"
-        )
-        self.assertEqual(
-            result["metadata"]["precallHandoffStatus"], "queued"
-        )
+        self.assertNotIn("precallHandoffJobId", result["metadata"])
+        self.assertEqual(result["metadata"]["precallHandoffStatus"], "idle")
+        self.assertEqual(result["metadata"]["precallHandoffSourceVersion"], 2)
     def test_handoff_only_directory_update_omits_unused_attribute_names(self):
         calls = []
 
@@ -3886,16 +3860,6 @@ class MeetingWorkflowTests(unittest.TestCase):
             updates[0]["ExpressionAttributeValues"][":processing"]["S"],
             "processing",
         )
-
-    def test_pre_call_status_mapping_is_role_neutral_and_deterministic(self):
-        self.assertEqual(worker._precall_status("queued"), "queued")
-        self.assertEqual(worker._precall_status("running"), "preparing")
-        self.assertEqual(worker._precall_status("validating"), "preparing")
-        self.assertEqual(worker._precall_status("saving"), "preparing")
-        self.assertEqual(worker._precall_status("complete"), "ready")
-        self.assertEqual(worker._precall_status("failed"), "failed")
-
-
 
 class ContentSafetyTests(unittest.TestCase):
     def test_guardrail_intervention_returns_actionable_custom_input_guidance(self):
